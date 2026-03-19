@@ -81,7 +81,9 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
     ghost.style.willChange = 'transform';
     ghost.style.left = '0';
     ghost.style.top = '0';
-    ghost.style.transform = `translate(${e.clientX - s.offsetX}px, ${e.clientY - s.offsetY}px)`;
+    // Offset card 60px above touch point so it clears the thumb on mobile
+    const yOffset = s.offsetY + 60;
+    ghost.style.transform = `translate(${e.clientX - s.offsetX}px, ${e.clientY - yOffset}px)`;
 
     const parent = originEl.parentElement;
     if (s.source && s.source.source.startsWith('tableau-') && parent) {

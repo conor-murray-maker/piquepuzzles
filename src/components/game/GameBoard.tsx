@@ -98,6 +98,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const [, forceRender] = useState(0);
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
+  const gameEndedRef = useRef(false);
+  const lastTapRef = useRef<{ source: string; cardIndex: number; time: number } | null>(null);
 
   const cardH = Math.round(cardW * 1.4);
 

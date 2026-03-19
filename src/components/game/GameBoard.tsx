@@ -15,7 +15,7 @@ import {
 } from '@/game/klondike';
 import { PlayingCard, EmptyPile } from './PlayingCard';
 import { useDragAndDrop, DragSource } from '@/hooks/useDragAndDrop';
-import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, Layers, X } from 'lucide-react';
+import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, Layers, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -30,6 +30,7 @@ import {
 
 const STORAGE_KEY = 'pique-game-state';
 const HISTORY_KEY = 'pique-game-history';
+const ELAPSED_KEY = 'pique-elapsed-time';
 
 function saveToStorage(state: KlondikeState, history: KlondikeState[]) {
   try {
@@ -55,6 +56,7 @@ function loadFromStorage(): { state: KlondikeState; history: KlondikeState[] } |
 export function clearStorage() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(HISTORY_KEY);
+  localStorage.removeItem(ELAPSED_KEY);
 }
 
 interface GameBoardProps {
@@ -72,7 +74,12 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     const saved = loadFromStorage();
     return saved ? saved.history : [];
   });
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem(ELAPSED_KEY);
+      return saved ? parseInt(saved, 10) : 0;
+    } catch { return 0; }
+  });
   const [selectedCard, setSelectedCard] = useState<{ source: string; cardIndex: number } | null>(null);
   const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
   const [autoCompleting, setAutoCompleting] = useState(false);
@@ -81,6 +88,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
   const [, forceRender] = useState(0);
+  const elapsedRef = useRef(elapsed);
+  elapsedRef.current = elapsed;
 
   // Persist game state
   useEffect(() => {
@@ -90,6 +99,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
       saveToStorage(state, history);
     }
   }, [state, history]);
+
+  // Persist elapsed time
+  useEffect(() => {
+    try {
+      localStorage.setItem(ELAPSED_KEY, String(elapsed));
+    } catch {}
+  }, [elapsed]);
 
   // Prevent pull-to-refresh on game board
   useEffect(() => {
@@ -109,12 +125,43 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  // Timer: only ticks when document is visible AND route is /play
   useEffect(() => {
-    timerRef.current = setInterval(() => {
-      if (!state.isWon) setElapsed(Math.floor((Date.now() - state.startTime) / 1000));
-    }, 1000);
-    return () => clearInterval(timerRef.current);
-  }, [state.startTime, state.isWon]);
+    if (state.isWon) return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const startTicking = () => {
+      if (intervalId) return;
+      intervalId = setInterval(() => {
+        setElapsed(e => e + 1);
+      }, 1000);
+    };
+
+    const stopTicking = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopTicking();
+      } else {
+        startTicking();
+      }
+    };
+
+    // Start if visible
+    if (!document.hidden) startTicking();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      stopTicking();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [state.isWon]);
 
   // Auto-complete
   useEffect(() => {
@@ -199,7 +246,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     if (history.length === 0) return;
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
-    setState(s => ({ ...prev, undosUsed: s.undosUsed + 1 }));
+    // Undo counts as a move: +1 to moves, +1 to undosUsed
+    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
   }, [history]);
 
   const handleHint = useCallback(() => {
@@ -223,12 +271,10 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const handleGiveUp = useCallback(() => {
     setShowGiveUpDialog(false);
     clearStorage();
-    // Mark as loss and notify parent
     const lostState: KlondikeState = { ...state, isWon: false };
     if (onGiveUp) {
       onGiveUp(lostState);
     } else {
-      // Fallback: just start new game
       handleNewGame();
     }
   }, [state, onGiveUp, handleNewGame]);
@@ -324,7 +370,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const gap = compact ? 3 : 6;
   const boardWidth = cardW * 7 + gap * 6;
 
-  // Waste fan: show up to 3 cards fanned for draw-3
   const wasteVisible = state.drawMode === 3
     ? state.waste.slice(-3)
     : state.waste.slice(-1);
@@ -498,7 +543,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
         </div>
       </div>
 
-      {/* Win overlay */}
+      {/* Win overlay — stays until user acts */}
       <AnimatePresence>
         {state.isWon && (
           <motion.div
@@ -520,7 +565,25 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                 <p>Moves: {state.moves}</p>
                 <p>Difficulty: {state.difficulty}</p>
               </div>
-              <Button onClick={handleNewGame} className="w-full">Play Again</Button>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Navigate home — trigger onGameEnd which shows PostGameScreen
+                    onGameEnd(state);
+                  }}
+                  className="flex-1"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1" />
+                  Home
+                </Button>
+                <Button
+                  onClick={handleNewGame}
+                  className="flex-1 bg-rating-up hover:bg-rating-up/90 text-white"
+                >
+                  Play Again
+                </Button>
+              </div>
             </motion.div>
           </motion.div>
         )}

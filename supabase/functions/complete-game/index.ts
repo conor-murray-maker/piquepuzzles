@@ -67,6 +67,8 @@ Deno.serve(async (req) => {
       hintsUsed = 0,
       undosUsed = 0,
       dealId: clientDealId,
+      dealUuid: clientDealUuid,
+      isDaily = false,
     } = body;
 
     const isWin = result === 'win';
@@ -85,14 +87,26 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Fetch deal by seed + game_mode + draw_mode
-    const { data: deal } = await supabaseAdmin
-      .from('deals')
-      .select('*')
-      .eq('seed', dealSeed)
-      .eq('game_mode', gameMode)
-      .eq('draw_mode', drawMode)
-      .single();
+    // 2. Fetch deal — prefer UUID lookup, fallback to seed lookup
+    let deal: any = null;
+    if (clientDealUuid) {
+      const { data } = await supabaseAdmin
+        .from('deals')
+        .select('*')
+        .eq('id', clientDealUuid)
+        .single();
+      deal = data;
+    }
+    if (!deal) {
+      const { data } = await supabaseAdmin
+        .from('deals')
+        .select('*')
+        .eq('seed', dealSeed)
+        .eq('game_mode', gameMode)
+        .eq('draw_mode', drawMode)
+        .single();
+      deal = data;
+    }
 
     const dds = deal ? (deal.dds_blended as number) : 50;
     const minMoves = deal ? (deal.min_moves as number) : 0;
@@ -133,6 +147,12 @@ Deno.serve(async (req) => {
     const baseDelta = Math.round(K * (outcome - expected));
 
     let finalDelta = Math.round(baseDelta * performanceModifier);
+
+    // Apply daily challenge 1.2x multiplier
+    if (isDaily) {
+      finalDelta = Math.round(finalDelta * 1.2);
+    }
+
     if (isWin) finalDelta = Math.max(1, finalDelta);        // floor: always gain on win
     else finalDelta = Math.max(-20, finalDelta);              // ceiling: cap loss at -20
 

@@ -16,7 +16,7 @@ import {
   maxMovableCards,
 } from '@/game/freecell';
 import { PlayingCard, EmptyPile } from './PlayingCard';
-import { useDragAndDrop, DragSource } from '@/hooks/useDragAndDrop';
+import { dragManager, DragSource } from '@/game/DragManager';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {

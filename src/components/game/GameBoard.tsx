@@ -14,7 +14,7 @@ import {
   getHint,
 } from '@/game/klondike';
 import { PlayingCard, EmptyPile } from './PlayingCard';
-import { useDragAndDrop, DragSource } from '@/hooks/useDragAndDrop';
+import { dragManager, DragSource } from '@/game/DragManager';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, Layers, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {

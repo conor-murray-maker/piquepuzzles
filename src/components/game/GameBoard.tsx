@@ -178,7 +178,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
         const next = autoCompleteStep(state);
         if (next) {
           setState(next);
-          if (next.isWon) {
+          if (next.isWon && !gameEndedRef.current) {
+            gameEndedRef.current = true;
             setAutoCompleting(false);
             onGameEnd(next);
           }
@@ -201,13 +202,19 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     setHistory(h => [...h, s]);
   }, []);
 
+  const fireGameEnd = useCallback((s: KlondikeState) => {
+    if (gameEndedRef.current) return;
+    gameEndedRef.current = true;
+    onGameEnd(s);
+  }, [onGameEnd]);
+
   const applyMove = useCallback((newState: KlondikeState | null) => {
     if (!newState) return false;
     pushHistory(state);
     setState(newState);
-    if (newState.isWon) onGameEnd(newState);
+    if (newState.isWon) fireGameEnd(newState);
     return true;
-  }, [state, pushHistory, onGameEnd]);
+  }, [state, pushHistory, fireGameEnd]);
 
   // Drag and drop handler
   const handleDrop = useCallback((source: DragSource, targetElement: Element | null) => {

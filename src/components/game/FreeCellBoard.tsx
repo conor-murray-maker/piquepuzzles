@@ -27,6 +27,14 @@ import {
 const STORAGE_KEY = 'pique-freecell-state';
 const HISTORY_KEY = 'pique-freecell-history';
 const ELAPSED_KEY = 'pique-freecell-elapsed';
+const SIDE_PAD = 8;
+const COL_GAP = 4;
+const FC_COLS = 8;
+
+function computeCardWidth(screenWidth: number) {
+  const available = screenWidth - SIDE_PAD * 2 - COL_GAP * (FC_COLS - 1);
+  return Math.floor(available / FC_COLS);
+}
 
 function saveToStorage(state: FreeCellState, history: FreeCellState[]) {
   try {
@@ -78,10 +86,18 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   const [autoCompleting, setAutoCompleting] = useState(false);
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const gameBoardRef = useRef<HTMLDivElement>(null);
-  const [compact, setCompact] = useState(false);
+  const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
   const [, forceRender] = useState(0);
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
+
+  const cardH = Math.round(cardW * 1.4);
+
+  useEffect(() => {
+    const update = () => setCardW(computeCardWidth(window.innerWidth));
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   useEffect(() => {
     if (state.isWon) { clearFreeCellStorage(); } else { saveToStorage(state, history); }
@@ -97,13 +113,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     const prevent = (e: TouchEvent) => { if (e.cancelable) e.preventDefault(); };
     el.addEventListener('touchmove', prevent, { passive: false });
     return () => el.removeEventListener('touchmove', prevent);
-  }, []);
-
-  useEffect(() => {
-    const check = () => setCompact(window.innerWidth < 500);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
   }, []);
 
   // Timer
@@ -307,15 +316,18 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     return false;
   };
 
-  const cardW = compact ? 44 : 56;
-  const gap = compact ? 2 : 4;
-  const boardWidth = cardW * 8 + gap * 7;
+  const boardWidth = cardW * FC_COLS + COL_GAP * (FC_COLS - 1);
+  const FACE_UP_OFFSET = 28;
 
   return (
     <div
       ref={gameBoardRef}
-      className="game-surface min-h-screen flex flex-col"
-      style={{ overscrollBehavior: 'none', touchAction: 'none' }}
+      className="min-h-screen flex flex-col"
+      style={{
+        background: '#f1f5f9',
+        overscrollBehavior: 'none',
+        touchAction: 'none',
+      }}
     >
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
@@ -346,70 +358,83 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       </div>
 
       {/* Game area */}
-      <div className="flex-1 flex flex-col items-center pt-3 pb-4 px-1 overflow-auto">
+      <div
+        className="flex-1 flex flex-col items-center pt-3 pb-4 overflow-auto"
+        style={{
+          padding: `12px ${SIDE_PAD}px 16px`,
+          boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.06)',
+        }}
+      >
         <div style={{ width: boardWidth, maxWidth: '100%' }}>
           {/* Top row: 4 free cells + 4 foundations */}
-          <div className="flex items-start justify-between mb-4" style={{ gap }}>
-            {/* Free cells */}
-            {state.freeCells.map((card, i) => (
-              <div
-                key={`fc-${i}`}
-                className={`flex-shrink-0 ${isHighlighted(`freecell-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
-                data-drop-target={`freecell-${i}`}
-              >
-                {card ? (
-                  <div
-                    onPointerDown={(e) => startDrag(e, `freecell-${i}`, 0)}
-                  >
-                    <PlayingCard
-                      card={card}
-                      onClick={() => !dragState.isDragging && handleCardClick(`freecell-${i}`, 0)}
-                      onDoubleClick={() => handleDoubleClick(`freecell-${i}`, 0)}
-                      compact={true}
-                    />
-                  </div>
-                ) : (
-                  <EmptyPile label="FC" onClick={() => handleEmptyFreeCellClick(i)} compact={true} />
-                )}
-              </div>
-            ))}
+          <div className="flex items-start justify-between" style={{ gap: COL_GAP }}>
+            {/* Free cells group */}
+            <div className="flex" style={{ gap: COL_GAP }}>
+              {state.freeCells.map((card, i) => (
+                <div
+                  key={`fc-${i}`}
+                  className={`flex-shrink-0 ${isHighlighted(`freecell-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                  data-drop-target={`freecell-${i}`}
+                >
+                  {card ? (
+                    <div onPointerDown={(e) => startDrag(e, `freecell-${i}`, 0)}>
+                      <PlayingCard
+                        card={card}
+                        onClick={() => !dragState.isDragging && handleCardClick(`freecell-${i}`, 0)}
+                        onDoubleClick={() => handleDoubleClick(`freecell-${i}`, 0)}
+                        cardWidth={cardW}
+                      />
+                    </div>
+                  ) : (
+                    <EmptyPile onClick={() => handleEmptyFreeCellClick(i)} variant="freecell" cardWidth={cardW} />
+                  )}
+                </div>
+              ))}
+            </div>
 
-            {/* Foundations */}
-            {state.foundation.map((pile, i) => (
-              <div
-                key={`f-${i}`}
-                className={`flex-shrink-0 ${isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
-                data-drop-target={`foundation-${i}`}
-              >
-                {pile.length > 0 ? (
-                  <div onPointerDown={(e) => startDrag(e, `foundation-${i}`, pile.length - 1)}>
-                    <PlayingCard
-                      card={pile[pile.length - 1]}
-                      onClick={() => !dragState.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
-                      compact={true}
-                    />
-                  </div>
-                ) : (
-                  <EmptyPile label={['♥', '♦', '♣', '♠'][i]} compact={true} />
-                )}
-              </div>
-            ))}
+            {/* Foundation group */}
+            <div className="flex" style={{ gap: COL_GAP }}>
+              {state.foundation.map((pile, i) => (
+                <div
+                  key={`f-${i}`}
+                  className={`flex-shrink-0 ${isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                  data-drop-target={`foundation-${i}`}
+                >
+                  {pile.length > 0 ? (
+                    <div onPointerDown={(e) => startDrag(e, `foundation-${i}`, pile.length - 1)}>
+                      <PlayingCard
+                        card={pile[pile.length - 1]}
+                        onClick={() => !dragState.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
+                        cardWidth={cardW}
+                      />
+                    </div>
+                  ) : (
+                    <EmptyPile label={['♥', '♦', '♣', '♠'][i]} variant="foundation" cardWidth={cardW} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Labels */}
+          <div className="flex justify-between mt-1 mb-3">
+            <span style={{ fontSize: 10, color: '#94a3b8', width: cardW * 4 + COL_GAP * 3, textAlign: 'center' }}>Free Cells</span>
+            <span style={{ fontSize: 10, color: '#94a3b8', width: cardW * 4 + COL_GAP * 3, textAlign: 'center' }}>Foundation</span>
           </div>
 
           {/* Tableau: 8 columns */}
-          <div className="flex justify-between" style={{ gap }}>
+          <div className="flex justify-between" style={{ gap: COL_GAP }}>
             {state.tableau.map((col, colIdx) => (
               <div
                 key={colIdx}
                 className={`relative flex-shrink-0 ${isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
-                style={{ width: cardW, minHeight: compact ? 100 : 140 }}
+                style={{ width: cardW, minHeight: cardH + 20 }}
                 data-drop-target={`tableau-${colIdx}`}
               >
                 {col.length === 0 ? (
-                  <EmptyPile onClick={() => handleEmptyTableauClick(colIdx)} compact={true} />
+                  <EmptyPile onClick={() => handleEmptyTableauClick(colIdx)} cardWidth={cardW} />
                 ) : (
                   col.map((card, cardIdx) => {
-                    const offset = compact ? 16 : 20;
                     const seqLen = getValidSequenceLength(col);
                     const seqStart = col.length - seqLen;
                     const canDrag = cardIdx >= seqStart && (col.length - cardIdx) <= maxMovableCards(state, undefined);
@@ -418,14 +443,14 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                       <div
                         key={card.id}
                         className="absolute"
-                        style={{ top: cardIdx * offset, left: 0 }}
+                        style={{ top: cardIdx * FACE_UP_OFFSET, left: 0 }}
                         onPointerDown={canDrag ? (e) => startDrag(e, `tableau-${colIdx}`, cardIdx) : undefined}
                       >
                         <PlayingCard
                           card={card}
                           onClick={!dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           onDoubleClick={cardIdx === col.length - 1 ? () => handleDoubleClick(`tableau-${colIdx}`, cardIdx) : undefined}
-                          compact={true}
+                          cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />
                       </div>

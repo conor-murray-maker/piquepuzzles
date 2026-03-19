@@ -31,6 +31,14 @@ import {
 const STORAGE_KEY = 'pique-game-state';
 const HISTORY_KEY = 'pique-game-history';
 const ELAPSED_KEY = 'pique-elapsed-time';
+const SIDE_PAD = 8;
+const COL_GAP = 4;
+const COLS = 7;
+
+function computeCardWidth(screenWidth: number) {
+  const available = screenWidth - SIDE_PAD * 2 - COL_GAP * (COLS - 1);
+  return Math.floor(available / COLS);
+}
 
 function saveToStorage(state: KlondikeState, history: KlondikeState[]) {
   try {
@@ -86,10 +94,19 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
-  const [compact, setCompact] = useState(false);
+  const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
   const [, forceRender] = useState(0);
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
+
+  const cardH = Math.round(cardW * 1.4);
+
+  // Responsive card width
+  useEffect(() => {
+    const update = () => setCardW(computeCardWidth(window.innerWidth));
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   // Persist game state
   useEffect(() => {
@@ -118,14 +135,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     return () => el.removeEventListener('touchmove', prevent);
   }, []);
 
-  useEffect(() => {
-    const check = () => setCompact(window.innerWidth < 500);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
-  // Timer: only ticks when document is visible AND route is /play
+  // Timer: only ticks when document is visible
   useEffect(() => {
     if (state.isWon) return;
 
@@ -146,14 +156,10 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     };
 
     const handleVisibility = () => {
-      if (document.hidden) {
-        stopTicking();
-      } else {
-        startTicking();
-      }
+      if (document.hidden) stopTicking();
+      else startTicking();
     };
 
-    // Start if visible
     if (!document.hidden) startTicking();
     document.addEventListener('visibilitychange', handleVisibility);
 
@@ -237,7 +243,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
 
   const { dragState, startDrag, setForceUpdate } = useDragAndDrop(handleDrop);
 
-  // Connect force update
   useEffect(() => {
     setForceUpdate(() => forceRender(c => c + 1));
   }, [setForceUpdate]);
@@ -246,7 +251,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     if (history.length === 0) return;
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
-    // Undo counts as a move: +1 to moves, +1 to undosUsed
     setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
   }, [history]);
 
@@ -366,20 +370,25 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     return false;
   };
 
-  const cardW = compact ? 56 : 70;
-  const gap = compact ? 3 : 6;
-  const boardWidth = cardW * 7 + gap * 6;
+  const boardWidth = cardW * COLS + COL_GAP * (COLS - 1);
 
   const wasteVisible = state.drawMode === 3
     ? state.waste.slice(-3)
     : state.waste.slice(-1);
-  const wasteFanOffset = compact ? 14 : 18;
+  const wasteFanOffset = Math.round(cardW * 0.28);
+
+  const FACE_DOWN_OFFSET = 12;
+  const FACE_UP_OFFSET = 28;
 
   return (
     <div
       ref={gameBoardRef}
-      className="game-surface min-h-screen flex flex-col"
-      style={{ overscrollBehavior: 'none', touchAction: 'none' }}
+      className="min-h-screen flex flex-col"
+      style={{
+        background: '#f1f5f9',
+        overscrollBehavior: 'none',
+        touchAction: 'none',
+      }}
     >
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
@@ -424,28 +433,34 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
         </div>
       </div>
 
-      {/* Game area */}
-      <div className="flex-1 flex flex-col items-center pt-3 pb-4 px-2 overflow-auto">
+      {/* Game area with inner shadow */}
+      <div
+        className="flex-1 flex flex-col items-center pt-3 pb-4 overflow-auto"
+        style={{
+          padding: `12px ${SIDE_PAD}px 16px`,
+          boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.06)',
+        }}
+      >
         <div style={{ width: boardWidth, maxWidth: '100%' }}>
           {/* Top row: Stock, Waste, spacer, Foundations */}
-          <div className="flex items-start justify-between mb-4" style={{ gap }}>
+          <div className="flex items-start mb-4" style={{ gap: COL_GAP }}>
             {/* Stock */}
             <div className="flex-shrink-0">
               {state.stock.length > 0 ? (
                 <PlayingCard
                   card={{ ...state.stock[state.stock.length - 1], faceUp: false } as any}
                   onClick={handleStockClick}
-                  compact={compact}
+                  cardWidth={cardW}
                 />
               ) : (
-                <EmptyPile onClick={handleStockClick} label="↻" compact={compact} />
+                <EmptyPile onClick={handleStockClick} variant="stock-empty" cardWidth={cardW} />
               )}
             </div>
 
             {/* Waste - fanned for draw-3 */}
             <div
               className={`flex-shrink-0 relative ${isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : ''}`}
-              style={{ width: cardW + (wasteVisible.length - 1) * wasteFanOffset, height: compact ? 80 : 100 }}
+              style={{ width: cardW + (wasteVisible.length - 1) * wasteFanOffset, height: cardH }}
               data-drop-target="waste"
             >
               {wasteVisible.length > 0 ? (
@@ -465,13 +480,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                         card={card}
                         onClick={isTop && !dragState.isDragging ? () => handleCardClick('waste', 0) : undefined}
                         onDoubleClick={isTop ? () => handleDoubleClick('waste', 0) : undefined}
-                        compact={compact}
+                        cardWidth={cardW}
                       />
                     </div>
                   );
                 })
               ) : (
-                <EmptyPile compact={compact} />
+                <EmptyPile cardWidth={cardW} />
               )}
             </div>
 
@@ -491,37 +506,41 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                     <PlayingCard
                       card={pile[pile.length - 1]}
                       onClick={() => !dragState.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
-                      compact={compact}
+                      cardWidth={cardW}
                     />
                   </div>
                 ) : (
-                  <EmptyPile label={['♥', '♦', '♣', '♠'][i]} compact={compact} />
+                  <EmptyPile label={['♥', '♦', '♣', '♠'][i]} variant="foundation" cardWidth={cardW} />
                 )}
               </div>
             ))}
           </div>
 
           {/* Tableau */}
-          <div className="flex justify-between" style={{ gap }}>
+          <div className="flex justify-between" style={{ gap: COL_GAP }}>
             {state.tableau.map((col, colIdx) => (
               <div
                 key={colIdx}
                 className={`relative flex-shrink-0 ${isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
-                style={{ width: cardW, minHeight: compact ? 120 : 160 }}
+                style={{ width: cardW, minHeight: cardH + 20 }}
                 data-drop-target={`tableau-${colIdx}`}
               >
                 {col.length === 0 ? (
-                  <EmptyPile onClick={() => handleEmptyTableauClick(colIdx)} compact={compact} />
+                  <EmptyPile onClick={() => handleEmptyTableauClick(colIdx)} cardWidth={cardW} />
                 ) : (
                   col.map((card, cardIdx) => {
-                    const offset = compact ? (card.faceUp ? 18 : 8) : (card.faceUp ? 22 : 10);
+                    const offset = card.faceUp ? FACE_UP_OFFSET : FACE_DOWN_OFFSET;
+                    let top = 0;
+                    for (let k = 0; k < cardIdx; k++) {
+                      top += col[k].faceUp ? FACE_UP_OFFSET : FACE_DOWN_OFFSET;
+                    }
                     const isSelected = selectedCard?.source === `tableau-${colIdx}` && cardIdx >= selectedCard.cardIndex;
                     return (
                       <div
                         key={card.id}
                         className="absolute"
                         style={{
-                          top: cardIdx * offset,
+                          top,
                           left: 0,
                         }}
                         onPointerDown={card.faceUp ? (e) => startDrag(e, `tableau-${colIdx}`, cardIdx) : undefined}
@@ -530,7 +549,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                           card={card}
                           onClick={card.faceUp && !dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           onDoubleClick={card.faceUp ? () => handleDoubleClick(`tableau-${colIdx}`, cardIdx) : undefined}
-                          compact={compact}
+                          cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />
                       </div>
@@ -568,10 +587,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
               <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    // Navigate home — trigger onGameEnd which shows PostGameScreen
-                    onGameEnd(state);
-                  }}
+                  onClick={() => onGameEnd(state)}
                   className="flex-1"
                 >
                   <ArrowLeft className="w-4 h-4 mr-1" />

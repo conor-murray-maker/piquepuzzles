@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Card as CardType, isRed, suitSymbol, Rank } from '@/game/types';
 
 interface PlayingCardProps {
@@ -11,115 +10,152 @@ interface PlayingCardProps {
   compact?: boolean;
 }
 
-const CARD_BACK_PATTERN = (
-  <div className="w-full h-full rounded-lg bg-primary flex items-center justify-center overflow-hidden">
-    <div className="w-full h-full relative">
-      <div className="absolute inset-1.5 rounded border border-primary-foreground/20 flex items-center justify-center">
-        <span className="text-primary-foreground/40 text-lg font-bold">♠</span>
-      </div>
-    </div>
-  </div>
-);
+const RED = '#DC2626';
+const BLACK = '#1a1a1a';
 
-type PipPosition = { row: number; col: number; flip?: boolean };
+// Standard pip positions as percentages [x%, y%] within the card body
+// x: 0=left col, 50=center, 100=right col
+// y: 0=top, 100=bottom
+type PipPos = [number, number, boolean?]; // [x%, y%, flipped?]
 
-const PIP_LAYOUTS: Record<string, PipPosition[]> = {
-  'A': [{ row: 2, col: 1 }],
-  '2': [{ row: 0, col: 1 }, { row: 4, col: 1, flip: true }],
-  '3': [{ row: 0, col: 1 }, { row: 2, col: 1 }, { row: 4, col: 1, flip: true }],
-  '4': [{ row: 0, col: 0 }, { row: 0, col: 2 }, { row: 4, col: 0, flip: true }, { row: 4, col: 2, flip: true }],
-  '5': [{ row: 0, col: 0 }, { row: 0, col: 2 }, { row: 2, col: 1 }, { row: 4, col: 0, flip: true }, { row: 4, col: 2, flip: true }],
-  '6': [{ row: 0, col: 0 }, { row: 0, col: 2 }, { row: 2, col: 0 }, { row: 2, col: 2 }, { row: 4, col: 0, flip: true }, { row: 4, col: 2, flip: true }],
-  '7': [{ row: 0, col: 0 }, { row: 0, col: 2 }, { row: 1, col: 1 }, { row: 2, col: 0 }, { row: 2, col: 2 }, { row: 4, col: 0, flip: true }, { row: 4, col: 2, flip: true }],
-  '8': [{ row: 0, col: 0 }, { row: 0, col: 2 }, { row: 1, col: 1 }, { row: 2, col: 0 }, { row: 2, col: 2 }, { row: 3, col: 1, flip: true }, { row: 4, col: 0, flip: true }, { row: 4, col: 2, flip: true }],
-  '9': [{ row: 0, col: 0 }, { row: 0, col: 2 }, { row: 1, col: 0 }, { row: 1, col: 2 }, { row: 2, col: 1 }, { row: 3, col: 0, flip: true }, { row: 3, col: 2, flip: true }, { row: 4, col: 0, flip: true }, { row: 4, col: 2, flip: true }],
-  '10': [{ row: 0, col: 0 }, { row: 0, col: 2 }, { row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 3, col: 0, flip: true }, { row: 3, col: 1, flip: true }, { row: 3, col: 2, flip: true }, { row: 4, col: 0, flip: true }, { row: 4, col: 2, flip: true }],
+const PIP_POSITIONS: Record<string, PipPos[]> = {
+  'A': [[50, 50]],
+  '2': [[50, 15], [50, 85, true]],
+  '3': [[50, 15], [50, 50], [50, 85, true]],
+  '4': [[30, 15], [70, 15], [30, 85, true], [70, 85, true]],
+  '5': [[30, 15], [70, 15], [50, 50], [30, 85, true], [70, 85, true]],
+  '6': [[30, 15], [70, 15], [30, 50], [70, 50], [30, 85, true], [70, 85, true]],
+  '7': [[30, 15], [70, 15], [50, 32.5], [30, 50], [70, 50], [30, 85, true], [70, 85, true]],
+  '8': [[30, 15], [70, 15], [50, 32.5], [30, 50], [70, 50], [50, 67.5, true], [30, 85, true], [70, 85, true]],
+  '9': [[30, 12], [70, 12], [30, 37], [70, 37], [50, 50], [30, 63, true], [70, 63, true], [30, 88, true], [70, 88, true]],
+  '10': [[30, 12], [70, 12], [50, 25], [30, 37], [70, 37], [30, 63, true], [70, 63, true], [50, 75, true], [30, 88, true], [70, 88, true]],
 };
 
 function isFaceCard(rank: Rank): boolean {
-  return rank === 'J' || rank === 'Q' || rank === 'K';
+  return rank === 'J' || rank === 'Q' || rank === 'K' || rank === 'A';
 }
 
-function PipGrid({ rank, symbol, compact }: { rank: Rank; symbol: string; compact?: boolean }) {
-  if (rank === 'A') {
-    return (
-      <div className="flex items-center justify-center flex-1">
-        <span className={compact ? 'text-2xl' : 'text-3xl'}>{symbol}</span>
-      </div>
-    );
-  }
-
-  if (isFaceCard(rank)) {
-    return (
-      <div className="flex items-center justify-center flex-1">
-        <span className={`font-bold ${compact ? 'text-xl' : 'text-2xl'}`}>{rank}</span>
-      </div>
-    );
-  }
-
-  const layout = PIP_LAYOUTS[rank];
-  if (!layout) return null;
-
-  const pipSize = compact ? 'text-[9px]' : 'text-[11px]';
-  // 5 rows x 3 cols grid
-  const rowCount = 5;
-  const colCount = 3;
+function CardFace({ card, compact }: { card: CardType; compact?: boolean }) {
+  const red = isRed(card.suit);
+  const color = red ? RED : BLACK;
+  const symbol = suitSymbol(card.suit);
+  const w = compact ? 56 : 70;
+  const h = compact ? 80 : 100;
+  const cornerFontSize = compact ? 8 : 10;
+  const cornerSymbolSize = compact ? 7 : 9;
 
   return (
-    <div className="flex-1 grid grid-rows-5 grid-cols-3 items-center justify-items-center px-0.5" style={{ gap: 0 }}>
-      {Array.from({ length: rowCount * colCount }).map((_, idx) => {
-        const row = Math.floor(idx / colCount);
-        const col = idx % colCount;
-        const pip = layout.find(p => p.row === row && p.col === col);
-        if (pip) {
-          return (
-            <span key={idx} className={`${pipSize} leading-none ${pip.flip ? 'rotate-180' : ''}`}>
-              {symbol}
-            </span>
-          );
-        }
-        return <span key={idx} />;
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      className="rounded-lg"
+      style={{ display: 'block' }}
+    >
+      {/* Card background */}
+      <rect x="0" y="0" width={w} height={h} rx="6" ry="6" fill="white" stroke="#d4d4d8" strokeWidth="1" />
+
+      {/* Top-left corner: rank + suit */}
+      <text x="4" y={cornerFontSize + 3} fontSize={cornerFontSize} fontWeight="600" fill={color} fontFamily="Inter, system-ui, sans-serif">
+        {card.rank}
+      </text>
+      <text x="4" y={cornerFontSize + cornerSymbolSize + 4} fontSize={cornerSymbolSize} fill={color} fontFamily="Inter, system-ui, sans-serif">
+        {symbol}
+      </text>
+
+      {/* Bottom-right corner: rank + suit (rotated) */}
+      <g transform={`translate(${w}, ${h}) rotate(180)`}>
+        <text x="4" y={cornerFontSize + 3} fontSize={cornerFontSize} fontWeight="600" fill={color} fontFamily="Inter, system-ui, sans-serif">
+          {card.rank}
+        </text>
+        <text x="4" y={cornerFontSize + cornerSymbolSize + 4} fontSize={cornerSymbolSize} fill={color} fontFamily="Inter, system-ui, sans-serif">
+          {symbol}
+        </text>
+      </g>
+
+      {/* Center content */}
+      {isFaceCard(card.rank) ? (
+        // Face card / Ace: large centered letter
+        <text
+          x={w / 2}
+          y={h / 2 + (compact ? 8 : 10)}
+          fontSize={compact ? 24 : 30}
+          fontWeight="700"
+          fill={color}
+          textAnchor="middle"
+          fontFamily="Inter, system-ui, sans-serif"
+        >
+          {card.rank}
+        </text>
+      ) : (
+        // Number card: pip layout
+        <PipsSVG rank={card.rank} symbol={symbol} color={color} w={w} h={h} compact={compact} />
+      )}
+    </svg>
+  );
+}
+
+function PipsSVG({ rank, symbol, color, w, h, compact }: { rank: Rank; symbol: string; color: string; w: number; h: number; compact?: boolean }) {
+  const positions = PIP_POSITIONS[rank];
+  if (!positions) return null;
+
+  // Pip area: inset from corners to avoid overlapping rank labels
+  const padX = compact ? 10 : 13;
+  const padTop = compact ? 18 : 22;
+  const padBottom = compact ? 18 : 22;
+  const areaW = w - padX * 2;
+  const areaH = h - padTop - padBottom;
+  const pipSize = compact ? 10 : 13;
+
+  return (
+    <>
+      {positions.map(([px, py, flipped], i) => {
+        const cx = padX + (px / 100) * areaW;
+        const cy = padTop + (py / 100) * areaH;
+        return (
+          <text
+            key={i}
+            x={cx}
+            y={cy + pipSize * 0.35}
+            fontSize={pipSize}
+            fill={color}
+            textAnchor="middle"
+            fontFamily="Inter, system-ui, sans-serif"
+            transform={flipped ? `rotate(180, ${cx}, ${cy})` : undefined}
+          >
+            {symbol}
+          </text>
+        );
       })}
-    </div>
+    </>
+  );
+}
+
+function CardBack({ compact }: { compact?: boolean }) {
+  const w = compact ? 56 : 70;
+  const h = compact ? 80 : 100;
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="rounded-lg" style={{ display: 'block' }}>
+      <rect x="0" y="0" width={w} height={h} rx="6" ry="6" fill="hsl(160, 60%, 40%)" />
+      <rect x="3" y="3" width={w - 6} height={h - 6} rx="4" ry="4" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+      <text x={w / 2} y={h / 2 + 6} fontSize="16" fill="rgba(255,255,255,0.3)" textAnchor="middle" fontWeight="bold">♠</text>
+    </svg>
   );
 }
 
 export function PlayingCard({ card, onClick, onDoubleClick, style, isDragging, className = '', compact }: PlayingCardProps) {
-  const red = isRed(card.suit);
-  const symbol = suitSymbol(card.suit);
   const h = compact ? 'h-[80px]' : 'h-[100px]';
   const w = compact ? 'w-[56px]' : 'w-[70px]';
 
   return (
-    <motion.div
+    <div
       className={`playing-card ${w} ${h} ${isDragging ? 'playing-card-dragging z-50' : 'z-0'} cursor-pointer ${className}`}
       style={style}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      whileHover={!isDragging ? { y: -2, transition: { duration: 0.15 } } : undefined}
-      whileTap={{ scale: 0.98 }}
-      layout
-      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
     >
-      {!card.faceUp ? (
-        CARD_BACK_PATTERN
-      ) : (
-        <div className={`w-full h-full rounded-lg bg-card border border-border flex flex-col p-1 ${red ? 'text-card-red' : 'text-card-black'}`}>
-          {/* Top-left rank + suit */}
-          <div className="flex flex-col items-start leading-none">
-            <span className={`font-semibold ${compact ? 'text-[9px]' : 'text-xs'}`}>{card.rank}</span>
-            <span className={compact ? 'text-[8px]' : 'text-[10px]'}>{symbol}</span>
-          </div>
-          {/* Pip area */}
-          <PipGrid rank={card.rank} symbol={symbol} compact={compact} />
-          {/* Bottom-right rank + suit (rotated) */}
-          <div className="flex flex-col items-end leading-none rotate-180">
-            <span className={`font-semibold ${compact ? 'text-[9px]' : 'text-xs'}`}>{card.rank}</span>
-            <span className={compact ? 'text-[8px]' : 'text-[10px]'}>{symbol}</span>
-          </div>
-        </div>
-      )}
-    </motion.div>
+      {!card.faceUp ? <CardBack compact={compact} /> : <CardFace card={card} compact={compact} />}
+    </div>
   );
 }
 

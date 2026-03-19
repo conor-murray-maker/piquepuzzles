@@ -78,8 +78,8 @@ function CardFace({ card, compact }: { card: CardType; compact?: boolean }) {
         // Face card / Ace: large centered letter
         <text
           x={w / 2}
-          y={h / 2 + (compact ? 8 : 10)}
-          fontSize={compact ? 24 : 30}
+          y={h / 2 + (compact ? 10 : 12)}
+          fontSize={compact ? 28 : 34}
           fontWeight="700"
           fill={color}
           textAnchor="middle"

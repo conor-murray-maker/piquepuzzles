@@ -473,7 +473,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                       <PlayingCard
                         card={card}
                         onClick={() => !dragState.isDragging && handleCardClick(`freecell-${i}`, 0)}
-                        onDoubleClick={() => handleDoubleClick(`freecell-${i}`, 0)}
+                        cardWidth={cardW}
                         cardWidth={cardW}
                       />
                     </div>

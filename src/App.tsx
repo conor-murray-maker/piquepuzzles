@@ -41,17 +41,6 @@ function DailyPlaceholder() {
   );
 }
 
-function StatsPlaceholder() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center pb-16">
-      <div className="text-center space-y-2">
-        <p className="text-2xl">📊</p>
-        <h2 className="text-lg font-semibold">Statistics</h2>
-        <p className="text-sm text-muted-foreground">Coming soon</p>
-      </div>
-    </div>
-  );
-}
 
 function ProfilePlaceholder() {
   const { signOut } = useAuth();

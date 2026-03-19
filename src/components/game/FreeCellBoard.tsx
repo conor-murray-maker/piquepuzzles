@@ -209,11 +209,20 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     applyMove(newState);
   }, [state, applyMove, autoCompleting]);
 
-  const { dragState, startDrag, setForceUpdate } = useDragAndDrop(handleDrop);
+  const dragConfig = useMemo(() => ({
+    onDrop: handleDrop,
+    multiCardStacks: false,
+  }), [handleDrop]);
 
+  const startDrag = useCallback((e: React.PointerEvent, source: string, cardIndex: number) => {
+    dragManager.startDrag(e, source, cardIndex, dragConfig);
+  }, [dragConfig]);
+
+  const [, forceRender] = useState(0);
   useEffect(() => {
-    setForceUpdate(() => forceRender(c => c + 1));
-  }, [setForceUpdate]);
+    dragManager.setOnChange(() => forceRender(c => c + 1));
+    return () => dragManager.setOnChange(() => {});
+  }, []);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;

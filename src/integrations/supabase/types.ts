@@ -19,6 +19,7 @@ export type Database = {
           deal_id: string
           difficulty: string
           difficulty_score: number
+          game_mode: string
           hints_used: number
           id: string
           moves: number
@@ -35,6 +36,7 @@ export type Database = {
           deal_id: string
           difficulty: string
           difficulty_score?: number
+          game_mode?: string
           hints_used?: number
           id?: string
           moves: number
@@ -51,6 +53,7 @@ export type Database = {
           deal_id?: string
           difficulty?: string
           difficulty_score?: number
+          game_mode?: string
           hints_used?: number
           id?: string
           moves?: number
@@ -109,7 +112,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_rating_percentile: { Args: { user_rating: number }; Returns: number }
     }
     Enums: {
       [_ in never]: never

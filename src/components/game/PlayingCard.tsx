@@ -41,8 +41,8 @@ function CardFace({ card, compact }: { card: CardType; compact?: boolean }) {
   const symbol = suitSymbol(card.suit);
   const w = compact ? 56 : 70;
   const h = compact ? 80 : 100;
-  const cornerFontSize = compact ? 8 : 10;
-  const cornerSymbolSize = compact ? 7 : 9;
+  const cornerFontSize = compact ? 9 : 11;
+  const cornerSymbolSize = compact ? 8 : 10;
 
   return (
     <svg

@@ -32,17 +32,7 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function DailyPlaceholder() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center pb-16">
-      <div className="text-center space-y-2">
-        <p className="text-2xl">📅</p>
-        <h2 className="text-lg font-semibold">Daily Challenge</h2>
-        <p className="text-sm text-muted-foreground">Coming soon</p>
-      </div>
-    </div>
-  );
-}
+// DailyPlaceholder removed - using full Daily page now
 
 function AppContent() {
   const location = useLocation();

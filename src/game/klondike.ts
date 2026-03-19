@@ -1,4 +1,4 @@
-import { Card, KlondikeState, DrawMode, Difficulty, rankValue, isRed } from './types';
+import { Card, KlondikeState, DrawMode, Difficulty, rankValue, isRed, suitSymbol } from './types';
 import { createDeck, shuffleDeck, generateDealId } from './deck';
 
 export function createKlondikeGame(drawMode: DrawMode = 1, seed?: number): KlondikeState {

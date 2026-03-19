@@ -146,22 +146,26 @@ class DragManagerClass {
     e.preventDefault();
 
     if (this.s.thresholdMet && this.s.source && this.s.config) {
-      // Hide ghost for hit testing
-      if (this.s.ghostEl) this.s.ghostEl.style.display = 'none';
+      // Use ghost element center for hit testing, not pointer position
+      let dropX = e.clientX;
+      let dropY = e.clientY;
+      if (this.s.ghostEl) {
+        const ghostRect = this.s.ghostEl.getBoundingClientRect();
+        dropX = ghostRect.left + ghostRect.width / 2;
+        dropY = ghostRect.top + ghostRect.height / 2;
+        this.s.ghostEl.style.display = 'none';
+      }
       this.s.originElements.forEach(el => { el.style.visibility = 'hidden'; });
 
-      const targetId = this.findBestDropTarget(e.clientX, e.clientY);
+      const targetId = this.findBestDropTarget(dropX, dropY);
 
       this.s.originElements.forEach(el => { el.style.visibility = ''; });
 
       if (targetId) {
-        // Successful drop path — remove ghost immediately
         this.removeGhost();
         this.s.config.onDrop(this.s.source, targetId);
       } else {
-        // Snap back animation
         this.animateSnapBack();
-        // onDrop with null so the board knows it failed (no-op)
       }
     }
 

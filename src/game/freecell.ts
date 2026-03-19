@@ -1,4 +1,4 @@
-import { Card, FreeCellState, Difficulty, rankValue, isRed } from './types';
+import { Card, FreeCellState, Difficulty, rankValue, isRed, suitSymbol } from './types';
 import { createDeck, shuffleDeck, generateDealId } from './deck';
 
 export function createFreeCellGame(seed?: number): FreeCellState {

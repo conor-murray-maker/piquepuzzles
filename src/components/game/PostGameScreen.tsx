@@ -11,10 +11,11 @@ interface PostGameScreenProps {
   ratingChange: number;
   onPlayAgain: () => void;
   onGoHome: () => void;
+  elapsedSeconds: number;
 }
 
-export function PostGameScreen({ gameState, currentRating, ratingChange, onPlayAgain, onGoHome }: PostGameScreenProps) {
-  const timeSeconds = Math.floor((Date.now() - gameState.startTime) / 1000);
+export function PostGameScreen({ gameState, currentRating, ratingChange, onPlayAgain, onGoHome, elapsedSeconds }: PostGameScreenProps) {
+  const timeSeconds = elapsedSeconds;
   const percentile = gameState.isWon
     ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)
     : 0;

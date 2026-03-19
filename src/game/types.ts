@@ -41,6 +41,7 @@ export interface KlondikeState {
   dealId: string;
   difficulty: Difficulty;
   difficultyScore: number;
+  seed?: number;
 }
 
 export interface MoveRecord {

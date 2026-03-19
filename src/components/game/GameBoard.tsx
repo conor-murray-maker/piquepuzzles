@@ -554,7 +554,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                         card={card}
                         onClick={isTop && !dragState.isDragging ? () => handleCardClick('waste', 0) : undefined}
                         cardWidth={cardW}
-                        cardWidth={cardW}
                       />
                     </div>
                   );

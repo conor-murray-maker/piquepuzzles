@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { KlondikeState, DrawMode } from '@/game/types';
+import { KlondikeState, DrawMode, Card } from '@/game/types';
 import {
   createKlondikeGame,
   drawFromStock,
@@ -11,12 +11,14 @@ import {
   moveFoundationToTableau,
   isAutoCompletable,
   autoCompleteStep,
-  getHint,
+  getProgressiveHint,
 } from '@/game/klondike';
 import { PlayingCard, EmptyPile } from './PlayingCard';
 import { dragManager, DragSource } from '@/game/DragManager';
+import { isKlondikeStuck } from '@/game/stuckDetector';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, Layers, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -68,8 +70,8 @@ export function clearStorage() {
 }
 
 interface GameBoardProps {
-  onGameEnd: (state: KlondikeState) => void;
-  onGiveUp?: (state: KlondikeState) => void;
+  onGameEnd: (state: KlondikeState, elapsedSeconds: number) => void;
+  onGiveUp?: (state: KlondikeState, elapsedSeconds: number) => void;
   drawMode?: DrawMode;
 }
 
@@ -92,6 +94,9 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
   const [autoCompleting, setAutoCompleting] = useState(false);
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
+  const [showStuckModal, setShowStuckModal] = useState(false);
+  const [stuckDismissedAtMove, setStuckDismissedAtMove] = useState(-1);
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
@@ -180,7 +185,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
           if (next.isWon && !gameEndedRef.current) {
             gameEndedRef.current = true;
             setAutoCompleting(false);
-            onGameEnd(next);
+            onGameEnd(next, elapsedRef.current);
           }
         } else {
           setAutoCompleting(false);
@@ -197,6 +202,19 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     }
   }, [state, autoCompleting]);
 
+  // Stuck detection
+  useEffect(() => {
+    if (state.isWon || autoCompleting) return;
+    if (stuckDismissedAtMove >= 0 && state.moves - stuckDismissedAtMove < 5) return;
+
+    if (isKlondikeStuck(state)) {
+      stuckTimerRef.current = setTimeout(() => {
+        setShowStuckModal(true);
+      }, 1500);
+      return () => { if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current); };
+    }
+  }, [state, autoCompleting, stuckDismissedAtMove]);
+
   const pushHistory = useCallback((s: KlondikeState) => {
     setHistory(h => [...h, s]);
   }, []);
@@ -204,7 +222,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const fireGameEnd = useCallback((s: KlondikeState) => {
     if (gameEndedRef.current) return;
     gameEndedRef.current = true;
-    onGameEnd(s);
+    onGameEnd(s, elapsedRef.current);
   }, [onGameEnd]);
 
   const applyMove = useCallback((newState: KlondikeState | null) => {
@@ -270,13 +288,16 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   }, [history]);
 
   const handleHint = useCallback(() => {
-    const hint = getHint(state);
-    if (hint) {
-      setHintTarget(hint);
+    const result = getProgressiveHint(state, history);
+    if ('noHint' in result) {
+      toast(result.message);
+      setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
+    } else {
+      setHintTarget(result);
       setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
       setTimeout(() => setHintTarget(null), 2000);
     }
-  }, [state]);
+  }, [state, history]);
 
   const handleNewGame = useCallback(() => {
     clearStorage();
@@ -286,6 +307,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     setElapsed(0);
     setSelectedCard(null);
     setAutoCompleting(false);
+    setStuckDismissedAtMove(-1);
   }, [drawMode]);
 
   const handleGiveUp = useCallback(() => {
@@ -293,7 +315,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     clearStorage();
     const lostState: KlondikeState = { ...state, isWon: false };
     if (onGiveUp) {
-      onGiveUp(lostState);
+      onGiveUp(lostState, elapsedRef.current);
     } else {
       handleNewGame();
     }
@@ -305,25 +327,27 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     setSelectedCard(null);
   }, [state, pushHistory]);
 
-  // Smart auto-move on double-tap: foundation → tableau (prefer most face-up) → empty col (kings only)
+  // Smart auto-move on double-tap: foundation → tableau → empty col (stacks supported)
   const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
     setSelectedCard(null);
 
-    // Only single cards (top of pile)
-    if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      if (cardIndex !== state.tableau[col].length - 1) return;
-    }
+    let card: Card | null = null;
+    let isStack = false;
 
-    // Get the card
-    let card: import('@/game/types').Card | null = null;
-    if (source === 'waste' && state.waste.length > 0) {
+    if (source.startsWith('tableau-')) {
+      const colIdx = parseInt(source.split('-')[1]);
+      const col = state.tableau[colIdx];
+      if (cardIndex < 0 || cardIndex >= col.length) return;
+      card = col[cardIndex];
+      if (!card || !card.faceUp) return;
+      isStack = cardIndex < col.length - 1;
+      // Verify all cards from cardIndex onwards are face up
+      for (let i = cardIndex; i < col.length; i++) {
+        if (!col[i].faceUp) return;
+      }
+    } else if (source === 'waste' && state.waste.length > 0) {
       card = state.waste[state.waste.length - 1];
-    } else if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      const column = state.tableau[col];
-      if (column.length > 0) card = column[column.length - 1];
     } else if (source.startsWith('foundation-')) {
       const fIdx = parseInt(source.split('-')[1]);
       const pile = state.foundation[fIdx];
@@ -333,16 +357,18 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
 
     let newState: KlondikeState | null = null;
 
-    // Priority 1: Foundation
-    if (source === 'waste') {
-      newState = moveWasteToFoundation(state);
-    } else if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      newState = moveTableauToFoundation(state, col);
+    // Priority 1: Foundation (single cards only)
+    if (!isStack) {
+      if (source === 'waste') {
+        newState = moveWasteToFoundation(state);
+      } else if (source.startsWith('tableau-')) {
+        const colIdx = parseInt(source.split('-')[1]);
+        newState = moveTableauToFoundation(state, colIdx);
+      }
+      if (newState) { applyMove(newState); return; }
     }
-    if (newState) { applyMove(newState); return; }
 
-    // Priority 2: Tableau card on another card (prefer column with most face-up cards)
+    // Priority 2: Tableau on another card (prefer most face-up cards)
     const sortedCols = state.tableau
       .map((col, i) => ({ col, i, faceUp: col.filter(c => c.faceUp).length }))
       .filter(c => c.col.length > 0)
@@ -362,21 +388,21 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
       if (attempt) { applyMove(attempt); return; }
     }
 
-    // Priority 3: Empty column (kings only in Klondike)
-    if (card.rank === 'K') {
-      for (let i = 0; i < 7; i++) {
-        if (state.tableau[i].length === 0 && source !== `tableau-${i}`) {
-          let attempt: KlondikeState | null = null;
-          if (source === 'waste') attempt = moveWasteToTableau(state, i);
-          else if (source.startsWith('tableau-')) {
-            const fromCol = parseInt(source.split('-')[1]);
-            attempt = moveTableauToTableau(state, fromCol, cardIndex, i);
-          } else if (source.startsWith('foundation-')) {
-            const fIdx = parseInt(source.split('-')[1]);
-            attempt = moveFoundationToTableau(state, fIdx, i);
-          }
-          if (attempt) { applyMove(attempt); return; }
+    // Priority 3: Empty column
+    for (let i = 0; i < 7; i++) {
+      if (state.tableau[i].length === 0 && source !== `tableau-${i}`) {
+        // Kings only for single cards in Klondike; stacks starting with king allowed via moveTableauToTableau validation
+        if (!isStack && card.rank !== 'K') continue;
+        let attempt: KlondikeState | null = null;
+        if (source === 'waste') attempt = moveWasteToTableau(state, i);
+        else if (source.startsWith('tableau-')) {
+          const fromCol = parseInt(source.split('-')[1]);
+          attempt = moveTableauToTableau(state, fromCol, cardIndex, i);
+        } else if (source.startsWith('foundation-')) {
+          const fIdx = parseInt(source.split('-')[1]);
+          attempt = moveFoundationToTableau(state, fIdx, i);
         }
+        if (attempt) { applyMove(attempt); return; }
       }
     }
   }, [state, applyMove, autoCompleting]);
@@ -422,7 +448,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     }
 
     setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragManager.isDragging, handleDoubleTap]);
+  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, handleDoubleTap]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;
@@ -441,6 +467,26 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     }
     setSelectedCard(null);
   }, [selectedCard, state, pushHistory, autoCompleting]);
+
+  const handleStuckUndo = useCallback(() => {
+    setShowStuckModal(false);
+    setHistory(h => {
+      if (h.length === 0) return h;
+      const n = Math.min(3, h.length);
+      const target = h[h.length - n];
+      setState(s => ({
+        ...target,
+        moves: s.moves + n,
+        undosUsed: s.undosUsed + n,
+      }));
+      return h.slice(0, -n);
+    });
+  }, []);
+
+  const handleStuckNewDeal = useCallback(() => {
+    setShowStuckModal(false);
+    handleGiveUp();
+  }, [handleGiveUp]);
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
@@ -608,7 +654,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                   <EmptyPile onClick={() => handleEmptyTableauClick(colIdx)} cardWidth={cardW} />
                 ) : (
                   col.map((card, cardIdx) => {
-                    const offset = card.faceUp ? FACE_UP_OFFSET : FACE_DOWN_OFFSET;
                     let top = 0;
                     for (let k = 0; k < cardIdx; k++) {
                       top += col[k].faceUp ? FACE_UP_OFFSET : FACE_DOWN_OFFSET;
@@ -640,7 +685,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
         </div>
       </div>
 
-      {/* Win overlay — stays until user acts */}
+      {/* Win overlay */}
       <AnimatePresence>
         {state.isWon && (
           <motion.div
@@ -701,6 +746,32 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
               Give Up
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Stuck modal */}
+      <AlertDialog open={showStuckModal} onOpenChange={setShowStuckModal}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>No moves available</AlertDialogTitle>
+            <AlertDialogDescription>
+              It looks like there are no more moves to make. What would you like to do?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button onClick={handleStuckUndo}>
+              Undo moves
+            </Button>
+            <Button variant="secondary" onClick={handleStuckNewDeal}>
+              New deal
+            </Button>
+            <Button variant="ghost" onClick={() => {
+              setShowStuckModal(false);
+              setStuckDismissedAtMove(state.moves);
+            }}>
+              Keep trying
+            </Button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>

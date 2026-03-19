@@ -293,3 +293,79 @@ function cloneState(state: KlondikeState): KlondikeState {
     waste: state.waste.map(c => ({ ...c })),
   };
 }
+
+export function getProgressiveHint(
+  state: KlondikeState,
+  recentStates: KlondikeState[] = []
+): { from: string; to: string; description: string } | { noHint: true; message: string } {
+  // Build set of recent card positions for regression check
+  const recentPositions = new Set<string>();
+  for (const s of recentStates.slice(-10)) {
+    s.tableau.forEach((col, i) => col.forEach(c => recentPositions.add(`${c.id}@tableau-${i}`)));
+    s.waste.forEach(c => recentPositions.add(`${c.id}@waste`));
+    s.foundation.forEach((pile, i) => pile.forEach(c => recentPositions.add(`${c.id}@foundation-${i}`)));
+  }
+
+  interface Candidate {
+    from: string; to: string; description: string;
+    priority: number; cardId: string;
+  }
+  const candidates: Candidate[] = [];
+
+  // Priority 1: Foundation
+  if (state.waste.length > 0) {
+    const card = state.waste[state.waste.length - 1];
+    const fIdx = canMoveToFoundation(card, state.foundation);
+    if (fIdx !== -1) candidates.push({ from: 'waste', to: `foundation-${fIdx}`, description: `Move ${card.rank}${suitSymbol(card.suit)} to foundation`, priority: 1, cardId: card.id });
+  }
+  for (let i = 0; i < 7; i++) {
+    const col = state.tableau[i];
+    if (col.length === 0) continue;
+    const card = col[col.length - 1];
+    if (!card.faceUp) continue;
+    const fIdx = canMoveToFoundation(card, state.foundation);
+    if (fIdx !== -1) candidates.push({ from: `tableau-${i}`, to: `foundation-${fIdx}`, description: `Move ${card.rank}${suitSymbol(card.suit)} to foundation`, priority: 1, cardId: card.id });
+  }
+
+  // Priority 2-4: Tableau moves
+  for (let i = 0; i < 7; i++) {
+    const col = state.tableau[i];
+    for (let j = 0; j < col.length; j++) {
+      if (!col[j].faceUp) continue;
+      const exposesDown = j > 0 && !col[j - 1].faceUp;
+      for (let k = 0; k < 7; k++) {
+        if (k === i) continue;
+        if (canMoveToTableau(col[j], state.tableau[k])) {
+          if (col[j].rank === 'K' && j === 0 && state.tableau[k].length === 0) continue;
+          let priority = 4;
+          if (exposesDown) priority = 2;
+          else if (state.tableau[k].length > 0) priority = 3;
+          candidates.push({ from: `tableau-${i}`, to: `tableau-${k}`, description: `Move ${col[j].rank}${suitSymbol(col[j].suit)} to column ${k + 1}`, priority, cardId: col[j].id });
+        }
+      }
+    }
+  }
+
+  // Waste to tableau
+  if (state.waste.length > 0) {
+    const card = state.waste[state.waste.length - 1];
+    for (let k = 0; k < 7; k++) {
+      if (canMoveToTableau(card, state.tableau[k])) {
+        candidates.push({ from: 'waste', to: `tableau-${k}`, description: `Move ${card.rank}${suitSymbol(card.suit)} to column ${k + 1}`, priority: 3, cardId: card.id });
+      }
+    }
+  }
+
+  candidates.sort((a, b) => a.priority - b.priority);
+
+  for (const c of candidates) {
+    if (c.priority === 1) return c; // Foundation moves always good
+    if (!recentPositions.has(`${c.cardId}@${c.to}`)) return c;
+  }
+
+  if (state.stock.length > 0) {
+    return { from: 'stock', to: 'waste', description: 'Draw from stock' };
+  }
+
+  return { noHint: true, message: 'No helpful moves found — consider undoing' };
+}

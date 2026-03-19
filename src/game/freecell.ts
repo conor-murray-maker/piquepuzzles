@@ -259,50 +259,80 @@ export function autoCompleteStep(state: FreeCellState): FreeCellState | null {
 }
 
 export function getHint(state: FreeCellState): { from: string; to: string; description: string } | null {
-  // Free cell / tableau to foundation
+  const result = getProgressiveHint(state);
+  if ('noHint' in result) return null;
+  return result;
+}
+
+export function getProgressiveHint(
+  state: FreeCellState,
+  recentStates: FreeCellState[] = []
+): { from: string; to: string; description: string } | { noHint: true; message: string } {
+  const recentPositions = new Set<string>();
+  for (const s of recentStates.slice(-10)) {
+    s.tableau.forEach((col, i) => col.forEach(c => recentPositions.add(`${c.id}@tableau-${i}`)));
+    s.freeCells.forEach((c, i) => { if (c) recentPositions.add(`${c.id}@freecell-${i}`); });
+    s.foundation.forEach((pile, i) => pile.forEach(c => recentPositions.add(`${c.id}@foundation-${i}`)));
+  }
+
+  interface Candidate {
+    from: string; to: string; description: string;
+    priority: number; cardId: string;
+  }
+  const candidates: Candidate[] = [];
+
+  // Priority 1: Foundation
   for (let i = 0; i < 4; i++) {
     const card = state.freeCells[i];
     if (!card) continue;
     const fIdx = canMoveToFoundation(card, state.foundation);
-    if (fIdx !== -1) return { from: `freecell-${i}`, to: `foundation-${fIdx}`, description: `Move ${card.rank}${card.suit} to foundation` };
+    if (fIdx !== -1) candidates.push({ from: `freecell-${i}`, to: `foundation-${fIdx}`, description: `Move ${card.rank}${suitSymbol(card.suit)} to foundation`, priority: 1, cardId: card.id });
   }
   for (let i = 0; i < 8; i++) {
     const col = state.tableau[i];
     if (col.length === 0) continue;
     const card = col[col.length - 1];
     const fIdx = canMoveToFoundation(card, state.foundation);
-    if (fIdx !== -1) return { from: `tableau-${i}`, to: `foundation-${fIdx}`, description: `Move ${card.rank}${card.suit} to foundation` };
+    if (fIdx !== -1) candidates.push({ from: `tableau-${i}`, to: `foundation-${fIdx}`, description: `Move ${card.rank}${suitSymbol(card.suit)} to foundation`, priority: 1, cardId: card.id });
   }
-  // Tableau to tableau
+
+  // Priority 2-4: Tableau moves
   for (let i = 0; i < 8; i++) {
     const col = state.tableau[i];
-    for (let j = col.length - 1; j >= 0; j--) {
-      // Check if j..end is a valid sequence
-      let valid = true;
-      for (let k = j; k < col.length - 1; k++) {
-        if (!(isRed(col[k].suit) !== isRed(col[k+1].suit) && rankValue(col[k].rank) === rankValue(col[k+1].rank) + 1)) {
-          valid = false; break;
-        }
-      }
-      if (!valid) break;
+    if (col.length === 0) continue;
+    const seqLen = getValidSequenceLength(col);
+    const seqStart = col.length - seqLen;
+    for (let j = seqStart; j < col.length; j++) {
       const numCards = col.length - j;
       for (let t = 0; t < 8; t++) {
         if (t === i) continue;
         if (canMoveToTableau(col[j], state.tableau[t]) && numCards <= maxMovableCards(state, t)) {
-          if (state.tableau[t].length === 0 && j === 0) continue; // Don't suggest moving whole col to empty
-          return { from: `tableau-${i}`, to: `tableau-${t}`, description: `Move ${col[j].rank}${col[j].suit} to column ${t + 1}` };
+          if (state.tableau[t].length === 0 && j === 0) continue;
+          let priority = 4;
+          if (state.tableau[t].length > 0) priority = 3;
+          candidates.push({ from: `tableau-${i}`, to: `tableau-${t}`, description: `Move ${col[j].rank}${suitSymbol(col[j].suit)} to column ${t + 1}`, priority, cardId: col[j].id });
         }
       }
     }
   }
-  // Suggest free cell
+
+  // Priority 5: Free cell
   for (let i = 0; i < 8; i++) {
     const col = state.tableau[i];
     if (col.length === 0) continue;
     const emptyCell = state.freeCells.findIndex(c => c === null);
     if (emptyCell !== -1) {
-      return { from: `tableau-${i}`, to: `freecell-${emptyCell}`, description: `Move ${col[col.length-1].rank} to free cell` };
+      const card = col[col.length - 1];
+      candidates.push({ from: `tableau-${i}`, to: `freecell-${emptyCell}`, description: `Move ${card.rank}${suitSymbol(card.suit)} to free cell`, priority: 5, cardId: card.id });
     }
   }
-  return null;
+
+  candidates.sort((a, b) => a.priority - b.priority);
+
+  for (const c of candidates) {
+    if (c.priority === 1) return c;
+    if (!recentPositions.has(`${c.cardId}@${c.to}`)) return c;
+  }
+
+  return { noHint: true, message: 'No helpful moves found — consider undoing' };
 }

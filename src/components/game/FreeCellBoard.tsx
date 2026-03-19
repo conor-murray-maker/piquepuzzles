@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { FreeCellState, Card, rankValue, isRed } from '@/game/types';
 import {
-  createFreeCellGame,
   moveToFreeCell,
   moveFreeCellToTableau,
   moveFreeCellToFoundation,
@@ -15,10 +14,12 @@ import {
   getValidSequenceLength,
   maxMovableCards,
 } from '@/game/freecell';
+import { createVerifiedFreeCellGame } from '@/game/solver';
 import { getFreeCellAutoSend, applyFreeCellAutoSend } from '@/game/autoSend';
 import { PlayingCard, EmptyPile } from './PlayingCard';
 import { dragManager, DragSource } from '@/game/DragManager';
 import { isFreeCellStuck } from '@/game/stuckDetector';
+import { supabase } from '@/integrations/supabase/client';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -72,9 +73,9 @@ interface FreeCellBoardProps {
 
 export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed }: FreeCellBoardProps) {
   const [state, setState] = useState<FreeCellState>(() => {
-    if (initialSeed !== undefined) return createFreeCellGame(initialSeed);
+    if (initialSeed !== undefined) return createVerifiedFreeCellGame(initialSeed);
     const saved = loadFromStorage();
-    return saved ? saved.state : createFreeCellGame();
+    return saved ? saved.state : createVerifiedFreeCellGame();
   });
   const [history, setHistory] = useState<FreeCellState[]>(() => {
     if (initialSeed !== undefined) return [];
@@ -119,6 +120,20 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed }: FreeCellBoar
     if (initialSeed !== undefined) return;
     if (state.isWon) { clearFreeCellStorage(); } else { saveToStorage(state, history); }
   }, [state, history, initialSeed]);
+
+  // Register deal in Supabase
+  useEffect(() => {
+    if (state.seed !== undefined) {
+      (supabase as any).from('deals').upsert({
+        seed: state.seed,
+        game_mode: 'freecell',
+        draw_mode: 3,
+        min_moves: state.minMoves || 0,
+        dds_initial: state.difficultyScore,
+        dds_blended: state.difficultyScore,
+      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true }).then(() => {});
+    }
+  }, [state.dealId]);
 
   useEffect(() => {
     if (initialSeed !== undefined) return;
@@ -296,7 +311,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed }: FreeCellBoar
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
     gameEndedRef.current = false;
-    setState(createFreeCellGame());
+    setState(createVerifiedFreeCellGame());
     setHistory([]);
     setElapsed(0);
     setGameStarted(false);

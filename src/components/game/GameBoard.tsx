@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { KlondikeState, DrawMode, Card } from '@/game/types';
 import {
-  createKlondikeGame,
   drawFromStock,
   moveWasteToTableau,
   moveWasteToFoundation,
@@ -13,10 +12,12 @@ import {
   autoCompleteStep,
   getProgressiveHint,
 } from '@/game/klondike';
+import { createVerifiedKlondikeGame } from '@/game/solver';
 import { getKlondikeAutoSend, applyKlondikeAutoSend } from '@/game/autoSend';
 import { PlayingCard, EmptyPile } from './PlayingCard';
 import { dragManager, DragSource } from '@/game/DragManager';
 import { isKlondikeStuck } from '@/game/stuckDetector';
+import { supabase } from '@/integrations/supabase/client';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, Layers, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -79,9 +80,9 @@ interface GameBoardProps {
 
 export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed }: GameBoardProps) {
   const [state, setState] = useState<KlondikeState>(() => {
-    if (initialSeed !== undefined) return createKlondikeGame(drawMode, initialSeed);
+    if (initialSeed !== undefined) return createVerifiedKlondikeGame(drawMode, initialSeed);
     const saved = loadFromStorage();
-    return saved ? saved.state : createKlondikeGame(drawMode);
+    return saved ? saved.state : createVerifiedKlondikeGame(drawMode);
   });
   const [history, setHistory] = useState<KlondikeState[]>(() => {
     if (initialSeed !== undefined) return [];
@@ -133,6 +134,20 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed }: Ga
       saveToStorage(state, history);
     }
   }, [state, history, initialSeed]);
+
+  // Register deal in Supabase
+  useEffect(() => {
+    if (state.seed !== undefined) {
+      (supabase as any).from('deals').upsert({
+        seed: state.seed,
+        game_mode: 'klondike',
+        draw_mode: drawMode,
+        min_moves: state.minMoves || 0,
+        dds_initial: state.difficultyScore,
+        dds_blended: state.difficultyScore,
+      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true }).then(() => {});
+    }
+  }, [state.dealId]);
 
   // Persist elapsed time
   useEffect(() => {
@@ -337,7 +352,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed }: Ga
   const handleNewGame = useCallback(() => {
     clearStorage();
     gameEndedRef.current = false;
-    setState(createKlondikeGame(drawMode));
+    setState(createVerifiedKlondikeGame(drawMode));
     setHistory([]);
     setElapsed(0);
     setGameStarted(false);

@@ -76,8 +76,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       seed,
     });
     const previousRating = profile?.rating ?? 1000;
-    const result = await saveGameResult(state, gameMode);
-    setRatingResult(result ? { ...result, previousRating } : null);
+    const result = await saveGameResult(state, gameMode, elapsedSeconds, drawMode);
+    setRatingResult(result ? { ...result, previousRating: result.previousRating } : null);
 
     // Save challenge completion
     if (challengeId && user) {
@@ -111,8 +111,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       seed,
     });
     const previousRating = profile?.rating ?? 1000;
-    const result = await saveGameResult(lostState as any, gameMode);
-    setRatingResult(result ? { ...result, previousRating } : null);
+    const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode);
+    setRatingResult(result ? { ...result, previousRating: result.previousRating } : null);
     if (gameMode === 'freecell') clearFreeCellStorage();
     else clearStorage();
     setPhase('postgame');

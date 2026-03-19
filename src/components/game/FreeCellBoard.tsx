@@ -233,6 +233,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
 
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
+    gameEndedRef.current = false;
     setState(createFreeCellGame());
     setHistory([]);
     setElapsed(0);

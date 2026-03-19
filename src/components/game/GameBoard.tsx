@@ -274,6 +274,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
 
   const handleNewGame = useCallback(() => {
     clearStorage();
+    gameEndedRef.current = false;
     setState(createKlondikeGame(drawMode));
     setHistory([]);
     setElapsed(0);

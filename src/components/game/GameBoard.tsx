@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { KlondikeState } from '@/game/types';
 import {
   createKlondikeGame,
@@ -12,8 +12,11 @@ import {
   isAutoCompletable,
   autoCompleteStep,
   getHint,
+  canMoveToFoundation,
 } from '@/game/klondike';
 import { PlayingCard, EmptyPile } from './PlayingCard';
+import { DragOverlay } from './DragOverlay';
+import { useDragAndDrop, DragSource } from '@/hooks/useDragAndDrop';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -131,6 +134,71 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
     setHistory(h => [...h, s]);
   }, []);
 
+  const applyMove = useCallback((newState: KlondikeState | null) => {
+    if (!newState) return false;
+    pushHistory(state);
+    setState(newState);
+    if (newState.isWon) onGameEnd(newState);
+    return true;
+  }, [state, pushHistory, onGameEnd]);
+
+  // Drag and drop handler
+  const handleDrop = useCallback((source: DragSource, targetElement: Element | null) => {
+    if (!targetElement || autoCompleting) return;
+    const targetId = targetElement.getAttribute('data-drop-target');
+    if (!targetId) return;
+
+    let newState: KlondikeState | null = null;
+
+    if (targetId.startsWith('tableau-')) {
+      const toCol = parseInt(targetId.split('-')[1]);
+      if (source.source === 'waste') {
+        newState = moveWasteToTableau(state, toCol);
+      } else if (source.source.startsWith('tableau-')) {
+        const fromCol = parseInt(source.source.split('-')[1]);
+        newState = moveTableauToTableau(state, fromCol, source.cardIndex, toCol);
+      } else if (source.source.startsWith('foundation-')) {
+        const fIdx = parseInt(source.source.split('-')[1]);
+        newState = moveFoundationToTableau(state, fIdx, toCol);
+      }
+    } else if (targetId.startsWith('foundation-')) {
+      const fIdx = parseInt(targetId.split('-')[1]);
+      if (source.source === 'waste') {
+        newState = moveWasteToFoundation(state);
+      } else if (source.source.startsWith('tableau-')) {
+        const fromCol = parseInt(source.source.split('-')[1]);
+        const col = state.tableau[fromCol];
+        // Only move single top card to foundation
+        if (source.cardIndex === col.length - 1) {
+          newState = moveTableauToFoundation(state, fromCol);
+        }
+      }
+    }
+
+    applyMove(newState);
+  }, [state, applyMove, autoCompleting]);
+
+  const { dragState, startDrag, moveDrag, endDrag } = useDragAndDrop(handleDrop);
+
+  // Get cards being dragged for overlay
+  const getDraggedCards = () => {
+    if (!dragState.source || !dragState.isDragging) return [];
+    const { source, cardIndex } = dragState.source;
+    if (source === 'waste') {
+      return state.waste.length > 0 ? [state.waste[state.waste.length - 1]] : [];
+    }
+    if (source.startsWith('tableau-')) {
+      const col = parseInt(source.split('-')[1]);
+      return state.tableau[col].slice(cardIndex);
+    }
+    if (source.startsWith('foundation-')) {
+      const fIdx = parseInt(source.split('-')[1]);
+      const pile = state.foundation[fIdx];
+      return pile.length > 0 ? [pile[pile.length - 1]] : [];
+    }
+    return [];
+  };
+
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
     const prev = history[history.length - 1];
@@ -164,9 +232,10 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
 
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
+    // If a drag just happened, don't process click
+    if (dragState.isDragging) return;
 
     if (selectedCard) {
-      // Try to move selected card to this target
       let newState: KlondikeState | null = null;
       const target = source;
 
@@ -192,9 +261,8 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
       return;
     }
 
-    // Select this card
     setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, onGameEnd, autoCompleting]);
+  }, [selectedCard, state, pushHistory, onGameEnd, autoCompleting, dragState.isDragging]);
 
   const handleDoubleClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
@@ -244,12 +312,24 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
     return false;
   };
 
+  const isDragSource = (source: string, cardIndex: number) => {
+    if (!dragState.isDragging || !dragState.source) return false;
+    if (dragState.source.source === source && cardIndex >= dragState.source.cardIndex) return true;
+    return false;
+  };
+
   const cardW = compact ? 56 : 70;
   const gap = compact ? 3 : 6;
   const boardWidth = cardW * 7 + gap * 6;
 
   return (
-    <div ref={gameBoardRef} className="game-surface min-h-screen flex flex-col" style={{ overscrollBehavior: 'none', touchAction: 'none' }}>
+    <div
+      ref={gameBoardRef}
+      className="game-surface min-h-screen flex flex-col"
+      style={{ overscrollBehavior: 'none', touchAction: 'none' }}
+      onPointerMove={moveDrag}
+      onPointerUp={endDrag}
+    >
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -299,14 +379,22 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
             </div>
 
             {/* Waste */}
-            <div className={`flex-shrink-0 ${isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : ''}`}>
+            <div
+              className={`flex-shrink-0 ${isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : ''}`}
+              data-drop-target="waste"
+            >
               {state.waste.length > 0 ? (
-                <PlayingCard
-                  card={state.waste[state.waste.length - 1]}
-                  onClick={() => handleCardClick('waste', 0)}
-                  onDoubleClick={() => handleDoubleClick('waste', 0)}
-                  compact={compact}
-                />
+                <div
+                  onPointerDown={(e) => startDrag(e, 'waste', 0)}
+                  style={{ opacity: isDragSource('waste', 0) ? 0.3 : 1 }}
+                >
+                  <PlayingCard
+                    card={state.waste[state.waste.length - 1]}
+                    onClick={() => !dragState.isDragging && handleCardClick('waste', 0)}
+                    onDoubleClick={() => handleDoubleClick('waste', 0)}
+                    compact={compact}
+                  />
+                </div>
               ) : (
                 <EmptyPile compact={compact} />
               )}
@@ -316,13 +404,22 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
 
             {/* Foundations */}
             {state.foundation.map((pile, i) => (
-              <div key={i} className={`flex-shrink-0 ${isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}>
+              <div
+                key={i}
+                className={`flex-shrink-0 ${isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                data-drop-target={`foundation-${i}`}
+              >
                 {pile.length > 0 ? (
-                  <PlayingCard
-                    card={pile[pile.length - 1]}
-                    onClick={() => handleCardClick(`foundation-${i}`, pile.length - 1)}
-                    compact={compact}
-                  />
+                  <div
+                    onPointerDown={(e) => startDrag(e, `foundation-${i}`, pile.length - 1)}
+                    style={{ opacity: isDragSource(`foundation-${i}`, pile.length - 1) ? 0.3 : 1 }}
+                  >
+                    <PlayingCard
+                      card={pile[pile.length - 1]}
+                      onClick={() => !dragState.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
+                      compact={compact}
+                    />
+                  </div>
                 ) : (
                   <EmptyPile label={['♥', '♦', '♣', '♠'][i]} compact={compact} />
                 )}
@@ -337,6 +434,7 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
                 key={colIdx}
                 className={`relative flex-shrink-0 ${isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
                 style={{ width: cardW, minHeight: compact ? 120 : 160 }}
+                data-drop-target={`tableau-${colIdx}`}
               >
                 {col.length === 0 ? (
                   <EmptyPile onClick={() => handleEmptyTableauClick(colIdx)} compact={compact} />
@@ -344,15 +442,21 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
                   col.map((card, cardIdx) => {
                     const offset = compact ? (card.faceUp ? 18 : 8) : (card.faceUp ? 22 : 10);
                     const isSelected = selectedCard?.source === `tableau-${colIdx}` && cardIdx >= selectedCard.cardIndex;
+                    const dragging = isDragSource(`tableau-${colIdx}`, cardIdx);
                     return (
                       <div
                         key={card.id}
                         className="absolute"
-                        style={{ top: cardIdx * offset, left: 0 }}
+                        style={{
+                          top: cardIdx * offset,
+                          left: 0,
+                          opacity: dragging ? 0.3 : 1,
+                        }}
+                        onPointerDown={card.faceUp ? (e) => startDrag(e, `tableau-${colIdx}`, cardIdx) : undefined}
                       >
                         <PlayingCard
                           card={card}
-                          onClick={card.faceUp ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
+                          onClick={card.faceUp && !dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           onDoubleClick={card.faceUp ? () => handleDoubleClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           compact={compact}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
@@ -366,6 +470,18 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
           </div>
         </div>
       </div>
+
+      {/* Drag overlay */}
+      {dragState.isDragging && dragState.source && (
+        <DragOverlay
+          cards={getDraggedCards()}
+          x={dragState.currentX}
+          y={dragState.currentY}
+          offsetX={dragState.offsetX}
+          offsetY={dragState.offsetY}
+          compact={compact}
+        />
+      )}
 
       {/* Win overlay */}
       <AnimatePresence>

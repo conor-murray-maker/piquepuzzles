@@ -25,6 +25,7 @@ export interface FreeCellState {
   difficulty: Difficulty;
   difficultyScore: number;
   seed?: number;
+  minMoves?: number;
 }
 
 export interface KlondikeState {
@@ -42,6 +43,7 @@ export interface KlondikeState {
   difficulty: Difficulty;
   difficultyScore: number;
   seed?: number;
+  minMoves?: number;
 }
 
 export interface MoveRecord {

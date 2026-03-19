@@ -109,15 +109,70 @@ export type Database = {
         }
         Relationships: []
       }
+      deals: {
+        Row: {
+          created_at: string
+          dds_blended: number
+          dds_empirical: number | null
+          dds_initial: number
+          draw_mode: number
+          game_mode: string
+          id: string
+          min_moves: number
+          pool_abandons: number
+          pool_attempts: number
+          pool_avg_moves: number
+          pool_avg_time: number
+          pool_wins: number
+          seed: number
+        }
+        Insert: {
+          created_at?: string
+          dds_blended?: number
+          dds_empirical?: number | null
+          dds_initial?: number
+          draw_mode?: number
+          game_mode?: string
+          id?: string
+          min_moves?: number
+          pool_abandons?: number
+          pool_attempts?: number
+          pool_avg_moves?: number
+          pool_avg_time?: number
+          pool_wins?: number
+          seed: number
+        }
+        Update: {
+          created_at?: string
+          dds_blended?: number
+          dds_empirical?: number | null
+          dds_initial?: number
+          draw_mode?: number
+          game_mode?: string
+          id?: string
+          min_moves?: number
+          pool_abandons?: number
+          pool_attempts?: number
+          pool_avg_moves?: number
+          pool_avg_time?: number
+          pool_wins?: number
+          seed?: number
+        }
+        Relationships: []
+      }
       game_history: {
         Row: {
+          base_delta: number | null
           deal_id: string
+          deal_uuid: string | null
           difficulty: string
           difficulty_score: number
+          final_delta: number | null
           game_mode: string
           hints_used: number
           id: string
           moves: number
+          performance_modifier: number | null
           played_at: string
           rating_after: number
           rating_before: number
@@ -128,13 +183,17 @@ export type Database = {
           won: boolean
         }
         Insert: {
+          base_delta?: number | null
           deal_id: string
+          deal_uuid?: string | null
           difficulty: string
           difficulty_score?: number
+          final_delta?: number | null
           game_mode?: string
           hints_used?: number
           id?: string
           moves: number
+          performance_modifier?: number | null
           played_at?: string
           rating_after: number
           rating_before: number
@@ -145,13 +204,17 @@ export type Database = {
           won: boolean
         }
         Update: {
+          base_delta?: number | null
           deal_id?: string
+          deal_uuid?: string | null
           difficulty?: string
           difficulty_score?: number
+          final_delta?: number | null
           game_mode?: string
           hints_used?: number
           id?: string
           moves?: number
+          performance_modifier?: number | null
           played_at?: string
           rating_after?: number
           rating_before?: number
@@ -161,7 +224,15 @@ export type Database = {
           user_id?: string
           won?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "game_history_deal_uuid_fkey"
+            columns: ["deal_uuid"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

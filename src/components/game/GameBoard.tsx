@@ -17,19 +17,75 @@ import { PlayingCard, EmptyPile } from './PlayingCard';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+const STORAGE_KEY = 'pique-game-state';
+const HISTORY_KEY = 'pique-game-history';
+
+function saveToStorage(state: KlondikeState, history: KlondikeState[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {}
+}
+
+function loadFromStorage(): { state: KlondikeState; history: KlondikeState[] } | null {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    const h = localStorage.getItem(HISTORY_KEY);
+    if (s) {
+      const state = JSON.parse(s) as KlondikeState;
+      if (!state.isWon) {
+        return { state, history: h ? JSON.parse(h) : [] };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function clearStorage() {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(HISTORY_KEY);
+}
+
 interface GameBoardProps {
   onGameEnd: (state: KlondikeState) => void;
 }
 
 export function GameBoard({ onGameEnd }: GameBoardProps) {
-  const [state, setState] = useState<KlondikeState>(() => createKlondikeGame(1));
-  const [history, setHistory] = useState<KlondikeState[]>([]);
+  const [state, setState] = useState<KlondikeState>(() => {
+    const saved = loadFromStorage();
+    return saved ? saved.state : createKlondikeGame(1);
+  });
+  const [history, setHistory] = useState<KlondikeState[]>(() => {
+    const saved = loadFromStorage();
+    return saved ? saved.history : [];
+  });
   const [elapsed, setElapsed] = useState(0);
   const [selectedCard, setSelectedCard] = useState<{ source: string; cardIndex: number } | null>(null);
   const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
   const [autoCompleting, setAutoCompleting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const gameBoardRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
+
+  // Persist game state
+  useEffect(() => {
+    if (state.isWon) {
+      clearStorage();
+    } else {
+      saveToStorage(state, history);
+    }
+  }, [state, history]);
+
+  // Prevent pull-to-refresh on game board
+  useEffect(() => {
+    const el = gameBoardRef.current;
+    if (!el) return;
+    const prevent = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchmove', prevent, { passive: false });
+    return () => el.removeEventListener('touchmove', prevent);
+  }, []);
 
   useEffect(() => {
     const check = () => setCompact(window.innerWidth < 500);

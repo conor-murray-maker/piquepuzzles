@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FreeCellState } from '@/game/types';
+import { FreeCellState, Card, rankValue, isRed } from '@/game/types';
 import {
   createFreeCellGame,
   moveToFreeCell,
@@ -11,14 +11,16 @@ import {
   moveFoundationToTableau,
   isAutoCompletable,
   autoCompleteStep,
-  getHint,
+  getProgressiveHint,
   getValidSequenceLength,
   maxMovableCards,
 } from '@/game/freecell';
 import { PlayingCard, EmptyPile } from './PlayingCard';
 import { dragManager, DragSource } from '@/game/DragManager';
+import { isFreeCellStuck } from '@/game/stuckDetector';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -62,8 +64,8 @@ export function clearFreeCellStorage() {
 }
 
 interface FreeCellBoardProps {
-  onGameEnd: (state: FreeCellState) => void;
-  onGiveUp?: (state: FreeCellState) => void;
+  onGameEnd: (state: FreeCellState, elapsedSeconds: number) => void;
+  onGiveUp?: (state: FreeCellState, elapsedSeconds: number) => void;
 }
 
 export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
@@ -85,6 +87,9 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
   const [autoCompleting, setAutoCompleting] = useState(false);
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
+  const [showStuckModal, setShowStuckModal] = useState(false);
+  const [stuckDismissedAtMove, setStuckDismissedAtMove] = useState(-1);
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
   const elapsedRef = useRef(elapsed);
@@ -138,7 +143,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
           if (next.isWon && !gameEndedRef.current) {
             gameEndedRef.current = true;
             setAutoCompleting(false);
-            onGameEnd(next);
+            onGameEnd(next, elapsedRef.current);
           }
         } else setAutoCompleting(false);
       }, 120);
@@ -150,12 +155,25 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     if (!autoCompleting && !state.isWon && isAutoCompletable(state)) setAutoCompleting(true);
   }, [state, autoCompleting]);
 
+  // Stuck detection
+  useEffect(() => {
+    if (state.isWon || autoCompleting) return;
+    if (stuckDismissedAtMove >= 0 && state.moves - stuckDismissedAtMove < 5) return;
+
+    if (isFreeCellStuck(state)) {
+      stuckTimerRef.current = setTimeout(() => {
+        setShowStuckModal(true);
+      }, 1500);
+      return () => { if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current); };
+    }
+  }, [state, autoCompleting, stuckDismissedAtMove]);
+
   const pushHistory = useCallback((s: FreeCellState) => setHistory(h => [...h, s]), []);
 
   const fireGameEnd = useCallback((s: FreeCellState) => {
     if (gameEndedRef.current) return;
     gameEndedRef.current = true;
-    onGameEnd(s);
+    onGameEnd(s, elapsedRef.current);
   }, [onGameEnd]);
 
   const applyMove = useCallback((newState: FreeCellState | null) => {
@@ -229,13 +247,16 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   }, [history]);
 
   const handleHint = useCallback(() => {
-    const hint = getHint(state);
-    if (hint) {
-      setHintTarget(hint);
+    const result = getProgressiveHint(state, history);
+    if ('noHint' in result) {
+      toast(result.message);
+      setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
+    } else {
+      setHintTarget(result);
       setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
       setTimeout(() => setHintTarget(null), 2000);
     }
-  }, [state]);
+  }, [state, history]);
 
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
@@ -245,32 +266,39 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     setElapsed(0);
     setSelectedCard(null);
     setAutoCompleting(false);
+    setStuckDismissedAtMove(-1);
   }, []);
 
   const handleGiveUp = useCallback(() => {
     setShowGiveUpDialog(false);
     clearFreeCellStorage();
     const lostState: FreeCellState = { ...state, isWon: false };
-    if (onGiveUp) onGiveUp(lostState);
+    if (onGiveUp) onGiveUp(lostState, elapsedRef.current);
     else handleNewGame();
   }, [state, onGiveUp, handleNewGame]);
 
-  // Smart auto-move: foundation → tableau (prefer most face-up) → empty col → free cell
+  // Smart auto-move: foundation → tableau → empty col → free cell (stacks supported)
   const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
     setSelectedCard(null);
 
-    // Only single cards (top of column or free cell)
-    if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      if (cardIndex !== state.tableau[col].length - 1) return;
-    }
+    let card: Card | null = null;
+    let isStack = false;
 
-    let card: import('@/game/types').Card | null = null;
     if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      const column = state.tableau[col];
-      if (column.length > 0) card = column[column.length - 1];
+      const colIdx = parseInt(source.split('-')[1]);
+      const col = state.tableau[colIdx];
+      if (cardIndex < 0 || cardIndex >= col.length) return;
+      card = col[cardIndex];
+      if (!card) return;
+      isStack = cardIndex < col.length - 1;
+      // Verify valid sequence from cardIndex
+      if (isStack) {
+        for (let i = cardIndex; i < col.length - 1; i++) {
+          const a = col[i], b = col[i + 1];
+          if (!(isRed(a.suit) !== isRed(b.suit) && rankValue(a.rank) === rankValue(b.rank) + 1)) return;
+        }
+      }
     } else if (source.startsWith('freecell-')) {
       const cellIdx = parseInt(source.split('-')[1]);
       card = state.freeCells[cellIdx];
@@ -283,17 +311,21 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
 
     let newState: FreeCellState | null = null;
 
-    // Priority 1: Foundation
-    if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      newState = moveTableauToFoundation(state, col);
-    } else if (source.startsWith('freecell-')) {
-      const cellIdx = parseInt(source.split('-')[1]);
-      newState = moveFreeCellToFoundation(state, cellIdx);
+    // Priority 1: Foundation (single cards only)
+    if (!isStack) {
+      if (source.startsWith('tableau-')) {
+        const colIdx = parseInt(source.split('-')[1]);
+        if (cardIndex === state.tableau[colIdx].length - 1) {
+          newState = moveTableauToFoundation(state, colIdx);
+        }
+      } else if (source.startsWith('freecell-')) {
+        const cellIdx = parseInt(source.split('-')[1]);
+        newState = moveFreeCellToFoundation(state, cellIdx);
+      }
+      if (newState) { applyMove(newState); return; }
     }
-    if (newState) { applyMove(newState); return; }
 
-    // Priority 2: Tableau on another card (prefer column with most face-up cards)
+    // Priority 2: Tableau on another card (prefer column with most cards)
     const sortedCols = state.tableau
       .map((col, i) => ({ col, i, faceUp: col.length }))
       .filter(c => c.col.length > 0)
@@ -315,7 +347,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       if (attempt) { applyMove(attempt); return; }
     }
 
-    // Priority 3: Empty column (any card in FreeCell)
+    // Priority 3: Empty column
     for (let i = 0; i < 8; i++) {
       if (state.tableau[i].length === 0 && source !== `tableau-${i}`) {
         let attempt: FreeCellState | null = null;
@@ -330,11 +362,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       }
     }
 
-    // Priority 4: Free cell (last resort)
-    if (source.startsWith('tableau-')) {
+    // Priority 4: Free cell (single cards only, last resort)
+    if (!isStack && source.startsWith('tableau-')) {
       const fromCol = parseInt(source.split('-')[1]);
-      const attempt = moveToFreeCell(state, fromCol);
-      if (attempt) { applyMove(attempt); return; }
+      if (cardIndex === state.tableau[fromCol].length - 1) {
+        const attempt = moveToFreeCell(state, fromCol);
+        if (attempt) { applyMove(attempt); return; }
+      }
     }
   }, [state, applyMove, autoCompleting]);
 
@@ -378,7 +412,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       return;
     }
     setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragManager.isDragging, handleDoubleTap]);
+  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, handleDoubleTap]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;
@@ -405,6 +439,26 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     }
     setSelectedCard(null);
   }, [selectedCard, state, pushHistory, autoCompleting]);
+
+  const handleStuckUndo = useCallback(() => {
+    setShowStuckModal(false);
+    setHistory(h => {
+      if (h.length === 0) return h;
+      const n = Math.min(3, h.length);
+      const target = h[h.length - n];
+      setState(s => ({
+        ...target,
+        moves: s.moves + n,
+        undosUsed: s.undosUsed + n,
+      }));
+      return h.slice(0, -n);
+    });
+  }, []);
+
+  const handleStuckNewDeal = useCallback(() => {
+    setShowStuckModal(false);
+    handleGiveUp();
+  }, [handleGiveUp]);
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
@@ -587,6 +641,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
         )}
       </AnimatePresence>
 
+      {/* Give Up dialog */}
       <AlertDialog open={showGiveUpDialog} onOpenChange={setShowGiveUpDialog}>
         <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
@@ -599,6 +654,32 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
               Give Up
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Stuck modal */}
+      <AlertDialog open={showStuckModal} onOpenChange={setShowStuckModal}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>No moves available</AlertDialogTitle>
+            <AlertDialogDescription>
+              It looks like there are no more moves to make. What would you like to do?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button onClick={handleStuckUndo}>
+              Undo moves
+            </Button>
+            <Button variant="secondary" onClick={handleStuckNewDeal}>
+              New deal
+            </Button>
+            <Button variant="ghost" onClick={() => {
+              setShowStuckModal(false);
+              setStuckDismissedAtMove(state.moves);
+            }}>
+              Keep trying
+            </Button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>

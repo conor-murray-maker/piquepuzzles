@@ -18,7 +18,10 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const { profile } = useAuth();
   const { saveGameResult } = useGamePersistence();
   const [gamePhase, setGamePhase] = useState<'playing' | 'postgame'>('playing');
-  const [lastResult, setLastResult] = useState<{ won: boolean; moves: number; difficulty: string; hintsUsed: number; undosUsed: number; difficultyScore: number; startTime: number } | null>(null);
+  const [lastResult, setLastResult] = useState<{
+    won: boolean; moves: number; difficulty: string; hintsUsed: number;
+    undosUsed: number; difficultyScore: number; startTime: number; elapsedSeconds: number;
+  } | null>(null);
   const [ratingResult, setRatingResult] = useState<{ newRating: number; ratingChange: number } | null>(null);
   const [gameKey, setGameKey] = useState(0);
 
@@ -27,7 +30,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     onActiveGameChange?.(phase === 'playing');
   }, [onActiveGameChange]);
 
-  const handleGameEnd = useCallback(async (state: KlondikeState | FreeCellState) => {
+  const handleGameEnd = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
     setLastResult({
       won: state.isWon,
       moves: state.moves,
@@ -36,13 +39,14 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       undosUsed: state.undosUsed,
       difficultyScore: state.difficultyScore,
       startTime: state.startTime,
+      elapsedSeconds,
     });
     const result = await saveGameResult(state, gameMode);
     setRatingResult(result);
     setPhase('postgame');
   }, [saveGameResult, setPhase, gameMode]);
 
-  const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState) => {
+  const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
     const lostState = { ...state, isWon: false };
     setLastResult({
       won: false,
@@ -52,6 +56,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       undosUsed: state.undosUsed,
       difficultyScore: state.difficultyScore,
       startTime: state.startTime,
+      elapsedSeconds,
     });
     const result = await saveGameResult(lostState as any, gameMode);
     setRatingResult(result);
@@ -68,7 +73,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }, [setPhase]);
 
   if (gamePhase === 'postgame' && lastResult) {
-    // Create a minimal state-like object for PostGameScreen
     const fakeState = {
       isWon: lastResult.won,
       moves: lastResult.moves,
@@ -86,6 +90,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
         ratingChange={ratingResult?.ratingChange ?? 0}
         onPlayAgain={handlePlayAgain}
         onGoHome={() => navigate('/')}
+        elapsedSeconds={lastResult.elapsedSeconds}
       />
     );
   }

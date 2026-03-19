@@ -249,48 +249,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     else handleNewGame();
   }, [state, onGiveUp, handleNewGame]);
 
-  const handleCardClick = useCallback((source: string, cardIndex: number) => {
-    if (autoCompleting || dragState.isDragging) return;
-
-    // Double-tap detection
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
-      lastTapRef.current = null;
-      handleDoubleTap(source, cardIndex);
-      return;
-    }
-    lastTapRef.current = { source, cardIndex, time: now };
-
-    if (selectedCard) {
-      let newState: FreeCellState | null = null;
-      if (source.startsWith('tableau-')) {
-        const toCol = parseInt(source.split('-')[1]);
-        if (selectedCard.source.startsWith('tableau-')) {
-          const fromCol = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveTableauToTableau(state, fromCol, selectedCard.cardIndex, toCol);
-        } else if (selectedCard.source.startsWith('freecell-')) {
-          const cellIdx = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveFreeCellToTableau(state, cellIdx, toCol);
-        } else if (selectedCard.source.startsWith('foundation-')) {
-          const fIdx = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveFoundationToTableau(state, fIdx, toCol);
-        }
-      } else if (source.startsWith('freecell-')) {
-        if (selectedCard.source.startsWith('tableau-')) {
-          const fromCol = parseInt(selectedCard.source.split('-')[1]);
-          if (selectedCard.cardIndex === state.tableau[fromCol].length - 1) {
-            newState = moveToFreeCell(state, fromCol);
-          }
-        }
-      }
-      if (newState) { pushHistory(state); setState(newState); if (newState.isWon) fireGameEnd(newState); }
-      setSelectedCard(null);
-      return;
-    }
-    setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragState.isDragging]);
-
   // Smart auto-move: foundation → tableau (prefer most face-up) → empty col → free cell
   const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
@@ -373,6 +331,48 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       if (attempt) { applyMove(attempt); return; }
     }
   }, [state, applyMove, autoCompleting]);
+
+  const handleCardClick = useCallback((source: string, cardIndex: number) => {
+    if (autoCompleting || dragState.isDragging) return;
+
+    // Double-tap detection
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
+      lastTapRef.current = null;
+      handleDoubleTap(source, cardIndex);
+      return;
+    }
+    lastTapRef.current = { source, cardIndex, time: now };
+
+    if (selectedCard) {
+      let newState: FreeCellState | null = null;
+      if (source.startsWith('tableau-')) {
+        const toCol = parseInt(source.split('-')[1]);
+        if (selectedCard.source.startsWith('tableau-')) {
+          const fromCol = parseInt(selectedCard.source.split('-')[1]);
+          newState = moveTableauToTableau(state, fromCol, selectedCard.cardIndex, toCol);
+        } else if (selectedCard.source.startsWith('freecell-')) {
+          const cellIdx = parseInt(selectedCard.source.split('-')[1]);
+          newState = moveFreeCellToTableau(state, cellIdx, toCol);
+        } else if (selectedCard.source.startsWith('foundation-')) {
+          const fIdx = parseInt(selectedCard.source.split('-')[1]);
+          newState = moveFoundationToTableau(state, fIdx, toCol);
+        }
+      } else if (source.startsWith('freecell-')) {
+        if (selectedCard.source.startsWith('tableau-')) {
+          const fromCol = parseInt(selectedCard.source.split('-')[1]);
+          if (selectedCard.cardIndex === state.tableau[fromCol].length - 1) {
+            newState = moveToFreeCell(state, fromCol);
+          }
+        }
+      }
+      if (newState) { pushHistory(state); setState(newState); if (newState.isWon) fireGameEnd(newState); }
+      setSelectedCard(null);
+      return;
+    }
+    setSelectedCard({ source, cardIndex });
+  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragState.isDragging, handleDoubleTap]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;

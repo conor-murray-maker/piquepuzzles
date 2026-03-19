@@ -299,49 +299,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     setSelectedCard(null);
   }, [state, pushHistory]);
 
-  const handleCardClick = useCallback((source: string, cardIndex: number) => {
-    if (autoCompleting) return;
-    if (dragState.isDragging) return;
-
-    // Double-tap detection
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
-      lastTapRef.current = null;
-      handleDoubleTap(source, cardIndex);
-      return;
-    }
-    lastTapRef.current = { source, cardIndex, time: now };
-
-    if (selectedCard) {
-      let newState: KlondikeState | null = null;
-      const target = source;
-
-      if (target.startsWith('tableau-')) {
-        const toCol = parseInt(target.split('-')[1]);
-        if (selectedCard.source === 'waste') {
-          newState = moveWasteToTableau(state, toCol);
-        } else if (selectedCard.source.startsWith('tableau-')) {
-          const fromCol = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveTableauToTableau(state, fromCol, selectedCard.cardIndex, toCol);
-        } else if (selectedCard.source.startsWith('foundation-')) {
-          const fIdx = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveFoundationToTableau(state, fIdx, toCol);
-        }
-      }
-
-      if (newState) {
-        pushHistory(state);
-        setState(newState);
-        if (newState.isWon) fireGameEnd(newState);
-      }
-      setSelectedCard(null);
-      return;
-    }
-
-    setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragState.isDragging]);
-
   // Smart auto-move on double-tap: foundation → tableau (prefer most face-up) → empty col (kings only)
   const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
@@ -417,6 +374,49 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
       }
     }
   }, [state, applyMove, autoCompleting]);
+
+  const handleCardClick = useCallback((source: string, cardIndex: number) => {
+    if (autoCompleting) return;
+    if (dragState.isDragging) return;
+
+    // Double-tap detection
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
+      lastTapRef.current = null;
+      handleDoubleTap(source, cardIndex);
+      return;
+    }
+    lastTapRef.current = { source, cardIndex, time: now };
+
+    if (selectedCard) {
+      let newState: KlondikeState | null = null;
+      const target = source;
+
+      if (target.startsWith('tableau-')) {
+        const toCol = parseInt(target.split('-')[1]);
+        if (selectedCard.source === 'waste') {
+          newState = moveWasteToTableau(state, toCol);
+        } else if (selectedCard.source.startsWith('tableau-')) {
+          const fromCol = parseInt(selectedCard.source.split('-')[1]);
+          newState = moveTableauToTableau(state, fromCol, selectedCard.cardIndex, toCol);
+        } else if (selectedCard.source.startsWith('foundation-')) {
+          const fIdx = parseInt(selectedCard.source.split('-')[1]);
+          newState = moveFoundationToTableau(state, fIdx, toCol);
+        }
+      }
+
+      if (newState) {
+        pushHistory(state);
+        setState(newState);
+        if (newState.isWon) fireGameEnd(newState);
+      }
+      setSelectedCard(null);
+      return;
+    }
+
+    setSelectedCard({ source, cardIndex });
+  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragState.isDragging, handleDoubleTap]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;

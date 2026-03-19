@@ -14,7 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      game_history: {
+        Row: {
+          deal_id: string
+          difficulty: string
+          difficulty_score: number
+          hints_used: number
+          id: string
+          moves: number
+          played_at: string
+          rating_after: number
+          rating_before: number
+          rating_change: number
+          time_seconds: number
+          undos_used: number
+          user_id: string
+          won: boolean
+        }
+        Insert: {
+          deal_id: string
+          difficulty: string
+          difficulty_score?: number
+          hints_used?: number
+          id?: string
+          moves: number
+          played_at?: string
+          rating_after: number
+          rating_before: number
+          rating_change: number
+          time_seconds: number
+          undos_used?: number
+          user_id: string
+          won: boolean
+        }
+        Update: {
+          deal_id?: string
+          difficulty?: string
+          difficulty_score?: number
+          hints_used?: number
+          id?: string
+          moves?: number
+          played_at?: string
+          rating_after?: number
+          rating_before?: number
+          rating_change?: number
+          time_seconds?: number
+          undos_used?: number
+          user_id?: string
+          won?: boolean
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          best_streak: number
+          created_at: string
+          current_streak: number
+          display_name: string | null
+          games_played: number
+          games_won: number
+          id: string
+          rating: number
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          best_streak?: number
+          created_at?: string
+          current_streak?: number
+          display_name?: string | null
+          games_played?: number
+          games_won?: number
+          id: string
+          rating?: number
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          best_streak?: number
+          created_at?: string
+          current_streak?: number
+          display_name?: string | null
+          games_played?: number
+          games_won?: number
+          id?: string
+          rating?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

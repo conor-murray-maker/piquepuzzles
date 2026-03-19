@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const navigate = useNavigate();
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
   const [isDark, setIsDark] = useState(false);
 
   const rating = profile?.rating ?? 1000;

@@ -541,7 +541,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                         <PlayingCard
                           card={card}
                           onClick={!dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
-                          onDoubleClick={cardIdx === col.length - 1 ? () => handleDoubleClick(`tableau-${colIdx}`, cardIdx) : undefined}
+                          cardWidth={cardW}
                           cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />

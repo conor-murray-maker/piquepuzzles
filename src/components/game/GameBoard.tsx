@@ -622,7 +622,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                         <PlayingCard
                           card={card}
                           onClick={card.faceUp && !dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
-                          onDoubleClick={card.faceUp ? () => handleDoubleClick(`tableau-${colIdx}`, cardIdx) : undefined}
+                          cardWidth={cardW}
                           cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />

@@ -38,27 +38,18 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-16">
       <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Spade className="w-6 h-6 text-primary" />
           <span className="text-lg font-bold tracking-tight">Pique</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleTheme}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {isDark ? '☀️' : '🌙'}
-          </button>
-          <button
-            onClick={signOut}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors p-1"
-            title="Sign out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
+        <button
+          onClick={toggleTheme}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {isDark ? '☀️' : '🌙'}
+        </button>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">

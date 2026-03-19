@@ -148,6 +148,7 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
   }, [state]);
 
   const handleNewGame = useCallback(() => {
+    clearStorage();
     setState(createKlondikeGame(1));
     setHistory([]);
     setElapsed(0);

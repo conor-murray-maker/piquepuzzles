@@ -11,7 +11,7 @@ export interface DragSource {
 export type DropHandler = (source: DragSource, targetId: string | null) => void;
 
 const DRAG_THRESHOLD = 6;
-const LIFT_OFFSET = 40;
+const LIFT_OFFSET = 24;
 const FORGIVENESS_MOUSE = 24;
 const FORGIVENESS_TOUCH = 36;
 

@@ -622,7 +622,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                           card={card}
                           onClick={card.faceUp && !dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           cardWidth={cardW}
-                          cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />
                       </div>

@@ -659,7 +659,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
               <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  onClick={() => onGameEnd(state)}
+                  onClick={() => fireGameEnd(state)}
                   className="flex-1"
                 >
                   <ArrowLeft className="w-4 h-4 mr-1" />

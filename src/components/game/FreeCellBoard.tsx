@@ -569,7 +569,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                 <p>Difficulty: {state.difficulty}</p>
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={() => onGameEnd(state)} className="flex-1">
+                <Button variant="outline" onClick={() => fireGameEnd(state)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-1" />Home
                 </Button>
                 <Button onClick={handleNewGame} className="flex-1 bg-rating-up hover:bg-rating-up/90 text-white">

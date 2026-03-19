@@ -41,6 +41,7 @@ export interface KlondikeState {
   undosUsed: number;
   isWon: boolean;
   dealId: string;
+  dealUuid?: string;
   difficulty: Difficulty;
   difficultyScore: number;
   seed?: number;

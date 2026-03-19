@@ -299,6 +299,5 @@ export function createVerifiedFreeCellGame(seed?: number): FreeCellState {
     if (seed !== undefined) break;
     seed = undefined;
   }
-  const game = createFreeCellGame(seed);
-  return { ...game, minMoves: 0 };
+  throw new Error('Could not generate verified solvable FreeCell deal after ' + MAX_ATTEMPTS + ' attempts');
 }

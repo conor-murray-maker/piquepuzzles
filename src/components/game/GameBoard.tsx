@@ -76,13 +76,31 @@ interface GameBoardProps {
   onGiveUp?: (state: KlondikeState, elapsedSeconds: number) => void;
   drawMode?: DrawMode;
   initialSeed?: number;
+  dealUuid?: string;
 }
 
-export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed }: GameBoardProps) {
+export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, dealUuid }: GameBoardProps) {
   const [state, setState] = useState<KlondikeState>(() => {
-    if (initialSeed !== undefined) return createVerifiedKlondikeGame(drawMode, initialSeed);
+    if (initialSeed !== undefined) {
+      try {
+        const game = createVerifiedKlondikeGame(drawMode, initialSeed);
+        return { ...game, dealUuid };
+      } catch (e) {
+        console.error(e);
+        toast.error('Failed to generate deal. Retrying...');
+        const game = createVerifiedKlondikeGame(drawMode);
+        return { ...game, dealUuid };
+      }
+    }
     const saved = loadFromStorage();
-    return saved ? saved.state : createVerifiedKlondikeGame(drawMode);
+    if (saved) return saved.state;
+    try {
+      return { ...createVerifiedKlondikeGame(drawMode), dealUuid };
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate deal. Retrying...');
+      return { ...createVerifiedKlondikeGame(drawMode), dealUuid };
+    }
   });
   const [history, setHistory] = useState<KlondikeState[]>(() => {
     if (initialSeed !== undefined) return [];

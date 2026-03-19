@@ -1,13 +1,13 @@
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { KlondikeState } from '@/game/types';
+import { KlondikeState, FreeCellState, GameMode } from '@/game/types';
 import { calculateRatingChange } from '@/game/rating';
 
 export function useGamePersistence() {
   const { user, profile, refreshProfile } = useAuth();
 
-  const saveGameResult = useCallback(async (gameState: KlondikeState) => {
+  const saveGameResult = useCallback(async (gameState: KlondikeState | FreeCellState, gameMode: GameMode = 'klondike') => {
     if (!user || !profile) return null;
 
     const timeSeconds = Math.floor((Date.now() - gameState.startTime) / 1000);
@@ -24,7 +24,6 @@ export function useGamePersistence() {
     const newRating = Math.max(0, profile.rating + ratingChange);
     const newStreak = gameState.isWon ? profile.current_streak + 1 : 0;
 
-    // Insert game history
     await supabase.from('game_history').insert({
       user_id: user.id,
       deal_id: gameState.dealId,
@@ -38,9 +37,9 @@ export function useGamePersistence() {
       rating_before: profile.rating,
       rating_after: newRating,
       rating_change: ratingChange,
-    });
+      game_mode: gameMode,
+    } as any);
 
-    // Update profile
     await supabase.from('profiles').update({
       rating: newRating,
       games_played: profile.games_played + 1,

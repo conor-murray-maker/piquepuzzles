@@ -1,0 +1,485 @@
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { FreeCellState } from '@/game/types';
+import {
+  createFreeCellGame,
+  moveToFreeCell,
+  moveFreeCellToTableau,
+  moveFreeCellToFoundation,
+  moveTableauToFoundation,
+  moveTableauToTableau,
+  moveFoundationToTableau,
+  isAutoCompletable,
+  autoCompleteStep,
+  getHint,
+  getValidSequenceLength,
+  maxMovableCards,
+} from '@/game/freecell';
+import { PlayingCard, EmptyPile } from './PlayingCard';
+import { useDragAndDrop, DragSource } from '@/hooks/useDragAndDrop';
+import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
+
+const STORAGE_KEY = 'pique-freecell-state';
+const HISTORY_KEY = 'pique-freecell-history';
+const ELAPSED_KEY = 'pique-freecell-elapsed';
+
+function saveToStorage(state: FreeCellState, history: FreeCellState[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {}
+}
+
+function loadFromStorage(): { state: FreeCellState; history: FreeCellState[] } | null {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    const h = localStorage.getItem(HISTORY_KEY);
+    if (s) {
+      const state = JSON.parse(s) as FreeCellState;
+      if (!state.isWon) return { state, history: h ? JSON.parse(h) : [] };
+    }
+  } catch {}
+  return null;
+}
+
+export function clearFreeCellStorage() {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(HISTORY_KEY);
+  localStorage.removeItem(ELAPSED_KEY);
+}
+
+interface FreeCellBoardProps {
+  onGameEnd: (state: FreeCellState) => void;
+  onGiveUp?: (state: FreeCellState) => void;
+}
+
+export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
+  const [state, setState] = useState<FreeCellState>(() => {
+    const saved = loadFromStorage();
+    return saved ? saved.state : createFreeCellGame();
+  });
+  const [history, setHistory] = useState<FreeCellState[]>(() => {
+    const saved = loadFromStorage();
+    return saved ? saved.history : [];
+  });
+  const [elapsed, setElapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem(ELAPSED_KEY);
+      return saved ? parseInt(saved, 10) : 0;
+    } catch { return 0; }
+  });
+  const [selectedCard, setSelectedCard] = useState<{ source: string; cardIndex: number } | null>(null);
+  const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
+  const [autoCompleting, setAutoCompleting] = useState(false);
+  const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
+  const gameBoardRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  const [, forceRender] = useState(0);
+  const elapsedRef = useRef(elapsed);
+  elapsedRef.current = elapsed;
+
+  useEffect(() => {
+    if (state.isWon) { clearFreeCellStorage(); } else { saveToStorage(state, history); }
+  }, [state, history]);
+
+  useEffect(() => {
+    try { localStorage.setItem(ELAPSED_KEY, String(elapsed)); } catch {}
+  }, [elapsed]);
+
+  useEffect(() => {
+    const el = gameBoardRef.current;
+    if (!el) return;
+    const prevent = (e: TouchEvent) => { if (e.cancelable) e.preventDefault(); };
+    el.addEventListener('touchmove', prevent, { passive: false });
+    return () => el.removeEventListener('touchmove', prevent);
+  }, []);
+
+  useEffect(() => {
+    const check = () => setCompact(window.innerWidth < 500);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // Timer
+  useEffect(() => {
+    if (state.isWon) return;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const start = () => { if (!intervalId) intervalId = setInterval(() => setElapsed(e => e + 1), 1000); };
+    const stop = () => { if (intervalId) { clearInterval(intervalId); intervalId = null; } };
+    const handleVis = () => { document.hidden ? stop() : start(); };
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', handleVis);
+    return () => { stop(); document.removeEventListener('visibilitychange', handleVis); };
+  }, [state.isWon]);
+
+  // Auto-complete
+  useEffect(() => {
+    if (autoCompleting && !state.isWon) {
+      const timer = setTimeout(() => {
+        const next = autoCompleteStep(state);
+        if (next) {
+          setState(next);
+          if (next.isWon) { setAutoCompleting(false); onGameEnd(next); }
+        } else setAutoCompleting(false);
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [autoCompleting, state, onGameEnd]);
+
+  useEffect(() => {
+    if (!autoCompleting && !state.isWon && isAutoCompletable(state)) setAutoCompleting(true);
+  }, [state, autoCompleting]);
+
+  const pushHistory = useCallback((s: FreeCellState) => setHistory(h => [...h, s]), []);
+
+  const applyMove = useCallback((newState: FreeCellState | null) => {
+    if (!newState) return false;
+    pushHistory(state);
+    setState(newState);
+    if (newState.isWon) onGameEnd(newState);
+    return true;
+  }, [state, pushHistory, onGameEnd]);
+
+  // Drag and drop
+  const handleDrop = useCallback((source: DragSource, targetElement: Element | null) => {
+    if (!targetElement || autoCompleting) return;
+    const targetId = targetElement.getAttribute('data-drop-target');
+    if (!targetId) return;
+
+    let newState: FreeCellState | null = null;
+
+    if (targetId.startsWith('tableau-')) {
+      const toCol = parseInt(targetId.split('-')[1]);
+      if (source.source.startsWith('tableau-')) {
+        const fromCol = parseInt(source.source.split('-')[1]);
+        newState = moveTableauToTableau(state, fromCol, source.cardIndex, toCol);
+      } else if (source.source.startsWith('freecell-')) {
+        const cellIdx = parseInt(source.source.split('-')[1]);
+        newState = moveFreeCellToTableau(state, cellIdx, toCol);
+      } else if (source.source.startsWith('foundation-')) {
+        const fIdx = parseInt(source.source.split('-')[1]);
+        newState = moveFoundationToTableau(state, fIdx, toCol);
+      }
+    } else if (targetId.startsWith('foundation-')) {
+      if (source.source.startsWith('tableau-')) {
+        const fromCol = parseInt(source.source.split('-')[1]);
+        if (source.cardIndex === state.tableau[fromCol].length - 1) {
+          newState = moveTableauToFoundation(state, fromCol);
+        }
+      } else if (source.source.startsWith('freecell-')) {
+        const cellIdx = parseInt(source.source.split('-')[1]);
+        newState = moveFreeCellToFoundation(state, cellIdx);
+      }
+    } else if (targetId.startsWith('freecell-')) {
+      if (source.source.startsWith('tableau-')) {
+        const fromCol = parseInt(source.source.split('-')[1]);
+        if (source.cardIndex === state.tableau[fromCol].length - 1) {
+          newState = moveToFreeCell(state, fromCol);
+        }
+      }
+    }
+
+    applyMove(newState);
+  }, [state, applyMove, autoCompleting]);
+
+  const { dragState, startDrag, setForceUpdate } = useDragAndDrop(handleDrop);
+
+  useEffect(() => {
+    setForceUpdate(() => forceRender(c => c + 1));
+  }, [setForceUpdate]);
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
+  }, [history]);
+
+  const handleHint = useCallback(() => {
+    const hint = getHint(state);
+    if (hint) {
+      setHintTarget(hint);
+      setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
+      setTimeout(() => setHintTarget(null), 2000);
+    }
+  }, [state]);
+
+  const handleNewGame = useCallback(() => {
+    clearFreeCellStorage();
+    setState(createFreeCellGame());
+    setHistory([]);
+    setElapsed(0);
+    setSelectedCard(null);
+    setAutoCompleting(false);
+  }, []);
+
+  const handleGiveUp = useCallback(() => {
+    setShowGiveUpDialog(false);
+    clearFreeCellStorage();
+    const lostState: FreeCellState = { ...state, isWon: false };
+    if (onGiveUp) onGiveUp(lostState);
+    else handleNewGame();
+  }, [state, onGiveUp, handleNewGame]);
+
+  const handleCardClick = useCallback((source: string, cardIndex: number) => {
+    if (autoCompleting || dragState.isDragging) return;
+
+    if (selectedCard) {
+      let newState: FreeCellState | null = null;
+      if (source.startsWith('tableau-')) {
+        const toCol = parseInt(source.split('-')[1]);
+        if (selectedCard.source.startsWith('tableau-')) {
+          const fromCol = parseInt(selectedCard.source.split('-')[1]);
+          newState = moveTableauToTableau(state, fromCol, selectedCard.cardIndex, toCol);
+        } else if (selectedCard.source.startsWith('freecell-')) {
+          const cellIdx = parseInt(selectedCard.source.split('-')[1]);
+          newState = moveFreeCellToTableau(state, cellIdx, toCol);
+        } else if (selectedCard.source.startsWith('foundation-')) {
+          const fIdx = parseInt(selectedCard.source.split('-')[1]);
+          newState = moveFoundationToTableau(state, fIdx, toCol);
+        }
+      } else if (source.startsWith('freecell-')) {
+        if (selectedCard.source.startsWith('tableau-')) {
+          const fromCol = parseInt(selectedCard.source.split('-')[1]);
+          if (selectedCard.cardIndex === state.tableau[fromCol].length - 1) {
+            newState = moveToFreeCell(state, fromCol);
+          }
+        }
+      }
+      if (newState) { pushHistory(state); setState(newState); if (newState.isWon) onGameEnd(newState); }
+      setSelectedCard(null);
+      return;
+    }
+    setSelectedCard({ source, cardIndex });
+  }, [selectedCard, state, pushHistory, onGameEnd, autoCompleting, dragState.isDragging]);
+
+  const handleDoubleClick = useCallback((source: string, _cardIndex: number) => {
+    if (autoCompleting) return;
+    let newState: FreeCellState | null = null;
+    if (source.startsWith('tableau-')) {
+      const col = parseInt(source.split('-')[1]);
+      newState = moveTableauToFoundation(state, col);
+    } else if (source.startsWith('freecell-')) {
+      const cellIdx = parseInt(source.split('-')[1]);
+      newState = moveFreeCellToFoundation(state, cellIdx);
+    }
+    if (newState) { pushHistory(state); setState(newState); if (newState.isWon) onGameEnd(newState); }
+    setSelectedCard(null);
+  }, [state, pushHistory, onGameEnd, autoCompleting]);
+
+  const handleEmptyTableauClick = useCallback((colIndex: number) => {
+    if (!selectedCard || autoCompleting) return;
+    let newState: FreeCellState | null = null;
+    if (selectedCard.source.startsWith('tableau-')) {
+      const fromCol = parseInt(selectedCard.source.split('-')[1]);
+      newState = moveTableauToTableau(state, fromCol, selectedCard.cardIndex, colIndex);
+    } else if (selectedCard.source.startsWith('freecell-')) {
+      const cellIdx = parseInt(selectedCard.source.split('-')[1]);
+      newState = moveFreeCellToTableau(state, cellIdx, colIndex);
+    }
+    if (newState) { pushHistory(state); setState(newState); }
+    setSelectedCard(null);
+  }, [selectedCard, state, pushHistory, autoCompleting]);
+
+  const handleEmptyFreeCellClick = useCallback((cellIdx: number) => {
+    if (!selectedCard || autoCompleting) return;
+    if (selectedCard.source.startsWith('tableau-')) {
+      const fromCol = parseInt(selectedCard.source.split('-')[1]);
+      if (selectedCard.cardIndex === state.tableau[fromCol].length - 1) {
+        const ns = moveToFreeCell(state, fromCol);
+        if (ns) { pushHistory(state); setState(ns); }
+      }
+    }
+    setSelectedCard(null);
+  }, [selectedCard, state, pushHistory, autoCompleting]);
+
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+
+  const isHighlighted = (source: string) => {
+    if (hintTarget) return hintTarget.from === source || hintTarget.to === source;
+    if (selectedCard) return selectedCard.source === source;
+    return false;
+  };
+
+  const cardW = compact ? 44 : 56;
+  const gap = compact ? 2 : 4;
+  const boardWidth = cardW * 8 + gap * 7;
+
+  return (
+    <div
+      ref={gameBoardRef}
+      className="game-surface min-h-screen flex flex-col"
+      style={{ overscrollBehavior: 'none', touchAction: 'none' }}
+    >
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1"><Timer className="w-3.5 h-3.5" />{formatTime(elapsed)}</span>
+          <span className="flex items-center gap-1"><Hash className="w-3.5 h-3.5" />{state.moves}</span>
+          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+            state.difficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
+            state.difficulty === 'Medium' ? 'bg-gold/20 text-gold' :
+            state.difficulty === 'Hard' ? 'bg-destructive/20 text-destructive' :
+            'bg-elite/20 text-elite'
+          }`}>{state.difficulty}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={handleHint} className="h-8 px-2">
+            <Lightbulb className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleUndo} disabled={history.length === 0} className="h-8 px-2">
+            <Undo2 className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleNewGame} className="h-8 px-2">
+            <RotateCcw className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowGiveUpDialog(true)} className="h-8 px-2 text-destructive hover:text-destructive">
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Game area */}
+      <div className="flex-1 flex flex-col items-center pt-3 pb-4 px-1 overflow-auto">
+        <div style={{ width: boardWidth, maxWidth: '100%' }}>
+          {/* Top row: 4 free cells + 4 foundations */}
+          <div className="flex items-start justify-between mb-4" style={{ gap }}>
+            {/* Free cells */}
+            {state.freeCells.map((card, i) => (
+              <div
+                key={`fc-${i}`}
+                className={`flex-shrink-0 ${isHighlighted(`freecell-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                data-drop-target={`freecell-${i}`}
+              >
+                {card ? (
+                  <div
+                    onPointerDown={(e) => startDrag(e, `freecell-${i}`, 0)}
+                  >
+                    <PlayingCard
+                      card={card}
+                      onClick={() => !dragState.isDragging && handleCardClick(`freecell-${i}`, 0)}
+                      onDoubleClick={() => handleDoubleClick(`freecell-${i}`, 0)}
+                      compact={true}
+                    />
+                  </div>
+                ) : (
+                  <EmptyPile label="FC" onClick={() => handleEmptyFreeCellClick(i)} compact={true} />
+                )}
+              </div>
+            ))}
+
+            {/* Foundations */}
+            {state.foundation.map((pile, i) => (
+              <div
+                key={`f-${i}`}
+                className={`flex-shrink-0 ${isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                data-drop-target={`foundation-${i}`}
+              >
+                {pile.length > 0 ? (
+                  <div onPointerDown={(e) => startDrag(e, `foundation-${i}`, pile.length - 1)}>
+                    <PlayingCard
+                      card={pile[pile.length - 1]}
+                      onClick={() => !dragState.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
+                      compact={true}
+                    />
+                  </div>
+                ) : (
+                  <EmptyPile label={['♥', '♦', '♣', '♠'][i]} compact={true} />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Tableau: 8 columns */}
+          <div className="flex justify-between" style={{ gap }}>
+            {state.tableau.map((col, colIdx) => (
+              <div
+                key={colIdx}
+                className={`relative flex-shrink-0 ${isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                style={{ width: cardW, minHeight: compact ? 100 : 140 }}
+                data-drop-target={`tableau-${colIdx}`}
+              >
+                {col.length === 0 ? (
+                  <EmptyPile onClick={() => handleEmptyTableauClick(colIdx)} compact={true} />
+                ) : (
+                  col.map((card, cardIdx) => {
+                    const offset = compact ? 16 : 20;
+                    const seqLen = getValidSequenceLength(col);
+                    const seqStart = col.length - seqLen;
+                    const canDrag = cardIdx >= seqStart && (col.length - cardIdx) <= maxMovableCards(state, undefined);
+                    const isSelected = selectedCard?.source === `tableau-${colIdx}` && cardIdx >= selectedCard.cardIndex;
+                    return (
+                      <div
+                        key={card.id}
+                        className="absolute"
+                        style={{ top: cardIdx * offset, left: 0 }}
+                        onPointerDown={canDrag ? (e) => startDrag(e, `tableau-${colIdx}`, cardIdx) : undefined}
+                      >
+                        <PlayingCard
+                          card={card}
+                          onClick={!dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
+                          onDoubleClick={cardIdx === col.length - 1 ? () => handleDoubleClick(`tableau-${colIdx}`, cardIdx) : undefined}
+                          compact={true}
+                          className={isSelected ? 'ring-2 ring-primary' : ''}
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Win overlay */}
+      <AnimatePresence>
+        {state.isWon && (
+          <motion.div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div className="bg-card border border-border rounded-2xl p-8 text-center max-w-sm mx-4"
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}>
+              <Trophy className="w-12 h-12 text-gold mx-auto mb-4" />
+              <h2 className="text-2xl font-bold mb-2">You Won!</h2>
+              <div className="space-y-1 text-sm text-muted-foreground mb-6">
+                <p>Time: {formatTime(elapsed)}</p>
+                <p>Moves: {state.moves}</p>
+                <p>Difficulty: {state.difficulty}</p>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => onGameEnd(state)} className="flex-1">
+                  <ArrowLeft className="w-4 h-4 mr-1" />Home
+                </Button>
+                <Button onClick={handleNewGame} className="flex-1 bg-rating-up hover:bg-rating-up/90 text-white">
+                  Play Again
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AlertDialog open={showGiveUpDialog} onOpenChange={setShowGiveUpDialog}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Give up this game?</AlertDialogTitle>
+            <AlertDialogDescription>Your rating will take a small penalty.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Playing</AlertDialogCancel>
+            <AlertDialogAction onClick={handleGiveUp} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Give Up
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

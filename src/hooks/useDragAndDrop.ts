@@ -189,7 +189,8 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
     }
 
     if (s.ghostEl) {
-      s.ghostEl.style.transform = `translate(${e.clientX - s.offsetX}px, ${e.clientY - s.offsetY}px)`;
+      const yOffset = s.offsetY + 60;
+      s.ghostEl.style.transform = `translate(${e.clientX - s.offsetX}px, ${e.clientY - yOffset}px)`;
     }
   }, [createGhost]);
 

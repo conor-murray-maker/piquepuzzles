@@ -474,7 +474,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                         card={card}
                         onClick={() => !dragState.isDragging && handleCardClick(`freecell-${i}`, 0)}
                         cardWidth={cardW}
-                        cardWidth={cardW}
                       />
                     </div>
                   ) : (

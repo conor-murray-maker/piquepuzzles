@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { FreeCellState } from '@/game/types';
 import {
@@ -16,7 +16,7 @@ import {
   maxMovableCards,
 } from '@/game/freecell';
 import { PlayingCard, EmptyPile } from './PlayingCard';
-import { useDragAndDrop, DragSource } from '@/hooks/useDragAndDrop';
+import { dragManager, DragSource } from '@/game/DragManager';
 import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -87,7 +87,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
-  const [, forceRender] = useState(0);
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);
@@ -168,10 +167,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   }, [state, pushHistory, fireGameEnd]);
 
   // Drag and drop
-  const handleDrop = useCallback((source: DragSource, targetElement: Element | null) => {
-    if (!targetElement || autoCompleting) return;
-    const targetId = targetElement.getAttribute('data-drop-target');
-    if (!targetId) return;
+  const handleDrop = useCallback((source: DragSource, targetId: string | null) => {
+    if (!targetId || autoCompleting) return;
 
     let newState: FreeCellState | null = null;
 
@@ -209,11 +206,20 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     applyMove(newState);
   }, [state, applyMove, autoCompleting]);
 
-  const { dragState, startDrag, setForceUpdate } = useDragAndDrop(handleDrop);
+  const dragConfig = useMemo(() => ({
+    onDrop: handleDrop,
+    multiCardStacks: false,
+  }), [handleDrop]);
 
+  const startDrag = useCallback((e: React.PointerEvent, source: string, cardIndex: number) => {
+    dragManager.startDrag(e, source, cardIndex, dragConfig);
+  }, [dragConfig]);
+
+  const [, forceRender] = useState(0);
   useEffect(() => {
-    setForceUpdate(() => forceRender(c => c + 1));
-  }, [setForceUpdate]);
+    dragManager.setOnChange(() => forceRender(c => c + 1));
+    return () => dragManager.setOnChange(() => {});
+  }, []);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
@@ -333,7 +339,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   }, [state, applyMove, autoCompleting]);
 
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
-    if (autoCompleting || dragState.isDragging) return;
+    if (autoCompleting || dragManager.isDragging) return;
 
     // Double-tap detection
     const now = Date.now();
@@ -372,7 +378,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       return;
     }
     setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragState.isDragging, handleDoubleTap]);
+  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragManager.isDragging, handleDoubleTap]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;
@@ -472,7 +478,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                     <div onPointerDown={(e) => startDrag(e, `freecell-${i}`, 0)}>
                       <PlayingCard
                         card={card}
-                        onClick={() => !dragState.isDragging && handleCardClick(`freecell-${i}`, 0)}
+                        onClick={() => !dragManager.isDragging && handleCardClick(`freecell-${i}`, 0)}
                         cardWidth={cardW}
                       />
                     </div>
@@ -495,7 +501,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                     <div onPointerDown={(e) => startDrag(e, `foundation-${i}`, pile.length - 1)}>
                       <PlayingCard
                         card={pile[pile.length - 1]}
-                        onClick={() => !dragState.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
+                        onClick={() => !dragManager.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
                         cardWidth={cardW}
                       />
                     </div>
@@ -539,7 +545,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                       >
                         <PlayingCard
                           card={card}
-                          onClick={!dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
+                          onClick={!dragManager.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />

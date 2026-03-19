@@ -12,6 +12,7 @@ import Auth from "./pages/Auth.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Stats from "./pages/Stats.tsx";
 import Profile from "./pages/Profile.tsx";
+import Challenge from "./pages/Challenge.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();

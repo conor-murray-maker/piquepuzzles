@@ -73,7 +73,7 @@ function AppContent() {
         <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
         <Route path="/play" element={<ProtectedRoute><Play onActiveGameChange={setIsGameActive} /></ProtectedRoute>} />
         <Route path="/daily" element={<ProtectedRoute><DailyPlaceholder /></ProtectedRoute>} />
-        <Route path="/stats" element={<ProtectedRoute><StatsPlaceholder /></ProtectedRoute>} />
+        <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePlaceholder /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>

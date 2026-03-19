@@ -338,7 +338,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
     gameEndedRef.current = false;
-    setState(createVerifiedFreeCellGame());
+    try {
+      setState(createVerifiedFreeCellGame());
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate deal');
+      setState(createVerifiedFreeCellGame());
+    }
     setHistory([]);
     setElapsed(0);
     setGameStarted(false);

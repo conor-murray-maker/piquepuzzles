@@ -109,6 +109,123 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_challenge_completions: {
+        Row: {
+          actual_moves: number
+          actual_time: number
+          completed_at: string
+          date: string
+          deal_id: string
+          final_delta: number
+          hints_used: number
+          id: string
+          result: string
+          user_id: string
+        }
+        Insert: {
+          actual_moves: number
+          actual_time: number
+          completed_at?: string
+          date: string
+          deal_id: string
+          final_delta?: number
+          hints_used?: number
+          id?: string
+          result: string
+          user_id: string
+        }
+        Update: {
+          actual_moves?: number
+          actual_time?: number
+          completed_at?: string
+          date?: string
+          deal_id?: string
+          final_delta?: number
+          hints_used?: number
+          id?: string
+          result?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_challenge_completions_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_challenges: {
+        Row: {
+          created_at: string
+          date: string
+          deal_id: string
+          game_mode: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          deal_id: string
+          game_mode?: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          deal_id?: string
+          game_mode?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_challenges_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_queue: {
+        Row: {
+          deal_id: string
+          game_mode: string
+          id: string
+          queued_at: string
+          served_at: string | null
+          tier: string
+          user_id: string
+        }
+        Insert: {
+          deal_id: string
+          game_mode?: string
+          id?: string
+          queued_at?: string
+          served_at?: string | null
+          tier?: string
+          user_id: string
+        }
+        Update: {
+          deal_id?: string
+          game_mode?: string
+          id?: string
+          queued_at?: string
+          served_at?: string | null
+          tier?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_queue_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deals: {
         Row: {
           created_at: string
@@ -118,6 +235,7 @@ export type Database = {
           draw_mode: number
           game_mode: string
           id: string
+          is_calibration: boolean
           min_moves: number
           pool_abandons: number
           pool_attempts: number
@@ -125,6 +243,7 @@ export type Database = {
           pool_avg_time: number
           pool_wins: number
           seed: number
+          tier: string
         }
         Insert: {
           created_at?: string
@@ -134,6 +253,7 @@ export type Database = {
           draw_mode?: number
           game_mode?: string
           id?: string
+          is_calibration?: boolean
           min_moves?: number
           pool_abandons?: number
           pool_attempts?: number
@@ -141,6 +261,7 @@ export type Database = {
           pool_avg_time?: number
           pool_wins?: number
           seed: number
+          tier?: string
         }
         Update: {
           created_at?: string
@@ -150,6 +271,7 @@ export type Database = {
           draw_mode?: number
           game_mode?: string
           id?: string
+          is_calibration?: boolean
           min_moves?: number
           pool_abandons?: number
           pool_attempts?: number
@@ -157,6 +279,7 @@ export type Database = {
           pool_avg_time?: number
           pool_wins?: number
           seed?: number
+          tier?: string
         }
         Relationships: []
       }
@@ -272,6 +395,59 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      user_calibration_progress: {
+        Row: {
+          calibration_deal_ids_played: string[]
+          game_mode: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calibration_deal_ids_played?: string[]
+          game_mode?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calibration_deal_ids_played?: string[]
+          game_mode?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_played_deals: {
+        Row: {
+          deal_id: string
+          id: string
+          played_at: string
+          user_id: string
+        }
+        Insert: {
+          deal_id: string
+          id?: string
+          played_at?: string
+          user_id: string
+        }
+        Update: {
+          deal_id?: string
+          id?: string
+          played_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_played_deals_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

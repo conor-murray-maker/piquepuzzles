@@ -2,3 +2,12 @@ project_id = "habzaxkukdlllwlavpdc"
 
 [functions.complete-game]
 verify_jwt = false
+
+[functions.seed-calibration-pool]
+verify_jwt = false
+
+[functions.refill-deal-queue]
+verify_jwt = false
+
+[functions.schedule-daily-challenge]
+verify_jwt = false

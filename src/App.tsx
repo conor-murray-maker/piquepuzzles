@@ -13,6 +13,7 @@ import ResetPassword from "./pages/ResetPassword.tsx";
 import Stats from "./pages/Stats.tsx";
 import Profile from "./pages/Profile.tsx";
 import Challenge from "./pages/Challenge.tsx";
+import Daily from "./pages/Daily.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -31,17 +32,7 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function DailyPlaceholder() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center pb-16">
-      <div className="text-center space-y-2">
-        <p className="text-2xl">📅</p>
-        <h2 className="text-lg font-semibold">Daily Challenge</h2>
-        <p className="text-sm text-muted-foreground">Coming soon</p>
-      </div>
-    </div>
-  );
-}
+// DailyPlaceholder removed - using full Daily page now
 
 function AppContent() {
   const location = useLocation();
@@ -59,7 +50,7 @@ function AppContent() {
         <Route path="/challenge/:id" element={<Challenge />} />
         <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
         <Route path="/play" element={<ProtectedRoute><Play onActiveGameChange={setIsGameActive} /></ProtectedRoute>} />
-        <Route path="/daily" element={<ProtectedRoute><DailyPlaceholder /></ProtectedRoute>} />
+        <Route path="/daily" element={<ProtectedRoute><Daily /></ProtectedRoute>} />
         <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />

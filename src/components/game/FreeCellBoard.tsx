@@ -69,13 +69,31 @@ interface FreeCellBoardProps {
   onGameEnd: (state: FreeCellState, elapsedSeconds: number) => void;
   onGiveUp?: (state: FreeCellState, elapsedSeconds: number) => void;
   initialSeed?: number;
+  dealUuid?: string;
 }
 
-export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed }: FreeCellBoardProps) {
+export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: FreeCellBoardProps) {
   const [state, setState] = useState<FreeCellState>(() => {
-    if (initialSeed !== undefined) return createVerifiedFreeCellGame(initialSeed);
+    if (initialSeed !== undefined) {
+      try {
+        const game = createVerifiedFreeCellGame(initialSeed);
+        return { ...game, dealUuid };
+      } catch (e) {
+        console.error(e);
+        toast.error('Failed to generate deal. Retrying...');
+        const game = createVerifiedFreeCellGame();
+        return { ...game, dealUuid };
+      }
+    }
     const saved = loadFromStorage();
-    return saved ? saved.state : createVerifiedFreeCellGame();
+    if (saved) return saved.state;
+    try {
+      return { ...createVerifiedFreeCellGame(), dealUuid };
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate deal. Retrying...');
+      return { ...createVerifiedFreeCellGame(), dealUuid };
+    }
   });
   const [history, setHistory] = useState<FreeCellState[]>(() => {
     if (initialSeed !== undefined) return [];
@@ -121,8 +139,9 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed }: FreeCellBoar
     if (state.isWon) { clearFreeCellStorage(); } else { saveToStorage(state, history); }
   }, [state, history, initialSeed]);
 
-  // Register deal in Supabase
+  // Register deal in Supabase (only for deals without a dealUuid from the queue)
   useEffect(() => {
+    if (state.dealUuid) return; // Already registered via deal queue
     if (state.seed !== undefined) {
       (supabase as any).from('deals').upsert({
         seed: state.seed,
@@ -131,9 +150,17 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed }: FreeCellBoar
         min_moves: state.minMoves || 0,
         dds_initial: state.difficultyScore,
         dds_blended: state.difficultyScore,
-      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true }).then(() => {});
+        tier: 'fresh',
+      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true })
+      .select('id')
+      .single()
+      .then(({ data }: any) => {
+        if (data?.id) {
+          setState(s => ({ ...s, dealUuid: data.id }));
+        }
+      });
     }
-  }, [state.dealId]);
+  }, [state.dealId, state.dealUuid]);
 
   useEffect(() => {
     if (initialSeed !== undefined) return;
@@ -311,7 +338,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed }: FreeCellBoar
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
     gameEndedRef.current = false;
-    setState(createVerifiedFreeCellGame());
+    try {
+      setState(createVerifiedFreeCellGame());
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate deal');
+      setState(createVerifiedFreeCellGame());
+    }
     setHistory([]);
     setElapsed(0);
     setGameStarted(false);

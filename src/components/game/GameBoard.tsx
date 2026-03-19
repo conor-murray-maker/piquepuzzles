@@ -76,13 +76,31 @@ interface GameBoardProps {
   onGiveUp?: (state: KlondikeState, elapsedSeconds: number) => void;
   drawMode?: DrawMode;
   initialSeed?: number;
+  dealUuid?: string;
 }
 
-export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed }: GameBoardProps) {
+export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, dealUuid }: GameBoardProps) {
   const [state, setState] = useState<KlondikeState>(() => {
-    if (initialSeed !== undefined) return createVerifiedKlondikeGame(drawMode, initialSeed);
+    if (initialSeed !== undefined) {
+      try {
+        const game = createVerifiedKlondikeGame(drawMode, initialSeed);
+        return { ...game, dealUuid };
+      } catch (e) {
+        console.error(e);
+        toast.error('Failed to generate deal. Retrying...');
+        const game = createVerifiedKlondikeGame(drawMode);
+        return { ...game, dealUuid };
+      }
+    }
     const saved = loadFromStorage();
-    return saved ? saved.state : createVerifiedKlondikeGame(drawMode);
+    if (saved) return saved.state;
+    try {
+      return { ...createVerifiedKlondikeGame(drawMode), dealUuid };
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate deal. Retrying...');
+      return { ...createVerifiedKlondikeGame(drawMode), dealUuid };
+    }
   });
   const [history, setHistory] = useState<KlondikeState[]>(() => {
     if (initialSeed !== undefined) return [];
@@ -135,8 +153,9 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed }: Ga
     }
   }, [state, history, initialSeed]);
 
-  // Register deal in Supabase
+  // Register deal in Supabase (only for deals without a dealUuid from the queue)
   useEffect(() => {
+    if (state.dealUuid) return; // Already registered via deal queue
     if (state.seed !== undefined) {
       (supabase as any).from('deals').upsert({
         seed: state.seed,
@@ -145,9 +164,17 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed }: Ga
         min_moves: state.minMoves || 0,
         dds_initial: state.difficultyScore,
         dds_blended: state.difficultyScore,
-      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true }).then(() => {});
+        tier: 'fresh',
+      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true })
+      .select('id')
+      .single()
+      .then(({ data }: any) => {
+        if (data?.id) {
+          setState(s => ({ ...s, dealUuid: data.id }));
+        }
+      });
     }
-  }, [state.dealId]);
+  }, [state.dealId, state.dealUuid]);
 
   // Persist elapsed time
   useEffect(() => {
@@ -352,7 +379,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed }: Ga
   const handleNewGame = useCallback(() => {
     clearStorage();
     gameEndedRef.current = false;
-    setState(createVerifiedKlondikeGame(drawMode));
+    try {
+      setState(createVerifiedKlondikeGame(drawMode));
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate deal');
+      setState(createVerifiedKlondikeGame(drawMode));
+    }
     setHistory([]);
     setElapsed(0);
     setGameStarted(false);

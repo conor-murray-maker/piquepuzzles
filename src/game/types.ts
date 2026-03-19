@@ -12,6 +12,20 @@ export type GameMode = 'klondike' | 'freecell';
 export type DrawMode = 1 | 3;
 export type Difficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert';
 
+export interface FreeCellState {
+  tableau: Card[][];        // 8 columns
+  foundation: Card[][];     // 4 piles
+  freeCells: (Card | null)[]; // 4 free cells
+  moves: number;
+  startTime: number;
+  hintsUsed: number;
+  undosUsed: number;
+  isWon: boolean;
+  dealId: string;
+  difficulty: Difficulty;
+  difficultyScore: number;
+}
+
 export interface KlondikeState {
   tableau: Card[][];        // 7 columns
   foundation: Card[][];     // 4 piles (hearts, diamonds, clubs, spades)

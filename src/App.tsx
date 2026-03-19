@@ -11,6 +11,7 @@ import Play from "./pages/Play.tsx";
 import Auth from "./pages/Auth.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Stats from "./pages/Stats.tsx";
+import Profile from "./pages/Profile.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -41,26 +42,10 @@ function DailyPlaceholder() {
   );
 }
 
-
-function ProfilePlaceholder() {
-  const { signOut } = useAuth();
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center pb-16">
-      <div className="text-center space-y-4">
-        <p className="text-2xl">👤</p>
-        <h2 className="text-lg font-semibold">Profile</h2>
-        <p className="text-sm text-muted-foreground">Coming soon</p>
-        <button onClick={signOut} className="text-sm text-destructive hover:underline">Sign out</button>
-      </div>
-    </div>
-  );
-}
-
 function AppContent() {
   const location = useLocation();
   const [isGameActive, setIsGameActive] = useState(false);
 
-  // Hide bottom nav during active game play and on auth/reset pages
   const hideNav = (location.pathname === '/play' && isGameActive) ||
     location.pathname === '/auth' ||
     location.pathname === '/reset-password';
@@ -74,7 +59,7 @@ function AppContent() {
         <Route path="/play" element={<ProtectedRoute><Play onActiveGameChange={setIsGameActive} /></ProtectedRoute>} />
         <Route path="/daily" element={<ProtectedRoute><DailyPlaceholder /></ProtectedRoute>} />
         <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><ProfilePlaceholder /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <BottomNav hidden={hideNav} />

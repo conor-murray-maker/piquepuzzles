@@ -553,7 +553,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                       <PlayingCard
                         card={card}
                         onClick={isTop && !dragState.isDragging ? () => handleCardClick('waste', 0) : undefined}
-                        onDoubleClick={isTop ? () => handleDoubleClick('waste', 0) : undefined}
+                        cardWidth={cardW}
                         cardWidth={cardW}
                       />
                     </div>

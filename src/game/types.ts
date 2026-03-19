@@ -22,6 +22,7 @@ export interface FreeCellState {
   undosUsed: number;
   isWon: boolean;
   dealId: string;
+  dealUuid?: string;
   difficulty: Difficulty;
   difficultyScore: number;
   seed?: number;

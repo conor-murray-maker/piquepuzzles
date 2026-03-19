@@ -90,6 +90,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   const [, forceRender] = useState(0);
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
+  const gameEndedRef = useRef(false);
+  const lastTapRef = useRef<{ source: string; cardIndex: number; time: number } | null>(null);
 
   const cardH = Math.round(cardW * 1.4);
 
@@ -134,7 +136,11 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
         const next = autoCompleteStep(state);
         if (next) {
           setState(next);
-          if (next.isWon) { setAutoCompleting(false); onGameEnd(next); }
+          if (next.isWon && !gameEndedRef.current) {
+            gameEndedRef.current = true;
+            setAutoCompleting(false);
+            onGameEnd(next);
+          }
         } else setAutoCompleting(false);
       }, 120);
       return () => clearTimeout(timer);
@@ -147,13 +153,19 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
 
   const pushHistory = useCallback((s: FreeCellState) => setHistory(h => [...h, s]), []);
 
+  const fireGameEnd = useCallback((s: FreeCellState) => {
+    if (gameEndedRef.current) return;
+    gameEndedRef.current = true;
+    onGameEnd(s);
+  }, [onGameEnd]);
+
   const applyMove = useCallback((newState: FreeCellState | null) => {
     if (!newState) return false;
     pushHistory(state);
     setState(newState);
-    if (newState.isWon) onGameEnd(newState);
+    if (newState.isWon) fireGameEnd(newState);
     return true;
-  }, [state, pushHistory, onGameEnd]);
+  }, [state, pushHistory, fireGameEnd]);
 
   // Drag and drop
   const handleDrop = useCallback((source: DragSource, targetElement: Element | null) => {
@@ -221,6 +233,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
 
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
+    gameEndedRef.current = false;
     setState(createFreeCellGame());
     setHistory([]);
     setElapsed(0);
@@ -236,8 +249,101 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     else handleNewGame();
   }, [state, onGiveUp, handleNewGame]);
 
+  // Smart auto-move: foundation → tableau (prefer most face-up) → empty col → free cell
+  const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
+    if (autoCompleting) return;
+    setSelectedCard(null);
+
+    // Only single cards (top of column or free cell)
+    if (source.startsWith('tableau-')) {
+      const col = parseInt(source.split('-')[1]);
+      if (cardIndex !== state.tableau[col].length - 1) return;
+    }
+
+    let card: import('@/game/types').Card | null = null;
+    if (source.startsWith('tableau-')) {
+      const col = parseInt(source.split('-')[1]);
+      const column = state.tableau[col];
+      if (column.length > 0) card = column[column.length - 1];
+    } else if (source.startsWith('freecell-')) {
+      const cellIdx = parseInt(source.split('-')[1]);
+      card = state.freeCells[cellIdx];
+    } else if (source.startsWith('foundation-')) {
+      const fIdx = parseInt(source.split('-')[1]);
+      const pile = state.foundation[fIdx];
+      if (pile.length > 0) card = pile[pile.length - 1];
+    }
+    if (!card) return;
+
+    let newState: FreeCellState | null = null;
+
+    // Priority 1: Foundation
+    if (source.startsWith('tableau-')) {
+      const col = parseInt(source.split('-')[1]);
+      newState = moveTableauToFoundation(state, col);
+    } else if (source.startsWith('freecell-')) {
+      const cellIdx = parseInt(source.split('-')[1]);
+      newState = moveFreeCellToFoundation(state, cellIdx);
+    }
+    if (newState) { applyMove(newState); return; }
+
+    // Priority 2: Tableau on another card (prefer column with most face-up cards)
+    const sortedCols = state.tableau
+      .map((col, i) => ({ col, i, faceUp: col.length }))
+      .filter(c => c.col.length > 0)
+      .sort((a, b) => b.faceUp - a.faceUp);
+
+    for (const { i: toCol } of sortedCols) {
+      if (source === `tableau-${toCol}`) continue;
+      let attempt: FreeCellState | null = null;
+      if (source.startsWith('tableau-')) {
+        const fromCol = parseInt(source.split('-')[1]);
+        attempt = moveTableauToTableau(state, fromCol, cardIndex, toCol);
+      } else if (source.startsWith('freecell-')) {
+        const cellIdx = parseInt(source.split('-')[1]);
+        attempt = moveFreeCellToTableau(state, cellIdx, toCol);
+      } else if (source.startsWith('foundation-')) {
+        const fIdx = parseInt(source.split('-')[1]);
+        attempt = moveFoundationToTableau(state, fIdx, toCol);
+      }
+      if (attempt) { applyMove(attempt); return; }
+    }
+
+    // Priority 3: Empty column (any card in FreeCell)
+    for (let i = 0; i < 8; i++) {
+      if (state.tableau[i].length === 0 && source !== `tableau-${i}`) {
+        let attempt: FreeCellState | null = null;
+        if (source.startsWith('tableau-')) {
+          const fromCol = parseInt(source.split('-')[1]);
+          attempt = moveTableauToTableau(state, fromCol, cardIndex, i);
+        } else if (source.startsWith('freecell-')) {
+          const cellIdx = parseInt(source.split('-')[1]);
+          attempt = moveFreeCellToTableau(state, cellIdx, i);
+        }
+        if (attempt) { applyMove(attempt); return; }
+      }
+    }
+
+    // Priority 4: Free cell (last resort)
+    if (source.startsWith('tableau-')) {
+      const fromCol = parseInt(source.split('-')[1]);
+      const attempt = moveToFreeCell(state, fromCol);
+      if (attempt) { applyMove(attempt); return; }
+    }
+  }, [state, applyMove, autoCompleting]);
+
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting || dragState.isDragging) return;
+
+    // Double-tap detection
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
+      lastTapRef.current = null;
+      handleDoubleTap(source, cardIndex);
+      return;
+    }
+    lastTapRef.current = { source, cardIndex, time: now };
 
     if (selectedCard) {
       let newState: FreeCellState | null = null;
@@ -261,26 +367,12 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
           }
         }
       }
-      if (newState) { pushHistory(state); setState(newState); if (newState.isWon) onGameEnd(newState); }
+      if (newState) { pushHistory(state); setState(newState); if (newState.isWon) fireGameEnd(newState); }
       setSelectedCard(null);
       return;
     }
     setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, onGameEnd, autoCompleting, dragState.isDragging]);
-
-  const handleDoubleClick = useCallback((source: string, _cardIndex: number) => {
-    if (autoCompleting) return;
-    let newState: FreeCellState | null = null;
-    if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      newState = moveTableauToFoundation(state, col);
-    } else if (source.startsWith('freecell-')) {
-      const cellIdx = parseInt(source.split('-')[1]);
-      newState = moveFreeCellToFoundation(state, cellIdx);
-    }
-    if (newState) { pushHistory(state); setState(newState); if (newState.isWon) onGameEnd(newState); }
-    setSelectedCard(null);
-  }, [state, pushHistory, onGameEnd, autoCompleting]);
+  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragState.isDragging, handleDoubleTap]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;
@@ -381,7 +473,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                       <PlayingCard
                         card={card}
                         onClick={() => !dragState.isDragging && handleCardClick(`freecell-${i}`, 0)}
-                        onDoubleClick={() => handleDoubleClick(`freecell-${i}`, 0)}
                         cardWidth={cardW}
                       />
                     </div>
@@ -449,7 +540,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                         <PlayingCard
                           card={card}
                           onClick={!dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
-                          onDoubleClick={cardIdx === col.length - 1 ? () => handleDoubleClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />
@@ -479,7 +569,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
                 <p>Difficulty: {state.difficulty}</p>
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={() => onGameEnd(state)} className="flex-1">
+                <Button variant="outline" onClick={() => fireGameEnd(state)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-1" />Home
                 </Button>
                 <Button onClick={handleNewGame} className="flex-1 bg-rating-up hover:bg-rating-up/90 text-white">

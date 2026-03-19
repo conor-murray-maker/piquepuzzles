@@ -98,6 +98,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const [, forceRender] = useState(0);
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
+  const gameEndedRef = useRef(false);
+  const lastTapRef = useRef<{ source: string; cardIndex: number; time: number } | null>(null);
 
   const cardH = Math.round(cardW * 1.4);
 
@@ -176,7 +178,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
         const next = autoCompleteStep(state);
         if (next) {
           setState(next);
-          if (next.isWon) {
+          if (next.isWon && !gameEndedRef.current) {
+            gameEndedRef.current = true;
             setAutoCompleting(false);
             onGameEnd(next);
           }
@@ -199,13 +202,19 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     setHistory(h => [...h, s]);
   }, []);
 
+  const fireGameEnd = useCallback((s: KlondikeState) => {
+    if (gameEndedRef.current) return;
+    gameEndedRef.current = true;
+    onGameEnd(s);
+  }, [onGameEnd]);
+
   const applyMove = useCallback((newState: KlondikeState | null) => {
     if (!newState) return false;
     pushHistory(state);
     setState(newState);
-    if (newState.isWon) onGameEnd(newState);
+    if (newState.isWon) fireGameEnd(newState);
     return true;
-  }, [state, pushHistory, onGameEnd]);
+  }, [state, pushHistory, fireGameEnd]);
 
   // Drag and drop handler
   const handleDrop = useCallback((source: DragSource, targetElement: Element | null) => {
@@ -265,6 +274,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
 
   const handleNewGame = useCallback(() => {
     clearStorage();
+    gameEndedRef.current = false;
     setState(createKlondikeGame(drawMode));
     setHistory([]);
     setElapsed(0);
@@ -289,9 +299,95 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     setSelectedCard(null);
   }, [state, pushHistory]);
 
+  // Smart auto-move on double-tap: foundation → tableau (prefer most face-up) → empty col (kings only)
+  const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
+    if (autoCompleting) return;
+    setSelectedCard(null);
+
+    // Only single cards (top of pile)
+    if (source.startsWith('tableau-')) {
+      const col = parseInt(source.split('-')[1]);
+      if (cardIndex !== state.tableau[col].length - 1) return;
+    }
+
+    // Get the card
+    let card: import('@/game/types').Card | null = null;
+    if (source === 'waste' && state.waste.length > 0) {
+      card = state.waste[state.waste.length - 1];
+    } else if (source.startsWith('tableau-')) {
+      const col = parseInt(source.split('-')[1]);
+      const column = state.tableau[col];
+      if (column.length > 0) card = column[column.length - 1];
+    } else if (source.startsWith('foundation-')) {
+      const fIdx = parseInt(source.split('-')[1]);
+      const pile = state.foundation[fIdx];
+      if (pile.length > 0) card = pile[pile.length - 1];
+    }
+    if (!card || !card.faceUp) return;
+
+    let newState: KlondikeState | null = null;
+
+    // Priority 1: Foundation
+    if (source === 'waste') {
+      newState = moveWasteToFoundation(state);
+    } else if (source.startsWith('tableau-')) {
+      const col = parseInt(source.split('-')[1]);
+      newState = moveTableauToFoundation(state, col);
+    }
+    if (newState) { applyMove(newState); return; }
+
+    // Priority 2: Tableau card on another card (prefer column with most face-up cards)
+    const sortedCols = state.tableau
+      .map((col, i) => ({ col, i, faceUp: col.filter(c => c.faceUp).length }))
+      .filter(c => c.col.length > 0)
+      .sort((a, b) => b.faceUp - a.faceUp);
+
+    for (const { i: toCol } of sortedCols) {
+      if (source === `tableau-${toCol}`) continue;
+      let attempt: KlondikeState | null = null;
+      if (source === 'waste') attempt = moveWasteToTableau(state, toCol);
+      else if (source.startsWith('tableau-')) {
+        const fromCol = parseInt(source.split('-')[1]);
+        attempt = moveTableauToTableau(state, fromCol, cardIndex, toCol);
+      } else if (source.startsWith('foundation-')) {
+        const fIdx = parseInt(source.split('-')[1]);
+        attempt = moveFoundationToTableau(state, fIdx, toCol);
+      }
+      if (attempt) { applyMove(attempt); return; }
+    }
+
+    // Priority 3: Empty column (kings only in Klondike)
+    if (card.rank === 'K') {
+      for (let i = 0; i < 7; i++) {
+        if (state.tableau[i].length === 0 && source !== `tableau-${i}`) {
+          let attempt: KlondikeState | null = null;
+          if (source === 'waste') attempt = moveWasteToTableau(state, i);
+          else if (source.startsWith('tableau-')) {
+            const fromCol = parseInt(source.split('-')[1]);
+            attempt = moveTableauToTableau(state, fromCol, cardIndex, i);
+          } else if (source.startsWith('foundation-')) {
+            const fIdx = parseInt(source.split('-')[1]);
+            attempt = moveFoundationToTableau(state, fIdx, i);
+          }
+          if (attempt) { applyMove(attempt); return; }
+        }
+      }
+    }
+  }, [state, applyMove, autoCompleting]);
+
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
     if (dragState.isDragging) return;
+
+    // Double-tap detection
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
+      lastTapRef.current = null;
+      handleDoubleTap(source, cardIndex);
+      return;
+    }
+    lastTapRef.current = { source, cardIndex, time: now };
 
     if (selectedCard) {
       let newState: KlondikeState | null = null;
@@ -313,36 +409,14 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
       if (newState) {
         pushHistory(state);
         setState(newState);
-        if (newState.isWon) onGameEnd(newState);
+        if (newState.isWon) fireGameEnd(newState);
       }
       setSelectedCard(null);
       return;
     }
 
     setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, onGameEnd, autoCompleting, dragState.isDragging]);
-
-  const handleDoubleClick = useCallback((source: string, cardIndex: number) => {
-    if (autoCompleting) return;
-    let newState: KlondikeState | null = null;
-
-    if (source === 'waste') {
-      newState = moveWasteToFoundation(state);
-    } else if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      const column = state.tableau[col];
-      if (cardIndex === column.length - 1) {
-        newState = moveTableauToFoundation(state, col);
-      }
-    }
-
-    if (newState) {
-      pushHistory(state);
-      setState(newState);
-      if (newState.isWon) onGameEnd(newState);
-    }
-    setSelectedCard(null);
-  }, [state, pushHistory, onGameEnd, autoCompleting]);
+  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragState.isDragging, handleDoubleTap]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;
@@ -479,7 +553,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                       <PlayingCard
                         card={card}
                         onClick={isTop && !dragState.isDragging ? () => handleCardClick('waste', 0) : undefined}
-                        onDoubleClick={isTop ? () => handleDoubleClick('waste', 0) : undefined}
                         cardWidth={cardW}
                       />
                     </div>
@@ -548,7 +621,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                         <PlayingCard
                           card={card}
                           onClick={card.faceUp && !dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
-                          onDoubleClick={card.faceUp ? () => handleDoubleClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />
@@ -587,7 +659,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
               <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  onClick={() => onGameEnd(state)}
+                  onClick={() => fireGameEnd(state)}
                   className="flex-1"
                 >
                   <ArrowLeft className="w-4 h-4 mr-1" />

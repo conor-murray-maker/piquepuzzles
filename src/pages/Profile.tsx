@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,12 +17,30 @@ export default function Profile() {
   const [displayName, setDisplayName] = useState(profile?.display_name || '');
   const [saving, setSaving] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
+  const [gameCounts, setGameCounts] = useState<{ klondike: number; freecell: number }>({ klondike: 0, freecell: 0 });
 
   const rating = profile?.rating ?? 1000;
   const tier = getTier(rating);
   const gamesPlayed = profile?.games_played ?? 0;
   const gamesWon = profile?.games_won ?? 0;
   const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0;
+
+  // Fetch game counts by mode
+  useEffect(() => {
+    if (!user) return;
+    async function fetchCounts() {
+      const { data } = await supabase
+        .from('game_history')
+        .select('game_mode')
+        .eq('user_id', user!.id);
+      if (data) {
+        const klondike = data.filter(g => !g.game_mode || g.game_mode === 'klondike').length;
+        const freecell = data.filter(g => g.game_mode === 'freecell').length;
+        setGameCounts({ klondike, freecell });
+      }
+    }
+    fetchCounts();
+  }, [user, profile?.games_played]);
 
   const handleSaveName = useCallback(async () => {
     if (!user) return;
@@ -147,14 +165,14 @@ export default function Profile() {
                   <Layers className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium">Klondike</span>
                 </div>
-                <span className="text-sm font-mono text-muted-foreground">{gamesPlayed} games</span>
+                <span className="text-sm font-mono text-muted-foreground">{gameCounts.klondike} games</span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2">
                   <Grid3X3 className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium">FreeCell</span>
                 </div>
-                <span className="text-sm font-mono text-muted-foreground">--</span>
+                <span className="text-sm font-mono text-muted-foreground">{gameCounts.freecell} games</span>
               </div>
             </CardContent>
           </Card>

@@ -11,6 +11,7 @@ export interface DragState {
 }
 
 const DRAG_THRESHOLD = 8;
+const DROP_SEARCH_RADIUS = 60;
 
 /**
  * High-performance drag-and-drop using direct DOM transforms.
@@ -41,7 +42,6 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
     pointerId: -1,
   });
 
-  // Expose a simple reactive state for UI (only updated on start/end)
   const dragStateRef = useRef<DragState>({ isDragging: false, source: null });
   const listenersRef = useRef<(() => void) | null>(null);
   const forceUpdateRef = useRef<(() => void) | null>(null);
@@ -74,7 +74,6 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
 
   const createGhost = useCallback((originEl: HTMLElement, e: PointerEvent) => {
     const s = stateRef.current;
-    // Find the card elements to clone - this element and subsequent siblings if tableau stack
     const ghost = document.createElement('div');
     ghost.style.position = 'fixed';
     ghost.style.zIndex = '1000';
@@ -84,25 +83,20 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
     ghost.style.top = '0';
     ghost.style.transform = `translate(${e.clientX - s.offsetX}px, ${e.clientY - s.offsetY}px)`;
 
-    // Clone the drag source element(s)
     const parent = originEl.parentElement;
     if (s.source && s.source.source.startsWith('tableau-') && parent) {
-      // Get all sibling elements from cardIndex onward
       const children = Array.from(parent.children) as HTMLElement[];
       const startIdx = children.indexOf(originEl);
       if (startIdx >= 0) {
         for (let i = startIdx; i < children.length; i++) {
           const clone = children[i].cloneNode(true) as HTMLElement;
           clone.style.position = i === startIdx ? 'relative' : 'absolute';
-          clone.style.top = i === startIdx ? '0' : `${(i - startIdx) * parseInt(children[i].style.top || '0') - parseInt(originEl.style.top || '0') + parseInt(children[startIdx].style.top || '0')}px`;
-          // Simpler: use the actual offset from the first card
           if (i > startIdx) {
             const topVal = parseInt(children[i].style.top || '0') - parseInt(children[startIdx].style.top || '0');
             clone.style.top = `${topVal}px`;
           }
           clone.style.left = '0';
           ghost.appendChild(clone);
-          // Fade original
           children[i].style.opacity = '0.3';
           s.originElements.push(children[i]);
         }
@@ -119,6 +113,61 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
     s.ghostEl = ghost;
   }, []);
 
+  /**
+   * Find the best drop target within DROP_SEARCH_RADIUS of the pointer.
+   * Checks multiple points and also scans all drop targets by bounding rect proximity.
+   */
+  const findBestDropTarget = useCallback((clientX: number, clientY: number): Element | null => {
+    // Strategy 1: Direct hit via elementsFromPoint
+    const directElements = document.elementsFromPoint(clientX, clientY);
+    for (const el of directElements) {
+      const target = el.closest('[data-drop-target]');
+      if (target) return target;
+    }
+
+    // Strategy 2: Check all drop targets by proximity
+    const allTargets = document.querySelectorAll('[data-drop-target]');
+    let bestTarget: Element | null = null;
+    let bestDist = DROP_SEARCH_RADIUS;
+
+    allTargets.forEach(target => {
+      const rect = target.getBoundingClientRect();
+      // Expand hit area by 20px on each side
+      const expandedLeft = rect.left - 20;
+      const expandedRight = rect.right + 20;
+      const expandedTop = rect.top - 10;
+      const expandedBottom = rect.bottom + 20;
+
+      // Check if pointer is within horizontal bounds (expanded)
+      const inHorizontal = clientX >= expandedLeft && clientX <= expandedRight;
+
+      // For tableau columns, also accept if pointer is below the column (cards extend beyond minHeight)
+      const targetId = target.getAttribute('data-drop-target') || '';
+      const isTableau = targetId.startsWith('tableau-');
+
+      let dist: number;
+      if (inHorizontal && clientY >= expandedTop && clientY <= expandedBottom) {
+        // Inside expanded bounds
+        dist = 0;
+      } else if (isTableau && inHorizontal && clientY > expandedBottom) {
+        // Below a tableau column but within its horizontal band — still accept
+        dist = clientY - expandedBottom;
+      } else {
+        // Calculate distance to nearest edge of expanded rect
+        const dx = Math.max(expandedLeft - clientX, 0, clientX - expandedRight);
+        const dy = Math.max(expandedTop - clientY, 0, clientY - expandedBottom);
+        dist = Math.sqrt(dx * dx + dy * dy);
+      }
+
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestTarget = target;
+      }
+    });
+
+    return bestTarget;
+  }, []);
+
   const onPointerMove = useCallback((e: PointerEvent) => {
     const s = stateRef.current;
     if (!s.active || e.pointerId !== s.pointerId) return;
@@ -131,12 +180,8 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
       if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
       s.thresholdMet = true;
       dragStateRef.current = { isDragging: true, source: s.source };
-      // Create ghost from the original element
-      const originEl = (e.target as HTMLElement).closest?.('[data-drag-handle]') as HTMLElement;
-      // We stored the origin element ref - find it
       if (s.originElements.length > 0) {
         createGhost(s.originElements[0], e);
-        // originElements were set by createGhost, which re-sets them
       }
       forceUpdateRef.current?.();
     }
@@ -152,32 +197,20 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
     e.preventDefault();
 
     if (s.thresholdMet && s.source) {
-      // Hide ghost temporarily to find drop target
+      // Hide ghost and origin elements for hit-testing
       if (s.ghostEl) s.ghostEl.style.display = 'none';
-      // Also hide origin elements so they don't block hit-testing
       s.originElements.forEach(el => { el.style.visibility = 'hidden'; });
-      const elements = document.elementsFromPoint(e.clientX, e.clientY);
+
+      const dropTarget = findBestDropTarget(e.clientX, e.clientY);
+
       s.originElements.forEach(el => { el.style.visibility = ''; });
       if (s.ghostEl) s.ghostEl.style.display = '';
 
-      // Walk up the DOM from each hit element to find the nearest drop target
-      // This is critical because tableau columns use position:relative with minHeight,
-      // but cards are absolutely positioned and can extend beyond the column's bounding box.
-      // elementsFromPoint won't return the column div if the pointer is below minHeight,
-      // but the card element IS a child of that column, so closest() finds it.
-      let dropTarget: Element | null = null;
-      for (const el of elements) {
-        const target = el.closest('[data-drop-target]');
-        if (target) {
-          dropTarget = target;
-          break;
-        }
-      }
       onDrop(s.source, dropTarget || null);
     }
 
     cleanup();
-  }, [onDrop, cleanup]);
+  }, [onDrop, cleanup, findBestDropTarget]);
 
   const startDrag = useCallback((e: React.PointerEvent, source: string, cardIndex: number) => {
     if (e.button !== 0) return;
@@ -200,11 +233,8 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
     s.originElements = [el];
     s.ghostEl = null;
 
-    // Add document-level listeners
     const moveHandler = (ev: PointerEvent) => onPointerMove(ev);
-    const upHandler = (ev: PointerEvent) => {
-      onPointerUp(ev);
-    };
+    const upHandler = (ev: PointerEvent) => onPointerUp(ev);
 
     document.addEventListener('pointermove', moveHandler, { passive: false });
     document.addEventListener('pointerup', upHandler, { passive: false });

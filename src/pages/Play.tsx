@@ -1,12 +1,16 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KlondikeState } from '@/game/types';
+import { KlondikeState, DrawMode } from '@/game/types';
 import { GameBoard } from '@/components/game/GameBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGamePersistence } from '@/hooks/useGamePersistence';
 
-export default function Play() {
+interface PlayProps {
+  onActiveGameChange?: (active: boolean) => void;
+}
+
+export default function Play({ onActiveGameChange }: PlayProps) {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { saveGameResult } = useGamePersistence();
@@ -14,18 +18,24 @@ export default function Play() {
   const [lastGameState, setLastGameState] = useState<KlondikeState | null>(null);
   const [ratingResult, setRatingResult] = useState<{ newRating: number; ratingChange: number } | null>(null);
 
+  // Notify parent about game phase
+  const setPhase = useCallback((phase: 'playing' | 'postgame') => {
+    setGamePhase(phase);
+    onActiveGameChange?.(phase === 'playing');
+  }, [onActiveGameChange]);
+
   const handleGameEnd = useCallback(async (state: KlondikeState) => {
     setLastGameState(state);
     const result = await saveGameResult(state);
     setRatingResult(result);
-    setGamePhase('postgame');
-  }, [saveGameResult]);
+    setPhase('postgame');
+  }, [saveGameResult, setPhase]);
 
   const handlePlayAgain = useCallback(() => {
-    setGamePhase('playing');
+    setPhase('playing');
     setLastGameState(null);
     setRatingResult(null);
-  }, []);
+  }, [setPhase]);
 
   if (gamePhase === 'postgame' && lastGameState) {
     return (
@@ -39,5 +49,5 @@ export default function Play() {
     );
   }
 
-  return <GameBoard onGameEnd={handleGameEnd} />;
+  return <GameBoard onGameEnd={handleGameEnd} drawMode={3} />;
 }

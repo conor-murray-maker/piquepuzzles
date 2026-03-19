@@ -86,7 +86,7 @@ export default function Index() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm">Klondike Solitaire</p>
-                <p className="text-xs text-muted-foreground">Classic • 1-card draw</p>
+                <p className="text-xs text-muted-foreground">Classic • 3-card draw</p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
             </button>

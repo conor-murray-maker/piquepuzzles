@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Trophy, Flame, BarChart3, LogOut, Share2, Check, Edit3, User, Layers, Grid3X3 } from 'lucide-react';
 import { toast } from 'sonner';
-import html2canvas from 'html2canvas';
+
 
 export default function Profile() {
   const { user, profile, signOut, refreshProfile } = useAuth();

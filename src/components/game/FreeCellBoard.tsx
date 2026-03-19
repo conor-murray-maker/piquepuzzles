@@ -87,7 +87,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
-  const [, forceRender] = useState(0);
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);

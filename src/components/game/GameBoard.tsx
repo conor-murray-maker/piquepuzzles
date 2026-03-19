@@ -95,7 +95,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
-  const [, forceRender] = useState(0);
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);

@@ -136,7 +136,11 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
         const next = autoCompleteStep(state);
         if (next) {
           setState(next);
-          if (next.isWon) { setAutoCompleting(false); onGameEnd(next); }
+          if (next.isWon && !gameEndedRef.current) {
+            gameEndedRef.current = true;
+            setAutoCompleting(false);
+            onGameEnd(next);
+          }
         } else setAutoCompleting(false);
       }, 120);
       return () => clearTimeout(timer);
@@ -149,13 +153,19 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
 
   const pushHistory = useCallback((s: FreeCellState) => setHistory(h => [...h, s]), []);
 
+  const fireGameEnd = useCallback((s: FreeCellState) => {
+    if (gameEndedRef.current) return;
+    gameEndedRef.current = true;
+    onGameEnd(s);
+  }, [onGameEnd]);
+
   const applyMove = useCallback((newState: FreeCellState | null) => {
     if (!newState) return false;
     pushHistory(state);
     setState(newState);
-    if (newState.isWon) onGameEnd(newState);
+    if (newState.isWon) fireGameEnd(newState);
     return true;
-  }, [state, pushHistory, onGameEnd]);
+  }, [state, pushHistory, fireGameEnd]);
 
   // Drag and drop
   const handleDrop = useCallback((source: DragSource, targetElement: Element | null) => {

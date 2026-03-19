@@ -41,8 +41,8 @@ function CardFace({ card, compact }: { card: CardType; compact?: boolean }) {
   const symbol = suitSymbol(card.suit);
   const w = compact ? 56 : 70;
   const h = compact ? 80 : 100;
-  const cornerFontSize = compact ? 8 : 10;
-  const cornerSymbolSize = compact ? 7 : 9;
+  const cornerFontSize = compact ? 9 : 11;
+  const cornerSymbolSize = compact ? 8 : 10;
 
   return (
     <svg
@@ -78,8 +78,8 @@ function CardFace({ card, compact }: { card: CardType; compact?: boolean }) {
         // Face card / Ace: large centered letter
         <text
           x={w / 2}
-          y={h / 2 + (compact ? 8 : 10)}
-          fontSize={compact ? 24 : 30}
+          y={h / 2 + (compact ? 10 : 12)}
+          fontSize={compact ? 28 : 34}
           fontWeight="700"
           fill={color}
           textAnchor="middle"
@@ -105,7 +105,7 @@ function PipsSVG({ rank, symbol, color, w, h, compact }: { rank: Rank; symbol: s
   const padBottom = compact ? 18 : 22;
   const areaW = w - padX * 2;
   const areaH = h - padTop - padBottom;
-  const pipSize = compact ? 10 : 13;
+  const pipSize = compact ? 12 : 15;
 
   return (
     <>

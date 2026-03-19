@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { KlondikeState } from '@/game/types';
+import { KlondikeState, DrawMode } from '@/game/types';
 import {
   createKlondikeGame,
   drawFromStock,
@@ -12,12 +12,11 @@ import {
   isAutoCompletable,
   autoCompleteStep,
   getHint,
-  canMoveToFoundation,
 } from '@/game/klondike';
 import { PlayingCard, EmptyPile } from './PlayingCard';
 import { DragOverlay } from './DragOverlay';
 import { useDragAndDrop, DragSource } from '@/hooks/useDragAndDrop';
-import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy } from 'lucide-react';
+import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const STORAGE_KEY = 'pique-game-state';
@@ -51,12 +50,13 @@ function clearStorage() {
 
 interface GameBoardProps {
   onGameEnd: (state: KlondikeState) => void;
+  drawMode?: DrawMode;
 }
 
-export function GameBoard({ onGameEnd }: GameBoardProps) {
+export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
   const [state, setState] = useState<KlondikeState>(() => {
     const saved = loadFromStorage();
-    return saved ? saved.state : createKlondikeGame(1);
+    return saved ? saved.state : createKlondikeGame(drawMode);
   });
   const [history, setHistory] = useState<KlondikeState[]>(() => {
     const saved = loadFromStorage();
@@ -162,13 +162,11 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
         newState = moveFoundationToTableau(state, fIdx, toCol);
       }
     } else if (targetId.startsWith('foundation-')) {
-      const fIdx = parseInt(targetId.split('-')[1]);
       if (source.source === 'waste') {
         newState = moveWasteToFoundation(state);
       } else if (source.source.startsWith('tableau-')) {
         const fromCol = parseInt(source.source.split('-')[1]);
         const col = state.tableau[fromCol];
-        // Only move single top card to foundation
         if (source.cardIndex === col.length - 1) {
           newState = moveTableauToFoundation(state, fromCol);
         }
@@ -217,12 +215,12 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
 
   const handleNewGame = useCallback(() => {
     clearStorage();
-    setState(createKlondikeGame(1));
+    setState(createKlondikeGame(drawMode));
     setHistory([]);
     setElapsed(0);
     setSelectedCard(null);
     setAutoCompleting(false);
-  }, []);
+  }, [drawMode]);
 
   const handleStockClick = useCallback(() => {
     pushHistory(state);
@@ -232,7 +230,6 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
 
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
-    // If a drag just happened, don't process click
     if (dragState.isDragging) return;
 
     if (selectedCard) {
@@ -322,6 +319,12 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
   const gap = compact ? 3 : 6;
   const boardWidth = cardW * 7 + gap * 6;
 
+  // Waste fan: show up to 3 cards fanned for draw-3
+  const wasteVisible = state.drawMode === 3
+    ? state.waste.slice(-3)
+    : state.waste.slice(-1);
+  const wasteFanOffset = compact ? 14 : 18;
+
   return (
     <div
       ref={gameBoardRef}
@@ -342,6 +345,10 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
             'bg-elite/20 text-elite'
           }`}>
             {state.difficulty}
+          </span>
+          <span className="flex items-center gap-1 text-xs">
+            <Layers className="w-3 h-3" />
+            Draw {state.drawMode}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -378,23 +385,36 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
               )}
             </div>
 
-            {/* Waste */}
+            {/* Waste - fanned for draw-3 */}
             <div
-              className={`flex-shrink-0 ${isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : ''}`}
+              className={`flex-shrink-0 relative ${isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : ''}`}
+              style={{ width: cardW + (wasteVisible.length - 1) * wasteFanOffset, height: compact ? 80 : 100 }}
               data-drop-target="waste"
             >
-              {state.waste.length > 0 ? (
-                <div
-                  onPointerDown={(e) => startDrag(e, 'waste', 0)}
-                  style={{ opacity: isDragSource('waste', 0) ? 0.3 : 1 }}
-                >
-                  <PlayingCard
-                    card={state.waste[state.waste.length - 1]}
-                    onClick={() => !dragState.isDragging && handleCardClick('waste', 0)}
-                    onDoubleClick={() => handleDoubleClick('waste', 0)}
-                    compact={compact}
-                  />
-                </div>
+              {wasteVisible.length > 0 ? (
+                wasteVisible.map((card, i) => {
+                  const isTop = i === wasteVisible.length - 1;
+                  const dragging = isTop && isDragSource('waste', 0);
+                  return (
+                    <div
+                      key={card.id}
+                      className="absolute top-0"
+                      style={{
+                        left: i * wasteFanOffset,
+                        zIndex: i,
+                        opacity: dragging ? 0.3 : 1,
+                      }}
+                      onPointerDown={isTop ? (e) => startDrag(e, 'waste', 0) : undefined}
+                    >
+                      <PlayingCard
+                        card={card}
+                        onClick={isTop && !dragState.isDragging ? () => handleCardClick('waste', 0) : undefined}
+                        onDoubleClick={isTop ? () => handleDoubleClick('waste', 0) : undefined}
+                        compact={compact}
+                      />
+                    </div>
+                  );
+                })
               ) : (
                 <EmptyPile compact={compact} />
               )}

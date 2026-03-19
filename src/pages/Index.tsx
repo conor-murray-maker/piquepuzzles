@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, LogOut } from 'lucide-react';
+import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PuzzleIQBadge, TierProgress } from '@/components/game/PuzzleIQBadge';
 import { useState, useEffect } from 'react';
@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const navigate = useNavigate();
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
   const [isDark, setIsDark] = useState(false);
 
   const rating = profile?.rating ?? 1000;
@@ -38,27 +38,18 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-16">
       <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Spade className="w-6 h-6 text-primary" />
           <span className="text-lg font-bold tracking-tight">Pique</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleTheme}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {isDark ? '☀️' : '🌙'}
-          </button>
-          <button
-            onClick={signOut}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors p-1"
-            title="Sign out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
+        <button
+          onClick={toggleTheme}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {isDark ? '☀️' : '🌙'}
+        </button>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
@@ -95,7 +86,7 @@ export default function Index() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm">Klondike Solitaire</p>
-                <p className="text-xs text-muted-foreground">Classic • 1-card draw</p>
+                <p className="text-xs text-muted-foreground">Classic • 3-card draw</p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
             </button>

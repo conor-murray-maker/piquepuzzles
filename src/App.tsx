@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { BottomNav } from "@/components/BottomNav";
+import { useState } from "react";
 import Index from "./pages/Index.tsx";
 import Play from "./pages/Play.tsx";
 import Auth from "./pages/Auth.tsx";
@@ -26,6 +28,70 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function DailyPlaceholder() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center pb-16">
+      <div className="text-center space-y-2">
+        <p className="text-2xl">📅</p>
+        <h2 className="text-lg font-semibold">Daily Challenge</h2>
+        <p className="text-sm text-muted-foreground">Coming soon</p>
+      </div>
+    </div>
+  );
+}
+
+function StatsPlaceholder() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center pb-16">
+      <div className="text-center space-y-2">
+        <p className="text-2xl">📊</p>
+        <h2 className="text-lg font-semibold">Statistics</h2>
+        <p className="text-sm text-muted-foreground">Coming soon</p>
+      </div>
+    </div>
+  );
+}
+
+function ProfilePlaceholder() {
+  const { signOut } = useAuth();
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center pb-16">
+      <div className="text-center space-y-4">
+        <p className="text-2xl">👤</p>
+        <h2 className="text-lg font-semibold">Profile</h2>
+        <p className="text-sm text-muted-foreground">Coming soon</p>
+        <button onClick={signOut} className="text-sm text-destructive hover:underline">Sign out</button>
+      </div>
+    </div>
+  );
+}
+
+function AppContent() {
+  const location = useLocation();
+  const [isGameActive, setIsGameActive] = useState(false);
+
+  // Hide bottom nav during active game play and on auth/reset pages
+  const hideNav = (location.pathname === '/play' && isGameActive) ||
+    location.pathname === '/auth' ||
+    location.pathname === '/reset-password';
+
+  return (
+    <>
+      <Routes>
+        <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+        <Route path="/play" element={<ProtectedRoute><Play onActiveGameChange={setIsGameActive} /></ProtectedRoute>} />
+        <Route path="/daily" element={<ProtectedRoute><DailyPlaceholder /></ProtectedRoute>} />
+        <Route path="/stats" element={<ProtectedRoute><StatsPlaceholder /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><ProfilePlaceholder /></ProtectedRoute>} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <BottomNav hidden={hideNav} />
+    </>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -33,13 +99,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/play" element={<ProtectedRoute><Play /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AppContent />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -379,7 +379,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   const handleNewGame = useCallback(() => {
     clearStorage();
     gameEndedRef.current = false;
-    setState(createVerifiedKlondikeGame(drawMode));
+    try {
+      setState(createVerifiedKlondikeGame(drawMode));
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate deal');
+      setState(createVerifiedKlondikeGame(drawMode));
+    }
     setHistory([]);
     setElapsed(0);
     setGameStarted(false);

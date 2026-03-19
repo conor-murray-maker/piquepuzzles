@@ -278,9 +278,7 @@ export function createVerifiedKlondikeGame(drawMode: DrawMode, seed?: number): K
     if (seed !== undefined) break; // Can't change a specified seed
     seed = undefined;
   }
-  // Fallback: return unverified deal
-  const game = createKlondikeGame(drawMode, seed);
-  return { ...game, minMoves: 0 };
+  throw new Error('Could not generate verified solvable Klondike deal after ' + MAX_ATTEMPTS + ' attempts');
 }
 
 export function createVerifiedFreeCellGame(seed?: number): FreeCellState {

@@ -105,7 +105,7 @@ function PipsSVG({ rank, symbol, color, w, h, compact }: { rank: Rank; symbol: s
   const padBottom = compact ? 18 : 22;
   const areaW = w - padX * 2;
   const areaH = h - padTop - padBottom;
-  const pipSize = compact ? 10 : 13;
+  const pipSize = compact ? 12 : 15;
 
   return (
     <>

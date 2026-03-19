@@ -154,9 +154,25 @@ export function useDragAndDrop(onDrop: (source: DragSource, targetElement: Eleme
     if (s.thresholdMet && s.source) {
       // Hide ghost temporarily to find drop target
       if (s.ghostEl) s.ghostEl.style.display = 'none';
+      // Also hide origin elements so they don't block hit-testing
+      s.originElements.forEach(el => { el.style.visibility = 'hidden'; });
       const elements = document.elementsFromPoint(e.clientX, e.clientY);
+      s.originElements.forEach(el => { el.style.visibility = ''; });
       if (s.ghostEl) s.ghostEl.style.display = '';
-      const dropTarget = elements.find(el => el.hasAttribute('data-drop-target'));
+
+      // Walk up the DOM from each hit element to find the nearest drop target
+      // This is critical because tableau columns use position:relative with minHeight,
+      // but cards are absolutely positioned and can extend beyond the column's bounding box.
+      // elementsFromPoint won't return the column div if the pointer is below minHeight,
+      // but the card element IS a child of that column, so closest() finds it.
+      let dropTarget: Element | null = null;
+      for (const el of elements) {
+        const target = el.closest('[data-drop-target]');
+        if (target) {
+          dropTarget = target;
+          break;
+        }
+      }
       onDrop(s.source, dropTarget || null);
     }
 

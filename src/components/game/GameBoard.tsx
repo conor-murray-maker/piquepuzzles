@@ -14,10 +14,19 @@ import {
   getHint,
 } from '@/game/klondike';
 import { PlayingCard, EmptyPile } from './PlayingCard';
-import { DragOverlay } from './DragOverlay';
 import { useDragAndDrop, DragSource } from '@/hooks/useDragAndDrop';
-import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, Layers } from 'lucide-react';
+import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, Layers, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 
 const STORAGE_KEY = 'pique-game-state';
 const HISTORY_KEY = 'pique-game-history';
@@ -43,17 +52,18 @@ function loadFromStorage(): { state: KlondikeState; history: KlondikeState[] } |
   return null;
 }
 
-function clearStorage() {
+export function clearStorage() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(HISTORY_KEY);
 }
 
 interface GameBoardProps {
   onGameEnd: (state: KlondikeState) => void;
+  onGiveUp?: (state: KlondikeState) => void;
   drawMode?: DrawMode;
 }
 
-export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
+export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps) {
   const [state, setState] = useState<KlondikeState>(() => {
     const saved = loadFromStorage();
     return saved ? saved.state : createKlondikeGame(drawMode);
@@ -66,9 +76,11 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
   const [selectedCard, setSelectedCard] = useState<{ source: string; cardIndex: number } | null>(null);
   const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
   const [autoCompleting, setAutoCompleting] = useState(false);
+  const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
+  const [, forceRender] = useState(0);
 
   // Persist game state
   useEffect(() => {
@@ -176,26 +188,12 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
     applyMove(newState);
   }, [state, applyMove, autoCompleting]);
 
-  const { dragState, startDrag, moveDrag, endDrag } = useDragAndDrop(handleDrop);
+  const { dragState, startDrag, setForceUpdate } = useDragAndDrop(handleDrop);
 
-  // Get cards being dragged for overlay
-  const getDraggedCards = () => {
-    if (!dragState.source || !dragState.isDragging) return [];
-    const { source, cardIndex } = dragState.source;
-    if (source === 'waste') {
-      return state.waste.length > 0 ? [state.waste[state.waste.length - 1]] : [];
-    }
-    if (source.startsWith('tableau-')) {
-      const col = parseInt(source.split('-')[1]);
-      return state.tableau[col].slice(cardIndex);
-    }
-    if (source.startsWith('foundation-')) {
-      const fIdx = parseInt(source.split('-')[1]);
-      const pile = state.foundation[fIdx];
-      return pile.length > 0 ? [pile[pile.length - 1]] : [];
-    }
-    return [];
-  };
+  // Connect force update
+  useEffect(() => {
+    setForceUpdate(() => forceRender(c => c + 1));
+  }, [setForceUpdate]);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
@@ -221,6 +219,19 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
     setSelectedCard(null);
     setAutoCompleting(false);
   }, [drawMode]);
+
+  const handleGiveUp = useCallback(() => {
+    setShowGiveUpDialog(false);
+    clearStorage();
+    // Mark as loss and notify parent
+    const lostState: KlondikeState = { ...state, isWon: false };
+    if (onGiveUp) {
+      onGiveUp(lostState);
+    } else {
+      // Fallback: just start new game
+      handleNewGame();
+    }
+  }, [state, onGiveUp, handleNewGame]);
 
   const handleStockClick = useCallback(() => {
     pushHistory(state);
@@ -309,12 +320,6 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
     return false;
   };
 
-  const isDragSource = (source: string, cardIndex: number) => {
-    if (!dragState.isDragging || !dragState.source) return false;
-    if (dragState.source.source === source && cardIndex >= dragState.source.cardIndex) return true;
-    return false;
-  };
-
   const cardW = compact ? 56 : 70;
   const gap = compact ? 3 : 6;
   const boardWidth = cardW * 7 + gap * 6;
@@ -330,8 +335,6 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
       ref={gameBoardRef}
       className="game-surface min-h-screen flex flex-col"
       style={{ overscrollBehavior: 'none', touchAction: 'none' }}
-      onPointerMove={moveDrag}
-      onPointerUp={endDrag}
     >
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
@@ -364,6 +367,15 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
             <RotateCcw className="w-4 h-4" />
             <span className="text-xs ml-1 hidden sm:inline">New</span>
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowGiveUpDialog(true)}
+            className="h-8 px-2 text-destructive hover:text-destructive"
+          >
+            <X className="w-4 h-4" />
+            <span className="text-xs ml-1 hidden sm:inline">Give Up</span>
+          </Button>
         </div>
       </div>
 
@@ -394,7 +406,6 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
               {wasteVisible.length > 0 ? (
                 wasteVisible.map((card, i) => {
                   const isTop = i === wasteVisible.length - 1;
-                  const dragging = isTop && isDragSource('waste', 0);
                   return (
                     <div
                       key={card.id}
@@ -402,7 +413,6 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
                       style={{
                         left: i * wasteFanOffset,
                         zIndex: i,
-                        opacity: dragging ? 0.3 : 1,
                       }}
                       onPointerDown={isTop ? (e) => startDrag(e, 'waste', 0) : undefined}
                     >
@@ -432,7 +442,6 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
                 {pile.length > 0 ? (
                   <div
                     onPointerDown={(e) => startDrag(e, `foundation-${i}`, pile.length - 1)}
-                    style={{ opacity: isDragSource(`foundation-${i}`, pile.length - 1) ? 0.3 : 1 }}
                   >
                     <PlayingCard
                       card={pile[pile.length - 1]}
@@ -462,7 +471,6 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
                   col.map((card, cardIdx) => {
                     const offset = compact ? (card.faceUp ? 18 : 8) : (card.faceUp ? 22 : 10);
                     const isSelected = selectedCard?.source === `tableau-${colIdx}` && cardIdx >= selectedCard.cardIndex;
-                    const dragging = isDragSource(`tableau-${colIdx}`, cardIdx);
                     return (
                       <div
                         key={card.id}
@@ -470,7 +478,6 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
                         style={{
                           top: cardIdx * offset,
                           left: 0,
-                          opacity: dragging ? 0.3 : 1,
                         }}
                         onPointerDown={card.faceUp ? (e) => startDrag(e, `tableau-${colIdx}`, cardIdx) : undefined}
                       >
@@ -490,18 +497,6 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
           </div>
         </div>
       </div>
-
-      {/* Drag overlay */}
-      {dragState.isDragging && dragState.source && (
-        <DragOverlay
-          cards={getDraggedCards()}
-          x={dragState.currentX}
-          y={dragState.currentY}
-          offsetX={dragState.offsetX}
-          offsetY={dragState.offsetY}
-          compact={compact}
-        />
-      )}
 
       {/* Win overlay */}
       <AnimatePresence>
@@ -530,6 +525,27 @@ export function GameBoard({ onGameEnd, drawMode = 3 }: GameBoardProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Give Up confirmation dialog */}
+      <AlertDialog open={showGiveUpDialog} onOpenChange={setShowGiveUpDialog}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Give up this game?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your rating will take a small penalty.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Playing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleGiveUp}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Give Up
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

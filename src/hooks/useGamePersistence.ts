@@ -15,41 +15,26 @@ interface CompleteGameResponse {
 export function useGamePersistence() {
   const { user, profile, refreshProfile } = useAuth();
 
-  /** Register a deal in Supabase (upsert on seed+mode+drawMode). */
-  const registerDeal = useCallback(async (
-    seed: number,
-    gameMode: GameMode,
-    drawMode: number,
-    minMoves: number,
-    ddsInitial: number
-  ) => {
-    if (!user) return;
-    try {
-      await (supabase as any).from('deals').upsert({
-        seed,
-        game_mode: gameMode,
-        draw_mode: drawMode,
-        min_moves: minMoves,
-        dds_initial: ddsInitial,
-        dds_blended: ddsInitial,
-      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true });
-    } catch {
-      // Silent — deal might already exist
-    }
-  }, [user]);
-
   /**
    * Save game result via server-side edge function.
-   * The edge function handles ELO calculation, deal pool updates, and profile updates.
-   * No client-side rating calculation — all values come from the server response.
+   * dealUuid is required — if missing, logs an error and does not call the edge function.
    */
   const saveGameResult = useCallback(async (
     gameState: KlondikeState | FreeCellState,
     gameMode: GameMode = 'klondike',
     elapsedSeconds: number = 0,
-    drawMode: number = 3
+    drawMode: number = 3,
+    dealUuid?: string,
+    isDaily?: boolean
   ): Promise<{ newRating: number; ratingChange: number; previousRating: number } | null> => {
     if (!user || !profile) return null;
+
+    const effectiveDealUuid = dealUuid || (gameState as any).dealUuid;
+
+    if (!effectiveDealUuid) {
+      console.error('Cannot save game result: deal_uuid is missing. Game will not be recorded.');
+      return null;
+    }
 
     try {
       const { data, error } = await supabase.functions.invoke('complete-game', {
@@ -63,6 +48,8 @@ export function useGamePersistence() {
           hintsUsed: gameState.hintsUsed,
           undosUsed: gameState.undosUsed,
           dealId: gameState.dealId,
+          dealUuid: effectiveDealUuid,
+          isDaily: isDaily || false,
         },
       });
 
@@ -82,5 +69,5 @@ export function useGamePersistence() {
     }
   }, [user, profile, refreshProfile]);
 
-  return { saveGameResult, registerDeal, rating: profile?.rating ?? 1000 };
+  return { saveGameResult, rating: profile?.rating ?? 1000 };
 }

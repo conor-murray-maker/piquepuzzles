@@ -56,6 +56,7 @@ function AppContent() {
       <Routes>
         <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/challenge/:id" element={<Challenge />} />
         <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
         <Route path="/play" element={<ProtectedRoute><Play onActiveGameChange={setIsGameActive} /></ProtectedRoute>} />
         <Route path="/daily" element={<ProtectedRoute><DailyPlaceholder /></ProtectedRoute>} />

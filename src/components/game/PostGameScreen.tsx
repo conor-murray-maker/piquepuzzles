@@ -1,26 +1,86 @@
+import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { KlondikeState } from '@/game/types';
 import { getPerformancePercentile } from '@/game/rating';
-import { PuzzleIQBadge, RatingChange, TierProgress } from './PuzzleIQBadge';
+import { PuzzleIQBadge, RatingChange } from './PuzzleIQBadge';
+import { TierProgressBar } from './TierProgressBar';
 import { Button } from '@/components/ui/button';
-import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft } from 'lucide-react';
+import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft, Swords } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface PostGameScreenProps {
   gameState: KlondikeState;
   currentRating: number;
+  previousRating?: number;
   ratingChange: number;
   onPlayAgain: () => void;
   onGoHome: () => void;
   elapsedSeconds: number;
+  gameMode?: string;
+  dealSeed?: number;
+  drawMode?: number;
+  challengeData?: {
+    challengeId: string;
+    challengerName: string;
+    challengerMoves: number;
+    challengerTime: number;
+    challengerRating: number;
+  } | null;
 }
 
-export function PostGameScreen({ gameState, currentRating, ratingChange, onPlayAgain, onGoHome, elapsedSeconds }: PostGameScreenProps) {
+export function PostGameScreen({
+  gameState, currentRating, previousRating, ratingChange, onPlayAgain, onGoHome, elapsedSeconds,
+  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData,
+}: PostGameScreenProps) {
+  const { user, profile } = useAuth();
+  const [sharing, setSharing] = useState(false);
   const timeSeconds = elapsedSeconds;
   const percentile = gameState.isWon
     ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)
     : 0;
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+
+  const handleChallenge = useCallback(async () => {
+    if (!user || !profile || dealSeed === undefined) return;
+    setSharing(true);
+    try {
+      const { data, error } = await (supabase as any).from('challenges').insert({
+        challenger_id: user.id,
+        deal_seed: dealSeed,
+        game_mode: gameMode,
+        draw_mode: drawMode,
+        difficulty: gameState.difficulty,
+        challenger_moves: gameState.moves,
+        challenger_time_seconds: timeSeconds,
+        challenger_rating: currentRating,
+        challenger_rating_change: ratingChange,
+        challenger_won: gameState.isWon,
+        challenger_display_name: profile.display_name,
+      }).select('id').single();
+
+      if (error || !data) throw error;
+
+      const url = `${window.location.origin}/challenge/${data.id}`;
+      const text = `I ${gameState.isWon ? 'solved' : 'attempted'} this ${gameState.difficulty} deal in ${formatTime(timeSeconds)} with ${gameState.moves} moves on Pique. Can you beat it? ${url}`;
+
+      if (navigator.share) {
+        await navigator.share({ title: 'Pique Challenge', text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        toast.success('Challenge link copied!');
+      }
+    } catch {
+      toast.error('Failed to create challenge');
+    }
+    setSharing(false);
+  }, [user, profile, dealSeed, gameMode, drawMode, gameState, timeSeconds, currentRating, ratingChange]);
+
+  const isChallenge = !!challengeData;
+  const playerWonChallenge = isChallenge && gameState.isWon && challengeData &&
+    gameState.moves <= challengeData.challengerMoves;
 
   return (
     <motion.div
@@ -60,7 +120,11 @@ export function PostGameScreen({ gameState, currentRating, ratingChange, onPlayA
           <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Puzzle IQ</p>
           <PuzzleIQBadge rating={currentRating} size="lg" />
           <RatingChange change={ratingChange} />
-          <TierProgress rating={currentRating} />
+          <TierProgressBar
+            rating={currentRating}
+            previousRating={previousRating}
+            ratingChange={ratingChange}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -94,6 +158,39 @@ export function PostGameScreen({ gameState, currentRating, ratingChange, onPlayA
           </div>
         </div>
 
+        {/* Challenge comparison */}
+        {isChallenge && challengeData && (
+          <motion.div
+            className="bg-secondary/50 rounded-xl p-4 space-y-3"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Swords className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">Challenge Result</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div></div>
+              <div className="font-semibold text-muted-foreground">You</div>
+              <div className="font-semibold text-muted-foreground">{challengeData.challengerName}</div>
+
+              <div className="text-muted-foreground text-left">Time</div>
+              <div className="font-mono font-semibold">{formatTime(timeSeconds)}</div>
+              <div className="font-mono font-semibold">{formatTime(challengeData.challengerTime)}</div>
+
+              <div className="text-muted-foreground text-left">Moves</div>
+              <div className="font-mono font-semibold">{gameState.moves}</div>
+              <div className="font-mono font-semibold">{challengeData.challengerMoves}</div>
+            </div>
+            {gameState.isWon && (
+              <p className={`text-center text-sm font-semibold ${playerWonChallenge ? 'text-rating-up' : 'text-muted-foreground'}`}>
+                {playerWonChallenge ? '🏆 You won the challenge!' : 'Challenger wins this round!'}
+              </p>
+            )}
+          </motion.div>
+        )}
+
         {gameState.isWon && percentile > 0 && (
           <motion.div
             className="bg-primary/10 rounded-xl p-3 text-center"
@@ -119,6 +216,18 @@ export function PostGameScreen({ gameState, currentRating, ratingChange, onPlayA
             Play Again
           </Button>
         </div>
+
+        {dealSeed !== undefined && (
+          <Button
+            variant="outline"
+            onClick={handleChallenge}
+            disabled={sharing}
+            className="w-full"
+          >
+            <Swords className="w-4 h-4 mr-2" />
+            Challenge a Friend
+          </Button>
+        )}
       </motion.div>
     </motion.div>
   );

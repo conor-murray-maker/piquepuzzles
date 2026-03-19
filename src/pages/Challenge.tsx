@@ -29,12 +29,12 @@ export default function Challenge() {
 
   useEffect(() => {
     if (!id) return;
-    supabase
-      .from('challenges' as any)
+    (supabase as any)
+      .from('challenges')
       .select('*')
       .eq('id', id)
       .single()
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         setChallenge(data as ChallengeData | null);
         setLoading(false);
       });

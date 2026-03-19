@@ -1,9 +1,9 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { getTier, RATING_TIERS, GameMode } from '@/game/types';
-import { PuzzleIQBadge, TierProgress } from '@/components/game/PuzzleIQBadge';
+import { RATING_TIERS } from '@/game/types';
+import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
+import { TierProgressBar } from '@/components/game/TierProgressBar';
+import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TrendingUp, TrendingDown, Trophy, Target, Timer, Hash, Flame, BarChart3, Users } from 'lucide-react';
@@ -22,8 +22,11 @@ interface GameRecord {
   game_mode: string;
 }
 
-function StatsContent({ games, profile, percentile }: { games: GameRecord[]; profile: any; percentile: number }) {
-  const stats = useMemo(() => {
+function StatsContent({ games, stats }: {
+  games: GameRecord[];
+  stats: ReturnType<typeof usePlayerStats>;
+}) {
+  const localStats = useMemo(() => {
     if (games.length === 0) return null;
     const wins = games.filter(g => g.won);
     const winRate = games.length > 0 ? (wins.length / games.length) * 100 : 0;
@@ -34,7 +37,6 @@ function StatsContent({ games, profile, percentile }: { games: GameRecord[]; pro
     return { winRate, avgMoves, avgTime, bestTime, fewestMoves, totalGames: games.length, totalWins: wins.length };
   }, [games]);
 
-  const rating = profile?.rating ?? 1000;
   const latestChange = games.length > 0 ? games[games.length - 1].rating_change : 0;
 
   const ratingHistory = useMemo(() => {
@@ -57,11 +59,6 @@ function StatsContent({ games, profile, percentile }: { games: GameRecord[]; pro
     return ratingHistory.map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(p.x).toFixed(1)} ${scaleY(p.y).toFixed(1)}`).join(' ');
   };
 
-  const formatTime = (s: number) => {
-    if (s === 0) return '--';
-    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
-  };
-
   if (games.length === 0) {
     return (
       <div className="text-center py-12">
@@ -73,14 +70,13 @@ function StatsContent({ games, profile, percentile }: { games: GameRecord[]; pro
 
   return (
     <div className="space-y-5">
-      {/* Puzzle IQ Card */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
         <Card>
           <CardContent className="pt-5 pb-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Puzzle IQ</p>
-                <PuzzleIQBadge rating={rating} size="lg" />
+                <PuzzleIQBadge rating={stats.puzzleIQ} size="lg" />
               </div>
               <div className="text-right space-y-1">
                 <p className={`text-lg font-bold font-mono flex items-center gap-1 ${
@@ -93,17 +89,16 @@ function StatsContent({ games, profile, percentile }: { games: GameRecord[]; pro
               </div>
             </div>
 
-            {/* Percentile badge */}
-            {percentile > 0 && (
+            {stats.percentile > 0 && (
               <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-3 py-2">
                 <Users className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium">
-                  Top <span className="text-primary font-bold">{Math.max(1, 100 - percentile)}%</span> of all players
+                  Top <span className="text-primary font-bold">{Math.max(1, 100 - stats.percentile)}%</span> of all players
                 </span>
               </div>
             )}
 
-            <TierProgress rating={rating} />
+            <TierProgressBar rating={stats.puzzleIQ} />
 
             {ratingHistory.length > 1 && (
               <div className="pt-2">
@@ -129,43 +124,41 @@ function StatsContent({ games, profile, percentile }: { games: GameRecord[]; pro
         </Card>
       </motion.div>
 
-      {/* Stats Grid */}
       <motion.div className="grid grid-cols-2 gap-3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="w-4 h-4 text-gold" />
             <p className="text-xs text-muted-foreground font-medium">Win Rate</p>
           </div>
-          <p className="text-2xl font-bold font-mono">{stats ? `${stats.winRate.toFixed(0)}%` : '--'}</p>
-          <p className="text-xs text-muted-foreground">{stats ? `${stats.totalWins}/${stats.totalGames} games` : 'No games yet'}</p>
+          <p className="text-2xl font-bold font-mono">{localStats ? `${localStats.winRate.toFixed(0)}%` : '--'}</p>
+          <p className="text-xs text-muted-foreground">{localStats ? `${localStats.totalWins}/${localStats.totalGames} games` : 'No games yet'}</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1">
             <Flame className="w-4 h-4 text-destructive" />
             <p className="text-xs text-muted-foreground font-medium">Best Streak</p>
           </div>
-          <p className="text-2xl font-bold font-mono">{profile?.best_streak ?? 0}</p>
-          <p className="text-xs text-muted-foreground">Current: {profile?.current_streak ?? 0}</p>
+          <p className="text-2xl font-bold font-mono">{stats.bestStreak}</p>
+          <p className="text-xs text-muted-foreground">Current: {stats.currentStreak}</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1">
             <Hash className="w-4 h-4 text-muted-foreground" />
             <p className="text-xs text-muted-foreground font-medium">Avg Moves</p>
           </div>
-          <p className="text-2xl font-bold font-mono">{stats?.avgMoves ?? '--'}</p>
-          <p className="text-xs text-muted-foreground">Best: {stats?.fewestMoves ?? '--'}</p>
+          <p className="text-2xl font-bold font-mono">{localStats?.avgMoves ?? '--'}</p>
+          <p className="text-xs text-muted-foreground">Best: {localStats?.fewestMoves ?? '--'}</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1">
             <Timer className="w-4 h-4 text-muted-foreground" />
             <p className="text-xs text-muted-foreground font-medium">Avg Time</p>
           </div>
-          <p className="text-2xl font-bold font-mono">{formatTime(stats?.avgTime ?? 0)}</p>
-          <p className="text-xs text-muted-foreground">Best: {formatTime(stats?.bestTime ?? 0)}</p>
+          <p className="text-2xl font-bold font-mono">{stats.formatTime(localStats?.avgTime ?? 0)}</p>
+          <p className="text-xs text-muted-foreground">Best: {stats.formatTime(localStats?.bestTime ?? 0)}</p>
         </div>
       </motion.div>
 
-      {/* Recent Games */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
@@ -187,7 +180,7 @@ function StatsContent({ games, profile, percentile }: { games: GameRecord[]; pro
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span>{game.moves} moves</span>
-                    <span>{formatTime(game.time_seconds)}</span>
+                    <span>{stats.formatTime(game.time_seconds)}</span>
                     <span className={`font-mono font-semibold ${game.rating_change > 0 ? 'text-rating-up' : 'text-rating-down'}`}>
                       {game.rating_change > 0 ? '+' : ''}{game.rating_change}
                     </span>
@@ -203,28 +196,12 @@ function StatsContent({ games, profile, percentile }: { games: GameRecord[]; pro
 }
 
 export default function Stats() {
-  const { profile } = useAuth();
-  const [games, setGames] = useState<GameRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [percentile, setPercentile] = useState(0);
+  const stats = usePlayerStats();
 
-  useEffect(() => {
-    async function fetchData() {
-      const [gamesRes, percentileRes] = await Promise.all([
-        supabase.from('game_history').select('*').order('played_at', { ascending: true }).limit(500),
-        supabase.rpc('get_rating_percentile', { user_rating: profile?.rating ?? 1000 }),
-      ]);
-      if (gamesRes.data) setGames(gamesRes.data as GameRecord[]);
-      if (percentileRes.data !== null) setPercentile(percentileRes.data as number);
-      setLoading(false);
-    }
-    fetchData();
-  }, [profile?.rating]);
+  const klondikeGames = useMemo(() => stats.games.filter((g: any) => !g.game_mode || g.game_mode === 'klondike'), [stats.games]);
+  const freecellGames = useMemo(() => stats.games.filter((g: any) => g.game_mode === 'freecell'), [stats.games]);
 
-  const klondikeGames = useMemo(() => games.filter(g => !g.game_mode || g.game_mode === 'klondike'), [games]);
-  const freecellGames = useMemo(() => games.filter(g => g.game_mode === 'freecell'), [games]);
-
-  if (loading) {
+  if (stats.loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center pb-16">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -250,13 +227,13 @@ export default function Stats() {
           </TabsList>
 
           <TabsContent value="all">
-            <StatsContent games={games} profile={profile} percentile={percentile} />
+            <StatsContent games={stats.games as GameRecord[]} stats={stats} />
           </TabsContent>
           <TabsContent value="klondike">
-            <StatsContent games={klondikeGames} profile={profile} percentile={percentile} />
+            <StatsContent games={klondikeGames as GameRecord[]} stats={stats} />
           </TabsContent>
           <TabsContent value="freecell">
-            <StatsContent games={freecellGames} profile={profile} percentile={percentile} />
+            <StatsContent games={freecellGames as GameRecord[]} stats={stats} />
           </TabsContent>
         </Tabs>
       </div>

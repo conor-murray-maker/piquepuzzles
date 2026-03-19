@@ -1,17 +1,21 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers } from 'lucide-react';
+import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PuzzleIQBadge, TierProgress } from '@/components/game/PuzzleIQBadge';
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const navigate = useNavigate();
-  const [rating] = useState(() => {
-    const saved = localStorage.getItem('pique-rating');
-    return saved ? parseInt(saved, 10) : 1000;
-  });
+  const { profile, signOut } = useAuth();
   const [isDark, setIsDark] = useState(false);
+
+  const rating = profile?.rating ?? 1000;
+  const gamesWon = profile?.games_won ?? 0;
+  const gamesPlayed = profile?.games_played ?? 0;
+  const currentStreak = profile?.current_streak ?? 0;
+  const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0;
 
   useEffect(() => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -35,18 +39,26 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Spade className="w-6 h-6 text-primary" />
           <span className="text-lg font-bold tracking-tight">Pique</span>
         </div>
-        <button
-          onClick={toggleTheme}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {isDark ? '☀️' : '🌙'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isDark ? '☀️' : '🌙'}
+          </button>
+          <button
+            onClick={signOut}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors p-1"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
@@ -56,7 +68,6 @@ export default function Index() {
           initial="hidden"
           animate="show"
         >
-          {/* Hero */}
           <motion.div variants={item} className="text-center space-y-3">
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
               Sharpen your mind.
@@ -66,14 +77,12 @@ export default function Index() {
             </p>
           </motion.div>
 
-          {/* Rating Card */}
           <motion.div variants={item} className="stat-card text-center space-y-3 py-5">
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Your Puzzle IQ</p>
             <PuzzleIQBadge rating={rating} size="lg" />
             <TierProgress rating={rating} />
           </motion.div>
 
-          {/* Game Selection */}
           <motion.div variants={item} className="space-y-3">
             <h2 className="text-xs text-muted-foreground uppercase tracking-wider font-medium px-1">Games</h2>
 
@@ -102,28 +111,26 @@ export default function Index() {
             </div>
           </motion.div>
 
-          {/* Quick Stats */}
           <motion.div variants={item} className="grid grid-cols-3 gap-3">
             <div className="stat-card text-center py-3">
               <Trophy className="w-4 h-4 text-gold mx-auto mb-1" />
-              <p className="font-mono font-semibold text-sm">0</p>
+              <p className="font-mono font-semibold text-sm">{gamesWon}</p>
               <p className="text-xs text-muted-foreground">Wins</p>
             </div>
             <div className="stat-card text-center py-3">
               <Flame className="w-4 h-4 text-destructive mx-auto mb-1" />
-              <p className="font-mono font-semibold text-sm">0</p>
+              <p className="font-mono font-semibold text-sm">{currentStreak}</p>
               <p className="text-xs text-muted-foreground">Streak</p>
             </div>
             <div className="stat-card text-center py-3">
               <BarChart3 className="w-4 h-4 text-primary mx-auto mb-1" />
-              <p className="font-mono font-semibold text-sm">0%</p>
+              <p className="font-mono font-semibold text-sm">{winRate}%</p>
               <p className="text-xs text-muted-foreground">Win Rate</p>
             </div>
           </motion.div>
         </motion.div>
       </main>
 
-      {/* Footer */}
       <footer className="py-4 text-center border-t border-border">
         <p className="text-xs text-muted-foreground">Pique — Puzzle games for sharp minds</p>
       </footer>

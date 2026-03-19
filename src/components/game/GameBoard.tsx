@@ -385,7 +385,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
 
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
-    if (dragState.isDragging) return;
+    if (dragManager.isDragging) return;
 
     // Double-tap detection
     const now = Date.now();
@@ -424,7 +424,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
     }
 
     setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragState.isDragging, handleDoubleTap]);
+  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, dragManager.isDragging, handleDoubleTap]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;
@@ -560,7 +560,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                     >
                       <PlayingCard
                         card={card}
-                        onClick={isTop && !dragState.isDragging ? () => handleCardClick('waste', 0) : undefined}
+                        onClick={isTop && !dragManager.isDragging ? () => handleCardClick('waste', 0) : undefined}
                         cardWidth={cardW}
                       />
                     </div>
@@ -586,7 +586,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                   >
                     <PlayingCard
                       card={pile[pile.length - 1]}
-                      onClick={() => !dragState.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
+                      onClick={() => !dragManager.isDragging && handleCardClick(`foundation-${i}`, pile.length - 1)}
                       cardWidth={cardW}
                     />
                   </div>
@@ -628,7 +628,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3 }: GameBoardProps)
                       >
                         <PlayingCard
                           card={card}
-                          onClick={card.faceUp && !dragState.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
+                          onClick={card.faceUp && !dragManager.isDragging ? () => handleCardClick(`tableau-${colIdx}`, cardIdx) : undefined}
                           cardWidth={cardW}
                           className={isSelected ? 'ring-2 ring-primary' : ''}
                         />

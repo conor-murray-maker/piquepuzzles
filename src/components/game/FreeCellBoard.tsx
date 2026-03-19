@@ -167,10 +167,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   }, [state, pushHistory, fireGameEnd]);
 
   // Drag and drop
-  const handleDrop = useCallback((source: DragSource, targetElement: Element | null) => {
-    if (!targetElement || autoCompleting) return;
-    const targetId = targetElement.getAttribute('data-drop-target');
-    if (!targetId) return;
+  const handleDrop = useCallback((source: DragSource, targetId: string | null) => {
+    if (!targetId || autoCompleting) return;
 
     let newState: FreeCellState | null = null;
 

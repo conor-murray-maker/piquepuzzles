@@ -153,8 +153,9 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     }
   }, [state, history, initialSeed]);
 
-  // Register deal in Supabase
+  // Register deal in Supabase (only for deals without a dealUuid from the queue)
   useEffect(() => {
+    if (state.dealUuid) return; // Already registered via deal queue
     if (state.seed !== undefined) {
       (supabase as any).from('deals').upsert({
         seed: state.seed,
@@ -163,9 +164,17 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         min_moves: state.minMoves || 0,
         dds_initial: state.difficultyScore,
         dds_blended: state.difficultyScore,
-      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true }).then(() => {});
+        tier: 'fresh',
+      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true })
+      .select('id')
+      .single()
+      .then(({ data }: any) => {
+        if (data?.id) {
+          setState(s => ({ ...s, dealUuid: data.id }));
+        }
+      });
     }
-  }, [state.dealId]);
+  }, [state.dealId, state.dealUuid]);
 
   // Persist elapsed time
   useEffect(() => {

@@ -1,4 +1,5 @@
-import { Card as CardType, isRed, suitSymbol, Rank } from '@/game/types';
+import { Card as CardType, isRed, suitSymbol, Rank, Suit } from '@/game/types';
+import { RotateCcw } from 'lucide-react';
 
 interface PlayingCardProps {
   card: CardType;
@@ -7,19 +8,16 @@ interface PlayingCardProps {
   style?: React.CSSProperties;
   isDragging?: boolean;
   className?: string;
-  compact?: boolean;
+  cardWidth?: number;
 }
 
 const RED = '#DC2626';
 const BLACK = '#1a1a1a';
+const NAVY = '#1B2340';
 
-// Standard pip positions as percentages [x%, y%] within the card body
-// x: 0=left col, 50=center, 100=right col
-// y: 0=top, 100=bottom
-type PipPos = [number, number, boolean?]; // [x%, y%, flipped?]
+type PipPos = [number, number, boolean?];
 
 const PIP_POSITIONS: Record<string, PipPos[]> = {
-  'A': [[50, 50]],
   '2': [[50, 15], [50, 85, true]],
   '3': [[50, 15], [50, 50], [50, 85, true]],
   '4': [[30, 15], [70, 15], [30, 85, true], [70, 85, true]],
@@ -32,17 +30,20 @@ const PIP_POSITIONS: Record<string, PipPos[]> = {
 };
 
 function isFaceCard(rank: Rank): boolean {
-  return rank === 'J' || rank === 'Q' || rank === 'K' || rank === 'A';
+  return rank === 'J' || rank === 'Q' || rank === 'K';
 }
 
-function CardFace({ card, compact }: { card: CardType; compact?: boolean }) {
+function CardFace({ card, w, h }: { card: CardType; w: number; h: number }) {
   const red = isRed(card.suit);
   const color = red ? RED : BLACK;
   const symbol = suitSymbol(card.suit);
-  const w = compact ? 56 : 70;
-  const h = compact ? 80 : 100;
-  const cornerFontSize = compact ? 9 : 11;
-  const cornerSymbolSize = compact ? 8 : 10;
+
+  // Scale font sizes relative to card width
+  const cornerRankSize = Math.max(10, w * 0.22);
+  const cornerSuitSize = Math.max(8, w * 0.18);
+  const cornerX = w * 0.08;
+  const cornerRankY = cornerRankSize + 2;
+  const cornerSuitY = cornerRankY + cornerSuitSize + 1;
 
   return (
     <svg
@@ -53,59 +54,94 @@ function CardFace({ card, compact }: { card: CardType; compact?: boolean }) {
       style={{ display: 'block' }}
     >
       {/* Card background */}
-      <rect x="0" y="0" width={w} height={h} rx="6" ry="6" fill="white" stroke="#d4d4d8" strokeWidth="1" />
+      <rect x="0" y="0" width={w} height={h} rx="5" ry="5" fill="white" stroke="#e2e8f0" strokeWidth="1" />
 
       {/* Top-left corner: rank + suit */}
-      <text x="4" y={cornerFontSize + 3} fontSize={cornerFontSize} fontWeight="600" fill={color} fontFamily="Inter, system-ui, sans-serif">
+      <text x={cornerX} y={cornerRankY} fontSize={cornerRankSize} fontWeight="700" fill={color} fontFamily="Inter, system-ui, sans-serif">
         {card.rank}
       </text>
-      <text x="4" y={cornerFontSize + cornerSymbolSize + 4} fontSize={cornerSymbolSize} fill={color} fontFamily="Inter, system-ui, sans-serif">
+      <text x={cornerX} y={cornerSuitY} fontSize={cornerSuitSize} fill={color} fontFamily="Inter, system-ui, sans-serif">
         {symbol}
       </text>
 
-      {/* Bottom-right corner: rank + suit (rotated) */}
+      {/* Bottom-right corner (rotated) */}
       <g transform={`translate(${w}, ${h}) rotate(180)`}>
-        <text x="4" y={cornerFontSize + 3} fontSize={cornerFontSize} fontWeight="600" fill={color} fontFamily="Inter, system-ui, sans-serif">
+        <text x={cornerX} y={cornerRankY} fontSize={cornerRankSize} fontWeight="700" fill={color} fontFamily="Inter, system-ui, sans-serif">
           {card.rank}
         </text>
-        <text x="4" y={cornerFontSize + cornerSymbolSize + 4} fontSize={cornerSymbolSize} fill={color} fontFamily="Inter, system-ui, sans-serif">
+        <text x={cornerX} y={cornerSuitY} fontSize={cornerSuitSize} fill={color} fontFamily="Inter, system-ui, sans-serif">
           {symbol}
         </text>
       </g>
 
       {/* Center content */}
-      {isFaceCard(card.rank) ? (
-        // Face card / Ace: large centered letter
-        <text
-          x={w / 2}
-          y={h / 2 + (compact ? 10 : 12)}
-          fontSize={compact ? 28 : 34}
-          fontWeight="700"
-          fill={color}
-          textAnchor="middle"
-          fontFamily="Inter, system-ui, sans-serif"
-        >
-          {card.rank}
-        </text>
+      {card.rank === 'A' ? (
+        <AceCenterSVG suit={card.suit} w={w} h={h} color={color} />
+      ) : isFaceCard(card.rank) ? (
+        <FaceCardCenterSVG rank={card.rank} w={w} h={h} color={color} />
       ) : (
-        // Number card: pip layout
-        <PipsSVG rank={card.rank} symbol={symbol} color={color} w={w} h={h} compact={compact} />
+        <PipsSVG rank={card.rank} symbol={symbol} color={color} w={w} h={h} />
       )}
     </svg>
   );
 }
 
-function PipsSVG({ rank, symbol, color, w, h, compact }: { rank: Rank; symbol: string; color: string; w: number; h: number; compact?: boolean }) {
+function AceCenterSVG({ suit, w, h, color }: { suit: Suit; w: number; h: number; color: string }) {
+  const symbol = suitSymbol(suit);
+  const fontSize = Math.min(w * 0.55, h * 0.35);
+  return (
+    <text
+      x={w / 2}
+      y={h / 2 + fontSize * 0.35}
+      fontSize={fontSize}
+      fill={color}
+      textAnchor="middle"
+      fontFamily="Inter, system-ui, sans-serif"
+    >
+      {symbol}
+    </text>
+  );
+}
+
+function FaceCardCenterSVG({ rank, w, h, color }: { rank: Rank; w: number; h: number; color: string }) {
+  const boxW = w * 0.52;
+  const boxH = h * 0.38;
+  const boxX = (w - boxW) / 2;
+  const boxY = (h - boxH) / 2;
+  const fontSize = Math.min(boxW * 0.65, boxH * 0.7);
+
+  return (
+    <g>
+      {/* Decorative bordered box */}
+      <rect x={boxX} y={boxY} width={boxW} height={boxH} rx="4" ry="4" fill={NAVY} />
+      <rect x={boxX + 2} y={boxY + 2} width={boxW - 4} height={boxH - 4} rx="3" ry="3" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+      {/* Stylised letter */}
+      <text
+        x={w / 2}
+        y={h / 2 + fontSize * 0.32}
+        fontSize={fontSize}
+        fontWeight="800"
+        fill="white"
+        textAnchor="middle"
+        fontFamily="Inter, system-ui, sans-serif"
+        letterSpacing="1"
+      >
+        {rank}
+      </text>
+    </g>
+  );
+}
+
+function PipsSVG({ rank, symbol, color, w, h }: { rank: Rank; symbol: string; color: string; w: number; h: number }) {
   const positions = PIP_POSITIONS[rank];
   if (!positions) return null;
 
-  // Pip area: inset from corners to avoid overlapping rank labels
-  const padX = compact ? 10 : 13;
-  const padTop = compact ? 18 : 22;
-  const padBottom = compact ? 18 : 22;
+  const padX = w * 0.18;
+  const padTop = h * 0.22;
+  const padBottom = h * 0.22;
   const areaW = w - padX * 2;
   const areaH = h - padTop - padBottom;
-  const pipSize = compact ? 12 : 15;
+  const pipSize = Math.max(10, w * 0.24);
 
   return (
     <>
@@ -131,40 +167,109 @@ function PipsSVG({ rank, symbol, color, w, h, compact }: { rank: Rank; symbol: s
   );
 }
 
-function CardBack({ compact }: { compact?: boolean }) {
-  const w = compact ? 56 : 70;
-  const h = compact ? 80 : 100;
+function CardBack({ w, h }: { w: number; h: number }) {
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="rounded-lg" style={{ display: 'block' }}>
-      <rect x="0" y="0" width={w} height={h} rx="6" ry="6" fill="hsl(160, 60%, 40%)" />
-      <rect x="3" y="3" width={w - 6} height={h - 6} rx="4" ry="4" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-      <text x={w / 2} y={h / 2 + 6} fontSize="16" fill="rgba(255,255,255,0.3)" textAnchor="middle" fontWeight="bold">♠</text>
+      <rect x="0" y="0" width={w} height={h} rx="5" ry="5" fill="hsl(160, 60%, 40%)" />
+      <rect x="3" y="3" width={w - 6} height={h - 6} rx="3" ry="3" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+      {/* Diamond pattern */}
+      <g opacity="0.12">
+        {Array.from({ length: 3 }).map((_, row) =>
+          Array.from({ length: 2 }).map((_, col) => {
+            const cx = w * 0.3 + col * w * 0.4;
+            const cy = h * 0.25 + row * h * 0.25;
+            return (
+              <text key={`${row}-${col}`} x={cx} y={cy + 6} fontSize="12" fill="white" textAnchor="middle" fontWeight="bold">♦</text>
+            );
+          })
+        )}
+      </g>
     </svg>
   );
 }
 
-export function PlayingCard({ card, onClick, onDoubleClick, style, isDragging, className = '', compact }: PlayingCardProps) {
-  const h = compact ? 'h-[80px]' : 'h-[100px]';
-  const w = compact ? 'w-[56px]' : 'w-[70px]';
+export function PlayingCard({ card, onClick, onDoubleClick, style, isDragging, className = '', cardWidth = 70 }: PlayingCardProps) {
+  const w = cardWidth;
+  const h = Math.round(w * 1.4);
 
   return (
     <div
-      className={`playing-card ${w} ${h} ${isDragging ? 'playing-card-dragging z-50' : 'z-0'} cursor-pointer ${className}`}
-      style={style}
+      className={`playing-card ${isDragging ? 'playing-card-dragging z-50' : 'z-0'} cursor-pointer ${className}`}
+      style={{
+        width: w,
+        height: h,
+        boxShadow: isDragging ? 'var(--shadow-playing-card-drag)' : '0 1px 3px rgba(0,0,0,0.12)',
+        ...style,
+      }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
-      {!card.faceUp ? <CardBack compact={compact} /> : <CardFace card={card} compact={compact} />}
+      {!card.faceUp ? <CardBack w={w} h={h} /> : <CardFace card={card} w={w} h={h} />}
     </div>
   );
 }
 
-export function EmptyPile({ label, onClick, className = '', compact }: { label?: string; onClick?: () => void; className?: string; compact?: boolean }) {
-  const h = compact ? 'h-[80px]' : 'h-[100px]';
-  const w = compact ? 'w-[56px]' : 'w-[70px]';
+export function EmptyPile({ label, onClick, className = '', cardWidth = 70, variant = 'default' }: {
+  label?: string;
+  onClick?: () => void;
+  className?: string;
+  cardWidth?: number;
+  variant?: 'default' | 'foundation' | 'freecell' | 'stock-empty';
+}) {
+  const w = cardWidth;
+  const h = Math.round(w * 1.4);
+
+  if (variant === 'freecell') {
+    return (
+      <div
+        className={`rounded-lg flex items-center justify-center cursor-pointer ${className}`}
+        style={{
+          width: w,
+          height: h,
+          backgroundColor: '#e8edf5',
+          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.08)',
+        }}
+        onClick={onClick}
+      />
+    );
+  }
+
+  if (variant === 'foundation') {
+    return (
+      <div
+        className={`rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer ${className}`}
+        style={{
+          width: w,
+          height: h,
+          borderColor: '#cbd5e1',
+        }}
+        onClick={onClick}
+      >
+        {label && <span style={{ color: '#cbd5e1', fontSize: Math.max(16, w * 0.35), fontWeight: 500 }}>{label}</span>}
+      </div>
+    );
+  }
+
+  if (variant === 'stock-empty') {
+    return (
+      <div
+        className={`rounded-lg flex items-center justify-center cursor-pointer ${className}`}
+        style={{
+          width: w,
+          height: h,
+          border: '2px dashed #cbd5e1',
+        }}
+        onClick={onClick}
+      >
+        <RotateCcw style={{ width: w * 0.35, height: w * 0.35, color: '#94a3b8' }} />
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`${w} ${h} rounded-lg border-2 border-dashed border-border/50 flex items-center justify-center cursor-pointer ${className}`}
+      className={`rounded-lg border-2 border-dashed border-border/50 flex items-center justify-center cursor-pointer ${className}`}
+      style={{ width: w, height: h }}
       onClick={onClick}
     >
       {label && <span className="text-muted-foreground/40 text-xs font-medium">{label}</span>}

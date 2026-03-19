@@ -128,9 +128,6 @@
 @layer components {
   .playing-card {
     @apply rounded-lg select-none;
-    width: 70px;
-    height: 100px;
-    box-shadow: var(--shadow-playing-card);
   }
 
   .playing-card-dragging {

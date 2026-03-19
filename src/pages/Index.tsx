@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, LogOut } from 'lucide-react';
+import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PuzzleIQBadge, TierProgress } from '@/components/game/PuzzleIQBadge';
 import { useState, useEffect } from 'react';

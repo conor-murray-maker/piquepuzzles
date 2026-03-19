@@ -1,8 +1,9 @@
 import { Card, KlondikeState, DrawMode, Difficulty, rankValue, isRed, suitSymbol } from './types';
-import { createDeck, shuffleDeck, generateDealId } from './deck';
+import { createDeck, shuffleDeck, generateDealId, generateSeed } from './deck';
 
 export function createKlondikeGame(drawMode: DrawMode = 1, seed?: number): KlondikeState {
-  const deck = shuffleDeck(createDeck(), seed);
+  const actualSeed = seed ?? generateSeed();
+  const deck = shuffleDeck(createDeck(), actualSeed);
   const tableau: Card[][] = [];
   let cardIndex = 0;
 
@@ -31,9 +32,10 @@ export function createKlondikeGame(drawMode: DrawMode = 1, seed?: number): Klond
     hintsUsed: 0,
     undosUsed: 0,
     isWon: false,
-    dealId: generateDealId(seed),
+    dealId: generateDealId(actualSeed),
     difficulty: difficultyLabel(diffScore),
     difficultyScore: diffScore,
+    seed: actualSeed,
   };
 }
 

@@ -33,3 +33,7 @@ export function generateDealId(seed?: number): string {
   if (seed !== undefined) return `daily-${seed}`;
   return `deal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+export function generateSeed(): number {
+  return Math.floor(Math.random() * 2147483647);
+}

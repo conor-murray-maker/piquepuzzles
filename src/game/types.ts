@@ -24,6 +24,7 @@ export interface FreeCellState {
   dealId: string;
   difficulty: Difficulty;
   difficultyScore: number;
+  seed?: number;
 }
 
 export interface KlondikeState {
@@ -40,6 +41,7 @@ export interface KlondikeState {
   dealId: string;
   difficulty: Difficulty;
   difficultyScore: number;
+  seed?: number;
 }
 
 export interface MoveRecord {

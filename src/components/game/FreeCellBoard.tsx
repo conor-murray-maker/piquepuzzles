@@ -15,6 +15,7 @@ import {
   getValidSequenceLength,
   maxMovableCards,
 } from '@/game/freecell';
+import { getFreeCellAutoSend, applyFreeCellAutoSend } from '@/game/autoSend';
 import { PlayingCard, EmptyPile } from './PlayingCard';
 import { dragManager, DragSource } from '@/game/DragManager';
 import { isFreeCellStuck } from '@/game/stuckDetector';
@@ -66,22 +67,31 @@ export function clearFreeCellStorage() {
 interface FreeCellBoardProps {
   onGameEnd: (state: FreeCellState, elapsedSeconds: number) => void;
   onGiveUp?: (state: FreeCellState, elapsedSeconds: number) => void;
+  initialSeed?: number;
 }
 
-export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
+export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed }: FreeCellBoardProps) {
   const [state, setState] = useState<FreeCellState>(() => {
+    if (initialSeed !== undefined) return createFreeCellGame(initialSeed);
     const saved = loadFromStorage();
     return saved ? saved.state : createFreeCellGame();
   });
   const [history, setHistory] = useState<FreeCellState[]>(() => {
+    if (initialSeed !== undefined) return [];
     const saved = loadFromStorage();
     return saved ? saved.history : [];
   });
   const [elapsed, setElapsed] = useState(() => {
+    if (initialSeed !== undefined) return 0;
     try {
       const saved = localStorage.getItem(ELAPSED_KEY);
       return saved ? parseInt(saved, 10) : 0;
     } catch { return 0; }
+  });
+  const [gameStarted, setGameStarted] = useState(() => {
+    if (initialSeed !== undefined) return false;
+    const saved = loadFromStorage();
+    return saved ? saved.state.moves > 0 : false;
   });
   const [selectedCard, setSelectedCard] = useState<{ source: string; cardIndex: number } | null>(null);
   const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
@@ -106,12 +116,14 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   }, []);
 
   useEffect(() => {
+    if (initialSeed !== undefined) return;
     if (state.isWon) { clearFreeCellStorage(); } else { saveToStorage(state, history); }
-  }, [state, history]);
+  }, [state, history, initialSeed]);
 
   useEffect(() => {
+    if (initialSeed !== undefined) return;
     try { localStorage.setItem(ELAPSED_KEY, String(elapsed)); } catch {}
-  }, [elapsed]);
+  }, [elapsed, initialSeed]);
 
   useEffect(() => {
     const el = gameBoardRef.current;
@@ -121,9 +133,9 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     return () => el.removeEventListener('touchmove', prevent);
   }, []);
 
-  // Timer
+  // Timer: only ticks when game started
   useEffect(() => {
-    if (state.isWon) return;
+    if (state.isWon || !gameStarted) return;
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const start = () => { if (!intervalId) intervalId = setInterval(() => setElapsed(e => e + 1), 1000); };
     const stop = () => { if (intervalId) { clearInterval(intervalId); intervalId = null; } };
@@ -131,7 +143,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     if (!document.hidden) start();
     document.addEventListener('visibilitychange', handleVis);
     return () => { stop(); document.removeEventListener('visibilitychange', handleVis); };
-  }, [state.isWon]);
+  }, [state.isWon, gameStarted]);
 
   // Auto-complete
   useEffect(() => {
@@ -154,6 +166,28 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   useEffect(() => {
     if (!autoCompleting && !state.isWon && isAutoCompletable(state)) setAutoCompleting(true);
   }, [state, autoCompleting]);
+
+  // Auto-send to foundation
+  useEffect(() => {
+    if (state.isWon || autoCompleting || !gameStarted) return;
+    if (dragManager.isDragging) return;
+
+    const info = getFreeCellAutoSend(state);
+    if (!info) return;
+
+    const timer = setTimeout(() => {
+      setState(s => {
+        const result = applyFreeCellAutoSend(s, info);
+        if (result.isWon && !gameEndedRef.current) {
+          gameEndedRef.current = true;
+          onGameEnd(result, elapsedRef.current);
+        }
+        return result;
+      });
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [state, autoCompleting, gameStarted, onGameEnd]);
 
   // Stuck detection
   useEffect(() => {
@@ -178,11 +212,12 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
 
   const applyMove = useCallback((newState: FreeCellState | null) => {
     if (!newState) return false;
+    if (!gameStarted) setGameStarted(true);
     pushHistory(state);
     setState(newState);
     if (newState.isWon) fireGameEnd(newState);
     return true;
-  }, [state, pushHistory, fireGameEnd]);
+  }, [state, pushHistory, fireGameEnd, gameStarted]);
 
   // Drag and drop
   const handleDrop = useCallback((source: DragSource, targetId: string | null) => {
@@ -264,6 +299,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     setState(createFreeCellGame());
     setHistory([]);
     setElapsed(0);
+    setGameStarted(false);
     setSelectedCard(null);
     setAutoCompleting(false);
     setStuckDismissedAtMove(-1);
@@ -277,7 +313,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
     else handleNewGame();
   }, [state, onGiveUp, handleNewGame]);
 
-  // Smart auto-move: foundation → tableau → empty col → free cell (stacks supported)
+  // Smart auto-move
   const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
     setSelectedCard(null);
@@ -292,7 +328,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       card = col[cardIndex];
       if (!card) return;
       isStack = cardIndex < col.length - 1;
-      // Verify valid sequence from cardIndex
       if (isStack) {
         for (let i = cardIndex; i < col.length - 1; i++) {
           const a = col[i], b = col[i + 1];
@@ -325,7 +360,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       if (newState) { applyMove(newState); return; }
     }
 
-    // Priority 2: Tableau on another card (prefer column with most cards)
+    // Priority 2: Tableau on another card
     const sortedCols = state.tableau
       .map((col, i) => ({ col, i, faceUp: col.length }))
       .filter(c => c.col.length > 0)
@@ -362,7 +397,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
       }
     }
 
-    // Priority 4: Free cell (single cards only, last resort)
+    // Priority 4: Free cell (single cards only)
     if (!isStack && source.startsWith('tableau-')) {
       const fromCol = parseInt(source.split('-')[1]);
       if (cardIndex === state.tableau[fromCol].length - 1) {
@@ -375,7 +410,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting || dragManager.isDragging) return;
 
-    // Double-tap detection
     const now = Date.now();
     const last = lastTapRef.current;
     if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
@@ -520,7 +554,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
         <div style={{ width: boardWidth, maxWidth: '100%' }}>
           {/* Top row: 4 free cells + 4 foundations */}
           <div className="flex items-start justify-between" style={{ gap: COL_GAP }}>
-            {/* Free cells group */}
             <div className="flex" style={{ gap: COL_GAP }}>
               {state.freeCells.map((card, i) => (
                 <div
@@ -543,7 +576,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
               ))}
             </div>
 
-            {/* Foundation group */}
             <div className="flex" style={{ gap: COL_GAP }}>
               {state.foundation.map((pile, i) => (
                 <div
@@ -567,13 +599,12 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
             </div>
           </div>
 
-          {/* Labels */}
           <div className="flex justify-between mt-1 mb-3">
             <span style={{ fontSize: 10, color: '#94a3b8', width: cardW * 4 + COL_GAP * 3, textAlign: 'center' }}>Free Cells</span>
             <span style={{ fontSize: 10, color: '#94a3b8', width: cardW * 4 + COL_GAP * 3, textAlign: 'center' }}>Foundation</span>
           </div>
 
-          {/* Tableau: 8 columns */}
+          {/* Tableau */}
           <div className="flex justify-between" style={{ gap: COL_GAP }}>
             {state.tableau.map((col, colIdx) => (
               <div
@@ -641,7 +672,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
         )}
       </AnimatePresence>
 
-      {/* Give Up dialog */}
       <AlertDialog open={showGiveUpDialog} onOpenChange={setShowGiveUpDialog}>
         <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
@@ -657,7 +687,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Stuck modal */}
       <AlertDialog open={showStuckModal} onOpenChange={setShowStuckModal}>
         <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
@@ -667,18 +696,12 @@ export function FreeCellBoard({ onGameEnd, onGiveUp }: FreeCellBoardProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-2 pt-2">
-            <Button onClick={handleStuckUndo}>
-              Undo moves
-            </Button>
-            <Button variant="secondary" onClick={handleStuckNewDeal}>
-              New deal
-            </Button>
+            <Button onClick={handleStuckUndo}>Undo moves</Button>
+            <Button variant="secondary" onClick={handleStuckNewDeal}>New deal</Button>
             <Button variant="ghost" onClick={() => {
               setShowStuckModal(false);
               setStuckDismissedAtMove(state.moves);
-            }}>
-              Keep trying
-            </Button>
+            }}>Keep trying</Button>
           </div>
         </AlertDialogContent>
       </AlertDialog>

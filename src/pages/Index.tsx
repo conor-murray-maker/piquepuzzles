@@ -1,20 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, Grid3X3 } from 'lucide-react';
-import { PuzzleIQBadge, TierProgress } from '@/components/game/PuzzleIQBadge';
+import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
+import { TierProgressBar } from '@/components/game/TierProgressBar';
+import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { puzzleIQ, wins, winRate, currentStreak } = usePlayerStats();
   const [isDark, setIsDark] = useState(false);
-
-  const rating = profile?.rating ?? 1000;
-  const gamesWon = profile?.games_won ?? 0;
-  const gamesPlayed = profile?.games_played ?? 0;
-  const currentStreak = profile?.current_streak ?? 0;
-  const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0;
 
   useEffect(() => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -59,8 +54,8 @@ export default function Index() {
 
           <motion.div variants={item} className="stat-card text-center space-y-3 py-5">
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Your Puzzle IQ</p>
-            <PuzzleIQBadge rating={rating} size="lg" />
-            <TierProgress rating={rating} />
+            <PuzzleIQBadge rating={puzzleIQ} size="lg" />
+            <TierProgressBar rating={puzzleIQ} />
           </motion.div>
 
           <motion.div variants={item} className="space-y-3">
@@ -98,7 +93,7 @@ export default function Index() {
           <motion.div variants={item} className="grid grid-cols-3 gap-3">
             <div className="stat-card text-center py-3">
               <Trophy className="w-4 h-4 text-gold mx-auto mb-1" />
-              <p className="font-mono font-semibold text-sm">{gamesWon}</p>
+              <p className="font-mono font-semibold text-sm">{wins}</p>
               <p className="text-xs text-muted-foreground">Wins</p>
             </div>
             <div className="stat-card text-center py-3">

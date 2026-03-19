@@ -14,6 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
+      challenge_completions: {
+        Row: {
+          challenge_id: string
+          completed_at: string
+          display_name: string | null
+          id: string
+          moves: number
+          rating: number
+          rating_change: number
+          time_seconds: number
+          user_id: string
+          won: boolean
+        }
+        Insert: {
+          challenge_id: string
+          completed_at?: string
+          display_name?: string | null
+          id?: string
+          moves: number
+          rating: number
+          rating_change: number
+          time_seconds: number
+          user_id: string
+          won: boolean
+        }
+        Update: {
+          challenge_id?: string
+          completed_at?: string
+          display_name?: string | null
+          id?: string
+          moves?: number
+          rating?: number
+          rating_change?: number
+          time_seconds?: number
+          user_id?: string
+          won?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_completions_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenges: {
+        Row: {
+          challenger_display_name: string | null
+          challenger_id: string
+          challenger_moves: number
+          challenger_rating: number
+          challenger_rating_change: number
+          challenger_time_seconds: number
+          challenger_won: boolean
+          created_at: string
+          deal_seed: number
+          difficulty: string
+          draw_mode: number
+          game_mode: string
+          id: string
+        }
+        Insert: {
+          challenger_display_name?: string | null
+          challenger_id: string
+          challenger_moves: number
+          challenger_rating: number
+          challenger_rating_change: number
+          challenger_time_seconds: number
+          challenger_won?: boolean
+          created_at?: string
+          deal_seed: number
+          difficulty: string
+          draw_mode?: number
+          game_mode?: string
+          id?: string
+        }
+        Update: {
+          challenger_display_name?: string | null
+          challenger_id?: string
+          challenger_moves?: number
+          challenger_rating?: number
+          challenger_rating_change?: number
+          challenger_time_seconds?: number
+          challenger_won?: boolean
+          created_at?: string
+          deal_seed?: number
+          difficulty?: string
+          draw_mode?: number
+          game_mode?: string
+          id?: string
+        }
+        Relationships: []
+      }
       game_history: {
         Row: {
           deal_id: string

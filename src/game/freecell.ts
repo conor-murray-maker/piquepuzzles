@@ -1,8 +1,9 @@
 import { Card, FreeCellState, Difficulty, rankValue, isRed, suitSymbol } from './types';
-import { createDeck, shuffleDeck, generateDealId } from './deck';
+import { createDeck, shuffleDeck, generateDealId, generateSeed } from './deck';
 
 export function createFreeCellGame(seed?: number): FreeCellState {
-  const deck = shuffleDeck(createDeck(), seed);
+  const actualSeed = seed ?? generateSeed();
+  const deck = shuffleDeck(createDeck(), actualSeed);
   const tableau: Card[][] = [[], [], [], [], [], [], [], []];
 
   // Deal all 52 cards face-up: first 4 columns get 7, last 4 get 6
@@ -22,9 +23,10 @@ export function createFreeCellGame(seed?: number): FreeCellState {
     hintsUsed: 0,
     undosUsed: 0,
     isWon: false,
-    dealId: generateDealId(seed),
+    dealId: generateDealId(actualSeed),
     difficulty: difficultyLabel(diffScore),
     difficultyScore: diffScore,
+    seed: actualSeed,
   };
 }
 

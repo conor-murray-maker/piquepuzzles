@@ -249,7 +249,7 @@ export function GameBoard({ onGameEnd }: GameBoardProps) {
   const boardWidth = cardW * 7 + gap * 6;
 
   return (
-    <div className="game-surface min-h-screen flex flex-col">
+    <div ref={gameBoardRef} className="game-surface min-h-screen flex flex-col" style={{ overscrollBehavior: 'none', touchAction: 'none' }}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">

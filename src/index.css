@@ -155,6 +155,12 @@
 
   .game-surface {
     background: hsl(var(--game-bg));
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
+  .playing-card {
+    touch-action: none;
   }
 
   .stat-card {

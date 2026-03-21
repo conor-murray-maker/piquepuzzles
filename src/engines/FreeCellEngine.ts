@@ -3,6 +3,7 @@ import {
   createFreeCellGame,
   moveToFreeCell,
   moveFreeCellToFoundation,
+  moveFreeCellToTableau,
   moveTableauToFoundation as fcMoveTableauToFoundation,
   moveTableauToTableau as fcMoveTableauToTableau,
   canMoveToFoundation as fcCanMoveToFoundation,
@@ -57,17 +58,17 @@ class FreeCellEngineImpl implements PuzzleEngine {
   private runSim(seed: number): { won: boolean; moves: number; foundationCards: number } {
     let state = createFreeCellGame(seed);
     let moves = 0;
-    const MAX = 400;
+    const MAX = 600;
     let stale = 0;
     let lastFT = 0;
 
     while (moves < MAX && !state.isWon) {
       const ft = state.foundation.reduce((s, p) => s + p.length, 0);
-      if (ft > lastFT) { lastFT = ft; stale = 0; } else { stale++; if (stale > 80) break; }
+      if (ft > lastFT) { lastFT = ft; stale = 0; } else { stale++; if (stale > 120) break; }
 
       let acted = false;
 
-      // 1. Foundation from tableau
+      // 1. Foundation from tableau (always prioritize)
       for (let i = 0; i < 8 && !acted; i++) {
         const col = state.tableau[i];
         if (!col.length) continue;
@@ -90,7 +91,7 @@ class FreeCellEngineImpl implements PuzzleEngine {
       }
       if (acted) continue;
 
-      // 3. Tableau → tableau
+      // 3. Tableau → tableau (prefer moves that build longer sequences)
       const tabMoves: [number, number, number][] = [];
       for (let i = 0; i < 8; i++) {
         const col = state.tableau[i];
@@ -101,6 +102,7 @@ class FreeCellEngineImpl implements PuzzleEngine {
           const numCards = col.length - j;
           for (let k = 0; k < 8; k++) {
             if (k === i) continue;
+            // Skip moving entire column to empty column (usually pointless)
             if (state.tableau[k].length === 0 && j === 0) continue;
             if (fcCanMoveToTableau(col[j], state.tableau[k]) && numCards <= maxMovableCards(state, k)) {
               tabMoves.push([i, j, k]);
@@ -114,9 +116,9 @@ class FreeCellEngineImpl implements PuzzleEngine {
         if (r) { state = r; moves++; continue; }
       }
 
-      // 4. Move to free cell
+      // 4. Move to free cell (with higher probability to keep exploring)
       const freeIdx = state.freeCells.findIndex(c => c === null);
-      if (freeIdx !== -1 && Math.random() > 0.4) {
+      if (freeIdx !== -1 && Math.random() > 0.3) {
         const candidates: number[] = [];
         for (let i = 0; i < 8; i++) {
           if (state.tableau[i].length > 0) candidates.push(i);
@@ -127,6 +129,21 @@ class FreeCellEngineImpl implements PuzzleEngine {
           if (r) { state = r; moves++; continue; }
         }
       }
+
+      // 5. Move free cell cards to tableau (try to empty free cells)
+      let fcMoved = false;
+      for (let i = 0; i < 4 && !fcMoved; i++) {
+        const card = state.freeCells[i];
+        if (!card) continue;
+        for (let k = 0; k < 8; k++) {
+          if (state.tableau[k].length === 0) continue;
+          if (fcCanMoveToTableau(card, state.tableau[k])) {
+            const r = moveFreeCellToTableau(state, i, k);
+            if (r) { state = r; moves++; fcMoved = true; break; }
+          }
+        }
+      }
+      if (fcMoved) continue;
 
       break;
     }

@@ -75,25 +75,12 @@ interface FreeCellBoardProps {
 export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: FreeCellBoardProps) {
   const [state, setState] = useState<FreeCellState>(() => {
     if (initialSeed !== undefined) {
-      try {
-        const game = createVerifiedFreeCellGame(initialSeed);
-        return { ...game, dealUuid };
-      } catch (e) {
-        console.error(e);
-        toast.error('Failed to generate deal. Retrying...');
-        const game = createVerifiedFreeCellGame();
-        return { ...game, dealUuid };
-      }
+      const game = createVerifiedFreeCellGame(initialSeed);
+      return { ...game, dealUuid };
     }
     const saved = loadFromStorage();
     if (saved) return saved.state;
-    try {
-      return { ...createVerifiedFreeCellGame(), dealUuid };
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to generate deal. Retrying...');
-      return { ...createVerifiedFreeCellGame(), dealUuid };
-    }
+    return { ...createVerifiedFreeCellGame(), dealUuid };
   });
   const [history, setHistory] = useState<FreeCellState[]>(() => {
     if (initialSeed !== undefined) return [];
@@ -338,13 +325,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
     gameEndedRef.current = false;
-    try {
-      setState(createVerifiedFreeCellGame());
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to generate deal');
-      setState(createVerifiedFreeCellGame());
-    }
+    setState(createVerifiedFreeCellGame());
     setHistory([]);
     setElapsed(0);
     setGameStarted(false);

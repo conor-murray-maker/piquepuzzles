@@ -23,7 +23,7 @@ export function solveKlondike(seed: number, drawMode: DrawMode, maxSims = 15): S
   }
 }
 
-export function solveFreecell(seed: number, maxSims = 12): SolverResult {
+export function solveFreecell(seed: number, maxSims = 25): SolverResult {
   try {
     const engine = EngineRegistry.get('freecell');
     const deal = engine.generateDeal(seed);
@@ -82,11 +82,11 @@ export function createVerifiedKlondikeGame(drawMode: DrawMode, seed?: number): K
 }
 
 export function createVerifiedFreeCellGame(seed?: number): FreeCellState {
-  const MAX_ATTEMPTS = 5;
+  const MAX_ATTEMPTS = 12;
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     const s = seed ?? generateSeed();
     const game = createFreeCellGame(s);
-    const result = solveFreecell(s, 12);
+    const result = solveFreecell(s, 25);
     if (result.solvable) {
       const dds = minMovesToDDS(result.minMoves, 'freecell');
       return {
@@ -96,8 +96,26 @@ export function createVerifiedFreeCellGame(seed?: number): FreeCellState {
         minMoves: result.minMoves,
       };
     }
-    if (seed !== undefined) break;
+    if (seed !== undefined) {
+      // If a specific seed was requested but solver couldn't verify it,
+      // still serve it (most FreeCell deals are solvable) with estimated difficulty
+      const dds = minMovesToDDS(0, 'freecell');
+      return {
+        ...game,
+        difficulty: 'Medium',
+        difficultyScore: 40,
+        minMoves: 0,
+      };
+    }
     seed = undefined;
   }
-  throw new Error('Could not generate verified solvable FreeCell deal after ' + MAX_ATTEMPTS + ' attempts');
+  // Fallback: serve unverified deal rather than crashing
+  const fallbackSeed = generateSeed();
+  const game = createFreeCellGame(fallbackSeed);
+  return {
+    ...game,
+    difficulty: 'Medium',
+    difficultyScore: 40,
+    minMoves: 0,
+  };
 }

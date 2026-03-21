@@ -155,8 +155,8 @@ function StatsContent({ games, stats }: {
             <Timer className="w-4 h-4 text-muted-foreground" />
             <p className="text-xs text-muted-foreground font-medium">Avg Time</p>
           </div>
-          <p className="text-2xl font-bold font-mono">{stats.formatTime(localStats?.avgTime ?? 0)}</p>
-          <p className="text-xs text-muted-foreground">Best: {stats.formatTime(localStats?.bestTime ?? 0)}</p>
+          <p className="text-2xl font-bold font-mono">{formatTime(localStats?.avgTime ?? 0)}</p>
+          <p className="text-xs text-muted-foreground">Best: {formatTime(localStats?.bestTime ?? 0)}</p>
         </div>
       </motion.div>
 

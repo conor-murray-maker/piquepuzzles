@@ -757,6 +757,17 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         </div>
       </div>
 
+      {/* Bottom action bar */}
+      {!state.isWon && (
+        <GameActionBar
+          onHint={handleHint}
+          onUndo={handleUndo}
+          undoDisabled={history.length === 0}
+          moveCount={state.moves}
+          hintLoading={hintLoading}
+        />
+      )}
+
       {/* Win overlay */}
       <AnimatePresence>
         {state.isWon && (

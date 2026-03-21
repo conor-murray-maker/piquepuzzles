@@ -181,7 +181,7 @@ function StatsContent({ games, stats }: {
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span>{game.moves} moves</span>
-                    <span>{stats.formatTime(game.time_seconds)}</span>
+                    <span>{formatTime(game.time_seconds)}</span>
                     <span className={`font-mono font-semibold ${game.rating_change > 0 ? 'text-rating-up' : 'text-rating-down'}`}>
                       {game.rating_change > 0 ? '+' : ''}{game.rating_change}
                     </span>

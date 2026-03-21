@@ -226,10 +226,11 @@ Deno.serve(async (req) => {
         ? ((deal.pool_abandons as number) * pa + 1) / newAttempts
         : ((deal.pool_abandons as number) * pa) / newAttempts;
 
-      // Empirical DDS
+      // Empirical DDS — game-mode-aware normalisation
       const winRate = newWins / newAttempts;
-      const normMoves = Math.max(0, Math.min(1, (newAvgMoves - 50) / 150));
-      const normTime = Math.max(0, Math.min(1, (newAvgTime - 60) / 540));
+      const norm = getNormConfig(gameMode);
+      const normMoves = Math.max(0, Math.min(1, (newAvgMoves - norm.movesMin) / norm.movesRange));
+      const normTime = Math.max(0, Math.min(1, (newAvgTime - norm.timeMin) / norm.timeRange));
       const ddsEmpirical = (1 - winRate) * 25 + normMoves * 25 + normTime * 25 + newAbandons * 25;
 
       // Blend

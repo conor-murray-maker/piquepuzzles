@@ -374,17 +374,52 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
   }, [history]);
 
-  const handleHint = useCallback(() => {
+  const handleHint = useCallback(async () => {
+    if (hintLoading) return;
+    setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
+
+    if (mcts.available) {
+      setHintLoading(true);
+      const mctsResult = await mcts.requestHint(state, 'klondike', 50);
+      setHintLoading(false);
+
+      if (mctsResult?.bestMove) {
+        const move = mctsResult.bestMove;
+        setHintTarget({ from: move.from, to: move.to });
+
+        // Update win probability from hint result
+        if (mctsResult.winRate !== undefined) {
+          setWinProbability(mctsResult.winRate);
+        }
+
+        setTimeout(() => setHintTarget(null), 2000);
+        return;
+      }
+    }
+
+    // Fallback to basic hint
     const result = getProgressiveHint(state, history);
     if ('noHint' in result) {
       toast(result.message);
-      setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
     } else {
       setHintTarget(result);
-      setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
       setTimeout(() => setHintTarget(null), 2000);
     }
-  }, [state, history]);
+  }, [state, history, mcts, hintLoading]);
+
+  // Win probability idle trigger
+  useEffect(() => {
+    lastMoveTimeRef.current = Date.now();
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (!mcts.available || state.isWon || state.moves < 5) return;
+
+    idleTimerRef.current = setTimeout(async () => {
+      const prob = await mcts.requestWinProbability(state, 'klondike', 30);
+      if (prob !== null) setWinProbability(prob);
+    }, 3000);
+
+    return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); };
+  }, [state.moves, state.isWon, mcts]);
 
   const handleNewGame = useCallback(() => {
     clearStorage();

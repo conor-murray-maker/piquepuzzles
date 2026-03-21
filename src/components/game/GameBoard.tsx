@@ -139,6 +139,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   const cardH = Math.round(cardW * 1.4);
 
+  // MCTS integration
+  const mcts = useMCTSWorker();
+  const [winProbability, setWinProbability] = useState<number | null>(null);
+  const [hintLoading, setHintLoading] = useState(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const lastMoveTimeRef = useRef(Date.now());
+
   // Responsive card width
   useEffect(() => {
     const update = () => setCardW(computeCardWidth(window.innerWidth));

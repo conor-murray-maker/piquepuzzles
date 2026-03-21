@@ -228,6 +228,7 @@ export type Database = {
       }
       deals: {
         Row: {
+          confidence: number
           created_at: string
           dds_blended: number
           dds_empirical: number | null
@@ -243,9 +244,11 @@ export type Database = {
           pool_avg_time: number
           pool_wins: number
           seed: number
+          simulation_count: number
           tier: string
         }
         Insert: {
+          confidence?: number
           created_at?: string
           dds_blended?: number
           dds_empirical?: number | null
@@ -261,9 +264,11 @@ export type Database = {
           pool_avg_time?: number
           pool_wins?: number
           seed: number
+          simulation_count?: number
           tier?: string
         }
         Update: {
+          confidence?: number
           created_at?: string
           dds_blended?: number
           dds_empirical?: number | null
@@ -279,6 +284,7 @@ export type Database = {
           pool_avg_time?: number
           pool_wins?: number
           seed?: number
+          simulation_count?: number
           tier?: string
         }
         Relationships: []

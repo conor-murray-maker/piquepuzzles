@@ -178,23 +178,16 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   // Register deal in Supabase (only for deals without a dealUuid from the queue)
   useEffect(() => {
-    if (state.dealUuid) return; // Already registered via deal queue
+    if (state.dealUuid) return;
     if (state.seed !== undefined) {
-      (supabase as any).from('deals').upsert({
+      registerDeal({
         seed: state.seed,
-        game_mode: 'freecell',
-        draw_mode: 3,
-        min_moves: state.minMoves || 0,
-        dds_initial: state.difficultyScore,
-        dds_blended: state.difficultyScore,
-        tier: 'fresh',
-      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true })
-      .select('id')
-      .single()
-      .then(({ data }: any) => {
-        if (data?.id) {
-          setState(s => ({ ...s, dealUuid: data.id }));
-        }
+        gameMode: 'freecell',
+        drawMode: 3,
+        minMoves: state.minMoves || 0,
+        difficultyScore: state.difficultyScore,
+      }).then(id => {
+        if (id) setState(s => ({ ...s, dealUuid: id }));
       });
     }
   }, [state.dealId, state.dealUuid]);

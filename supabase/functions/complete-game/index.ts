@@ -68,8 +68,44 @@ Deno.serve(async (req) => {
       undosUsed = 0,
       dealId: clientDealId,
       dealUuid: clientDealUuid,
-      isDaily = false,
+      isDaily: clientIsDaily = false,
     } = body;
+
+    // --- Input validation ---
+    if (!['win', 'loss', 'abandon'].includes(result)) {
+      return new Response(JSON.stringify({ error: 'Invalid result value' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!Number.isInteger(actualMoves) || actualMoves < 0 || actualMoves > 10000) {
+      return new Response(JSON.stringify({ error: 'Invalid actualMoves' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!Number.isInteger(actualTime) || actualTime < 0 || actualTime > 86400) {
+      return new Response(JSON.stringify({ error: 'Invalid actualTime' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!Number.isInteger(hintsUsed) || hintsUsed < 0 || hintsUsed > 1000) {
+      return new Response(JSON.stringify({ error: 'Invalid hintsUsed' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // --- Server-side isDaily verification ---
+    let isDaily = false;
+    if (clientIsDaily && clientDealUuid) {
+      const now = new Date();
+      const todayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+        .toISOString().split('T')[0];
+      const { data: dc } = await supabaseAdmin
+        .from('daily_challenges')
+        .select('deal_id')
+        .eq('date', todayStr)
+        .single();
+      isDaily = dc?.deal_id === clientDealUuid;
+    }
 
     const isWin = result === 'win';
 

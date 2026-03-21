@@ -20,7 +20,7 @@ import { isKlondikeStuck } from '@/game/stuckDetector';
 import { WinProbabilityBar } from './WinProbabilityBar';
 import { GameActionBar } from './GameActionBar';
 import { useMCTSWorker } from '@/hooks/useMCTSWorker';
-import { supabase } from '@/integrations/supabase/client';
+import { registerDeal } from '@/services/DealRegistrationService';
 import { Timer, Hash, Trophy, Layers, X, ArrowLeft, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';

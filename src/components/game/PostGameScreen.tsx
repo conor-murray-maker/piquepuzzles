@@ -6,7 +6,8 @@ import { PuzzleIQBadge, RatingChange } from './PuzzleIQBadge';
 import { TierProgressBar } from './TierProgressBar';
 import { Button } from '@/components/ui/button';
 import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft, Swords } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { ChallengeService } from '@/services/ChallengeService';
+import { formatTimeRaw } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -41,29 +42,29 @@ export function PostGameScreen({
     ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)
     : 0;
 
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+  const formatTime = formatTimeRaw;
 
   const handleChallenge = useCallback(async () => {
     if (!user || !profile || dealSeed === undefined) return;
     setSharing(true);
     try {
-      const { data, error } = await (supabase as any).from('challenges').insert({
-        challenger_id: user.id,
-        deal_seed: dealSeed,
-        game_mode: gameMode,
-        draw_mode: drawMode,
+      const challengeId = await ChallengeService.createChallenge({
+        challengerId: user.id,
+        dealSeed,
+        gameMode,
+        drawMode,
         difficulty: gameState.difficulty,
-        challenger_moves: gameState.moves,
-        challenger_time_seconds: timeSeconds,
-        challenger_rating: currentRating,
-        challenger_rating_change: ratingChange,
-        challenger_won: gameState.isWon,
-        challenger_display_name: profile.display_name,
-      }).select('id').single();
+        moves: gameState.moves,
+        timeSeconds,
+        rating: currentRating,
+        ratingChange,
+        won: gameState.isWon,
+        displayName: profile.display_name,
+      });
 
-      if (error || !data) throw error;
+      if (!challengeId) throw new Error('No challenge ID returned');
 
-      const url = `${window.location.origin}/challenge/${data.id}`;
+      const url = `${window.location.origin}/challenge/${challengeId}`;
       const text = `I ${gameState.isWon ? 'solved' : 'attempted'} this ${gameState.difficulty} deal in ${formatTime(timeSeconds)} with ${gameState.moves} moves on Pique. Can you beat it? ${url}`;
 
       if (navigator.share) {

@@ -4,6 +4,7 @@ import { RATING_TIERS } from '@/game/types';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
+import { formatTime } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TrendingUp, TrendingDown, Trophy, Target, Timer, Hash, Flame, BarChart3, Users } from 'lucide-react';
@@ -154,8 +155,8 @@ function StatsContent({ games, stats }: {
             <Timer className="w-4 h-4 text-muted-foreground" />
             <p className="text-xs text-muted-foreground font-medium">Avg Time</p>
           </div>
-          <p className="text-2xl font-bold font-mono">{stats.formatTime(localStats?.avgTime ?? 0)}</p>
-          <p className="text-xs text-muted-foreground">Best: {stats.formatTime(localStats?.bestTime ?? 0)}</p>
+          <p className="text-2xl font-bold font-mono">{formatTime(localStats?.avgTime ?? 0)}</p>
+          <p className="text-xs text-muted-foreground">Best: {formatTime(localStats?.bestTime ?? 0)}</p>
         </div>
       </motion.div>
 
@@ -180,7 +181,7 @@ function StatsContent({ games, stats }: {
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span>{game.moves} moves</span>
-                    <span>{stats.formatTime(game.time_seconds)}</span>
+                    <span>{formatTime(game.time_seconds)}</span>
                     <span className={`font-mono font-semibold ${game.rating_change > 0 ? 'text-rating-up' : 'text-rating-down'}`}>
                       {game.rating_change > 0 ? '+' : ''}{game.rating_change}
                     </span>

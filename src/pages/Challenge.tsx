@@ -1,24 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { ChallengeService, ChallengeData } from '@/services/ChallengeService';
+import { formatTimeRaw } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Spade, Timer, Hash, User } from 'lucide-react';
-
-interface ChallengeData {
-  id: string;
-  deal_seed: number;
-  game_mode: string;
-  draw_mode: number;
-  difficulty: string;
-  challenger_moves: number;
-  challenger_time_seconds: number;
-  challenger_rating: number;
-  challenger_rating_change: number;
-  challenger_won: boolean;
-  challenger_display_name: string | null;
-}
 
 export default function Challenge() {
   const { id } = useParams<{ id: string }>();
@@ -29,19 +16,11 @@ export default function Challenge() {
 
   useEffect(() => {
     if (!id) return;
-    (supabase as any)
-      .from('challenges')
-      .select('*')
-      .eq('id', id)
-      .single()
-      .then(({ data }: any) => {
-        setChallenge(data as ChallengeData | null);
-        setLoading(false);
-      });
+    ChallengeService.getChallenge(id).then(data => {
+      setChallenge(data);
+      setLoading(false);
+    });
   }, [id]);
-
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
   if (loading) {
     return (
@@ -108,7 +87,7 @@ export default function Challenge() {
               <div>
                 <p className="text-xs text-muted-foreground">Time</p>
                 <p className="font-mono font-semibold text-sm">
-                  {formatTime(challenge.challenger_time_seconds)}
+                  {formatTimeRaw(challenge.challenger_time_seconds)}
                 </p>
               </div>
             </div>

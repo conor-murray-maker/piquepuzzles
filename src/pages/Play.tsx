@@ -7,7 +7,7 @@ import { PostGameScreen } from '@/components/game/PostGameScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGamePersistence } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
-import { supabase } from '@/integrations/supabase/client';
+import { ChallengeService } from '@/services/ChallengeService';
 
 interface PlayProps {
   onActiveGameChange?: (active: boolean) => void;
@@ -53,11 +53,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     popNextDeal(gameMode, drawMode).then(deal => {
       if (deal) {
         setQueuedDeal(deal);
-        console.log('Popped deal from queue:', deal.dealUuid, 'tier:', deal.tier);
-      } else {
-        console.warn('No deals in queue — falling back to direct generation');
       }
-    });
+    }).catch(() => { /* queue pop failed — will fall back to direct generation */ });
   }, [gameMode, drawMode, initialSeed, popNextDeal]);
 
   // Refill queue in background on mount
@@ -69,18 +66,17 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   // Fetch challenge data
   useEffect(() => {
     if (!challengeId) return;
-    (supabase as any).from('challenges').select('*').eq('id', challengeId).single()
-      .then(({ data }: any) => {
-        if (data) {
-          setChallengeData({
-            challengeId,
-            challengerName: data.challenger_display_name || 'Anonymous',
-            challengerMoves: data.challenger_moves,
-            challengerTime: data.challenger_time_seconds,
-            challengerRating: data.challenger_rating,
-          });
-        }
-      });
+    ChallengeService.getChallenge(challengeId).then(data => {
+      if (data) {
+        setChallengeData({
+          challengeId,
+          challengerName: data.challenger_display_name || 'Anonymous',
+          challengerMoves: data.challenger_moves,
+          challengerTime: data.challenger_time_seconds,
+          challengerRating: data.challenger_rating,
+        });
+      }
+    });
   }, [challengeId]);
 
   const setPhase = useCallback((phase: 'playing' | 'postgame') => {
@@ -109,30 +105,30 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
     // Save challenge completion
     if (challengeId && user) {
-      await (supabase as any).from('challenge_completions').insert({
-        challenge_id: challengeId,
-        user_id: user.id,
-        display_name: profile?.display_name || null,
+      await ChallengeService.saveCompletion({
+        challengeId,
+        userId: user.id,
+        displayName: profile?.display_name || null,
         moves: state.moves,
-        time_seconds: elapsedSeconds,
+        timeSeconds: elapsedSeconds,
         rating: result?.newRating ?? previousRating,
-        rating_change: result?.ratingChange ?? 0,
+        ratingChange: result?.ratingChange ?? 0,
         won: state.isWon,
       });
     }
 
     // Save daily challenge completion
     if (dailyDate && dailyDealId && user) {
-      await (supabase as any).from('daily_challenge_completions').upsert({
-        user_id: user.id,
+      await ChallengeService.saveDailyCompletion({
+        userId: user.id,
         date: dailyDate,
-        deal_id: dailyDealId,
+        dealId: dailyDealId,
         result: state.isWon ? 'win' : 'loss',
-        actual_moves: state.moves,
-        actual_time: elapsedSeconds,
-        hints_used: state.hintsUsed,
-        final_delta: result?.ratingChange ?? 0,
-      }, { onConflict: 'user_id,date', ignoreDuplicates: true });
+        actualMoves: state.moves,
+        actualTime: elapsedSeconds,
+        hintsUsed: state.hintsUsed,
+        finalDelta: result?.ratingChange ?? 0,
+      });
     }
 
     // Refill queue in background after game
@@ -165,16 +161,16 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
     // Save daily challenge completion on give up
     if (dailyDate && dailyDealId && user) {
-      await (supabase as any).from('daily_challenge_completions').upsert({
-        user_id: user.id,
+      await ChallengeService.saveDailyCompletion({
+        userId: user.id,
         date: dailyDate,
-        deal_id: dailyDealId,
+        dealId: dailyDealId,
         result: 'loss',
-        actual_moves: state.moves,
-        actual_time: elapsedSeconds,
-        hints_used: state.hintsUsed,
-        final_delta: result?.ratingChange ?? 0,
-      }, { onConflict: 'user_id,date', ignoreDuplicates: true });
+        actualMoves: state.moves,
+        actualTime: elapsedSeconds,
+        hintsUsed: state.hintsUsed,
+        finalDelta: result?.ratingChange ?? 0,
+      });
     }
 
     if (gameMode === 'freecell') clearFreeCellStorage();

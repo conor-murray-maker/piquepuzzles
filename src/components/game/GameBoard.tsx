@@ -20,7 +20,7 @@ import { isKlondikeStuck } from '@/game/stuckDetector';
 import { WinProbabilityBar } from './WinProbabilityBar';
 import { GameActionBar } from './GameActionBar';
 import { useMCTSWorker } from '@/hooks/useMCTSWorker';
-import { supabase } from '@/integrations/supabase/client';
+import { registerDeal } from '@/services/DealRegistrationService';
 import { Timer, Hash, Trophy, Layers, X, ArrowLeft, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -165,23 +165,16 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   // Register deal in Supabase (only for deals without a dealUuid from the queue)
   useEffect(() => {
-    if (state.dealUuid) return; // Already registered via deal queue
+    if (state.dealUuid) return;
     if (state.seed !== undefined) {
-      (supabase as any).from('deals').upsert({
+      registerDeal({
         seed: state.seed,
-        game_mode: 'klondike',
-        draw_mode: drawMode,
-        min_moves: state.minMoves || 0,
-        dds_initial: state.difficultyScore,
-        dds_blended: state.difficultyScore,
-        tier: 'fresh',
-      }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true })
-      .select('id')
-      .single()
-      .then(({ data }: any) => {
-        if (data?.id) {
-          setState(s => ({ ...s, dealUuid: data.id }));
-        }
+        gameMode: 'klondike',
+        drawMode,
+        minMoves: state.minMoves || 0,
+        difficultyScore: state.difficultyScore,
+      }).then(id => {
+        if (id) setState(s => ({ ...s, dealUuid: id }));
       });
     }
   }, [state.dealId, state.dealUuid]);

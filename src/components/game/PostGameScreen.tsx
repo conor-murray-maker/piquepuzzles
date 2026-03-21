@@ -42,7 +42,7 @@ export function PostGameScreen({
     ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)
     : 0;
 
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+  const formatTime = formatTimeRaw;
 
   const handleChallenge = useCallback(async () => {
     if (!user || !profile || dealSeed === undefined) return;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { ddsToLabel, formatTimeRaw } from '@/lib/format';
 import { Calendar, Timer, Hash, Trophy, Clock, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -93,12 +94,12 @@ export default function Daily() {
             setMyCompletion(comp || null);
           }
 
-          // Leaderboard: top 10 by wins first, then fewest moves, then fastest time
+          // Leaderboard: top 10
           const { data: lb } = await (supabase as any)
             .from('daily_challenge_completions')
             .select('user_id, actual_moves, actual_time, result')
             .eq('date', todayStr)
-            .order('result', { ascending: false }) // 'win' > 'loss'
+            .order('result', { ascending: false })
             .order('actual_moves', { ascending: true })
             .order('actual_time', { ascending: true })
             .limit(10);
@@ -135,16 +136,6 @@ export default function Daily() {
 
     fetchChallenge();
   }, [todayStr, user]);
-
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
-
-  const ddsToLabel = (dds: number) => {
-    if (dds <= 25) return 'Easy';
-    if (dds <= 55) return 'Medium';
-    if (dds <= 80) return 'Hard';
-    return 'Expert';
-  };
 
   const handlePlay = () => {
     if (!challenge?.deals) return;
@@ -249,7 +240,7 @@ export default function Daily() {
                     <Timer className="w-4 h-4 text-muted-foreground" />
                     <div>
                       <p className="text-xs text-muted-foreground">Time</p>
-                      <p className="font-mono font-semibold text-sm">{formatTime(myCompletion.actual_time)}</p>
+                      <p className="font-mono font-semibold text-sm">{formatTimeRaw(myCompletion.actual_time)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -301,7 +292,7 @@ export default function Daily() {
                       <span className="flex-1 truncate">{entry.display_name}</span>
                       <span className="font-mono text-xs">{entry.actual_moves}m</span>
                       <span className="font-mono text-xs text-muted-foreground">
-                        {formatTime(entry.actual_time)}
+                        {formatTimeRaw(entry.actual_time)}
                       </span>
                       {entry.result === 'win' && (
                         <Trophy className="w-3 h-3 text-gold flex-shrink-0" />

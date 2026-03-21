@@ -19,8 +19,11 @@ import { getFreeCellAutoSend, applyFreeCellAutoSend } from '@/game/autoSend';
 import { PlayingCard, EmptyPile } from './PlayingCard';
 import { dragManager, DragSource } from '@/game/DragManager';
 import { isFreeCellStuck } from '@/game/stuckDetector';
+import { WinProbabilityBar } from './WinProbabilityBar';
+import { GameActionBar } from './GameActionBar';
+import { useMCTSWorker } from '@/hooks/useMCTSWorker';
 import { supabase } from '@/integrations/supabase/client';
-import { Lightbulb, Undo2, RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
+import { RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import {
@@ -155,6 +158,12 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const lastTapRef = useRef<{ source: string; cardIndex: number; time: number } | null>(null);
 
   const cardH = Math.round(cardW * 1.4);
+
+  // MCTS integration
+  const mcts = useMCTSWorker();
+  const [winProbability, setWinProbability] = useState<number | null>(null);
+  const [hintLoading, setHintLoading] = useState(false);
+  const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     const update = () => setCardW(computeCardWidth(window.innerWidth));
@@ -351,17 +360,48 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
   }, [history]);
 
-  const handleHint = useCallback(() => {
+  const handleHint = useCallback(async () => {
+    if (hintLoading) return;
+    setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
+
+    if (mcts.available) {
+      setHintLoading(true);
+      const mctsResult = await mcts.requestHint(state, 'freecell', 50);
+      setHintLoading(false);
+
+      if (mctsResult?.bestMove) {
+        const move = mctsResult.bestMove;
+        setHintTarget({ from: move.from, to: move.to });
+        if (mctsResult.winRate !== undefined) {
+          setWinProbability(mctsResult.winRate);
+        }
+        setTimeout(() => setHintTarget(null), 2000);
+        return;
+      }
+    }
+
+    // Fallback to basic hint
     const result = getProgressiveHint(state, history);
     if ('noHint' in result) {
       toast(result.message);
-      setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
     } else {
       setHintTarget(result);
-      setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
       setTimeout(() => setHintTarget(null), 2000);
     }
-  }, [state, history]);
+  }, [state, history, mcts, hintLoading]);
+
+  // Win probability idle trigger
+  useEffect(() => {
+    if (idleTimerRef2.current) clearTimeout(idleTimerRef2.current);
+    if (!mcts.available || state.isWon || state.moves < 5) return;
+
+    idleTimerRef2.current = setTimeout(async () => {
+      const prob = await mcts.requestWinProbability(state, 'freecell', 30);
+      if (prob !== null) setWinProbability(prob);
+    }, 3000);
+
+    return () => { if (idleTimerRef2.current) clearTimeout(idleTimerRef2.current); };
+  }, [state.moves, state.isWon, mcts]);
 
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
@@ -585,10 +625,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         touchAction: 'none',
       }}
     >
-      {/* Top bar */}
+      {/* Top bar — simplified */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1"><Timer className="w-3.5 h-3.5" />{formatTime(elapsed)}</span>
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <Timer className="w-3.5 h-3.5" />
+          <span>{formatTime(elapsed)}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="flex items-center gap-1"><Hash className="w-3.5 h-3.5" />{state.moves}</span>
           <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
             state.difficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
@@ -598,12 +641,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
           }`}>{state.difficulty}</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={handleHint} className="h-8 px-2">
-            <Lightbulb className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleUndo} disabled={history.length === 0} className="h-8 px-2">
-            <Undo2 className="w-4 h-4" />
-          </Button>
           <Button variant="ghost" size="sm" onClick={handleNewGame} className="h-8 px-2">
             <RotateCcw className="w-4 h-4" />
           </Button>
@@ -613,11 +650,17 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         </div>
       </div>
 
+      {/* Win probability bar */}
+      <WinProbabilityBar
+        probability={winProbability}
+        visible={mcts.available && !state.isWon && state.moves >= 5}
+      />
+
       {/* Game area */}
       <div
-        className="flex-1 flex flex-col items-center pt-3 pb-4 overflow-auto"
+        className="flex-1 flex flex-col items-center pt-3 overflow-auto"
         style={{
-          padding: `12px ${SIDE_PAD}px 16px`,
+          padding: `12px ${SIDE_PAD}px 136px`,
           boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.06)',
         }}
       >
@@ -713,6 +756,17 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
           </div>
         </div>
       </div>
+
+      {/* Bottom action bar */}
+      {!state.isWon && (
+        <GameActionBar
+          onHint={handleHint}
+          onUndo={handleUndo}
+          undoDisabled={history.length === 0}
+          moveCount={state.moves}
+          hintLoading={hintLoading}
+        />
+      )}
 
       {/* Win overlay */}
       <AnimatePresence>

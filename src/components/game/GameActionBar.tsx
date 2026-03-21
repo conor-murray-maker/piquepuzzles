@@ -1,0 +1,48 @@
+import { Lightbulb, Undo2 } from 'lucide-react';
+
+interface GameActionBarProps {
+  onHint: () => void;
+  onUndo: () => void;
+  undoDisabled: boolean;
+  moveCount: number;
+  hintLoading?: boolean;
+}
+
+export function GameActionBar({ onHint, onUndo, undoDisabled, moveCount, hintLoading }: GameActionBarProps) {
+  return (
+    <div
+      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+56px)] left-0 right-0 z-40 bg-card border-t flex items-stretch"
+      style={{
+        borderColor: '#e2e8f0',
+        padding: '12px 0',
+        boxShadow: '0 -1px 4px rgba(0,0,0,0.08)',
+      }}
+    >
+      {/* Undo */}
+      <button
+        onClick={onUndo}
+        disabled={undoDisabled}
+        className="flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[56px] transition-opacity disabled:opacity-40"
+      >
+        <Undo2 className="w-5 h-5 text-foreground" />
+        <span className="text-xs font-medium text-foreground">Undo</span>
+        <span className="text-[10px] text-muted-foreground">Move {moveCount}</span>
+      </button>
+
+      {/* Divider */}
+      <div className="w-px self-stretch my-2" style={{ backgroundColor: '#e2e8f0' }} />
+
+      {/* Hint */}
+      <button
+        onClick={onHint}
+        className="flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[56px] transition-opacity"
+      >
+        <Lightbulb className={`w-5 h-5 text-foreground ${hintLoading ? 'animate-pulse' : ''}`} />
+        <span className={`text-xs font-medium text-foreground ${hintLoading ? 'animate-pulse' : ''}`}>
+          {hintLoading ? 'Thinking...' : 'Hint'}
+        </span>
+        <span className="text-[10px] text-muted-foreground">MCTS</span>
+      </button>
+    </div>
+  );
+}

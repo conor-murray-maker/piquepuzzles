@@ -5,11 +5,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+// Game-agnostic normalisation config — add new game modes here
+const NORM_CONFIG: Record<string, { movesMin: number; movesRange: number; timeMin: number; timeRange: number }> = {
+  klondike: { movesMin: 50, movesRange: 150, timeMin: 60, timeRange: 540 },
+  freecell: { movesMin: 40, movesRange: 140, timeMin: 60, timeRange: 480 },
+};
+
+function getNormConfig(gameMode: string) {
+  return NORM_CONFIG[gameMode] ?? NORM_CONFIG.klondike;
+}
+
 function ddsToLabel(dds: number): string {
   if (dds <= 25) return 'Easy';
   if (dds <= 55) return 'Medium';
   if (dds <= 80) return 'Hard';
   return 'Expert';
+}
+
+function getTierName(rating: number): string {
+  if (rating < 1000) return 'Bronze';
+  if (rating < 1250) return 'Silver';
+  if (rating < 1500) return 'Gold';
+  if (rating < 1750) return 'Platinum';
+  return 'Elite';
 }
 
 function getTierName(rating: number): string {

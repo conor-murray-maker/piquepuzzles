@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getTier, RATING_TIERS } from '@/game/types';
+import { formatTime } from '@/lib/format';
 
 interface GameRecord {
   id: string;

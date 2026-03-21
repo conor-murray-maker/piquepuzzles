@@ -40,6 +40,35 @@ function computeCardWidth(screenWidth: number) {
   return Math.floor(available / FC_COLS);
 }
 
+function isStoredCard(value: unknown): value is Card {
+  return !!value && typeof value === 'object' &&
+    typeof (value as Card).id === 'string' &&
+    typeof (value as Card).rank === 'string' &&
+    typeof (value as Card).suit === 'string' &&
+    typeof (value as Card).faceUp === 'boolean';
+}
+
+function isStoredColumn(value: unknown): value is Card[] {
+  return Array.isArray(value) && value.every(isStoredCard);
+}
+
+function isStoredFreeCellState(value: unknown): value is FreeCellState {
+  if (!value || typeof value !== 'object') return false;
+
+  const state = value as FreeCellState;
+  return Array.isArray(state.tableau) && state.tableau.length === 8 && state.tableau.every(isStoredColumn) &&
+    Array.isArray(state.foundation) && state.foundation.length === 4 && state.foundation.every(isStoredColumn) &&
+    Array.isArray(state.freeCells) && state.freeCells.length === 4 && state.freeCells.every(card => card === null || isStoredCard(card)) &&
+    typeof state.moves === 'number' &&
+    typeof state.startTime === 'number' &&
+    typeof state.hintsUsed === 'number' &&
+    typeof state.undosUsed === 'number' &&
+    typeof state.isWon === 'boolean' &&
+    typeof state.dealId === 'string' &&
+    typeof state.difficulty === 'string' &&
+    typeof state.difficultyScore === 'number';
+}
+
 function saveToStorage(state: FreeCellState, history: FreeCellState[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -51,12 +80,24 @@ function loadFromStorage(): { state: FreeCellState; history: FreeCellState[] } |
   try {
     const s = localStorage.getItem(STORAGE_KEY);
     const h = localStorage.getItem(HISTORY_KEY);
-    if (s) {
-      const state = JSON.parse(s) as FreeCellState;
-      if (!state.isWon) return { state, history: h ? JSON.parse(h) : [] };
+    if (!s) return null;
+
+    const parsedState = JSON.parse(s);
+    if (!isStoredFreeCellState(parsedState) || parsedState.isWon) {
+      clearFreeCellStorage();
+      return null;
     }
-  } catch {}
-  return null;
+
+    const parsedHistory = h ? JSON.parse(h) : [];
+    const history = Array.isArray(parsedHistory)
+      ? parsedHistory.filter(isStoredFreeCellState)
+      : [];
+
+    return { state: parsedState, history };
+  } catch {
+    clearFreeCellStorage();
+    return null;
+  }
 }
 
 export function clearFreeCellStorage() {

@@ -159,6 +159,12 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const cardH = Math.round(cardW * 1.4);
 
+  // MCTS integration
+  const mcts = useMCTSWorker();
+  const [winProbability, setWinProbability] = useState<number | null>(null);
+  const [hintLoading, setHintLoading] = useState(false);
+  const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
+
   useEffect(() => {
     const update = () => setCardW(computeCardWidth(window.innerWidth));
     window.addEventListener('resize', update);

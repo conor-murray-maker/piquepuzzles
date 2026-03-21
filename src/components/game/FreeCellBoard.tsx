@@ -22,7 +22,7 @@ import { isFreeCellStuck } from '@/game/stuckDetector';
 import { WinProbabilityBar } from './WinProbabilityBar';
 import { GameActionBar } from './GameActionBar';
 import { useMCTSWorker } from '@/hooks/useMCTSWorker';
-import { supabase } from '@/integrations/supabase/client';
+import { registerDeal } from '@/services/DealRegistrationService';
 import { RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';

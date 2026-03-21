@@ -57,10 +57,7 @@ export function usePlayerStats() {
   const gamesPlayed = games.length;
   const winRate = gamesPlayed > 0 ? Math.round((wins.length / gamesPlayed) * 100) : 0;
 
-  const formatTime = (s: number) => {
-    if (s === 0) return '--';
-    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
-  };
+  // formatTime imported from @/lib/format
 
   return {
     puzzleIQ: rating,

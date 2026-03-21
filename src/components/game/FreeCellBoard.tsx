@@ -625,10 +625,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         touchAction: 'none',
       }}
     >
-      {/* Top bar */}
+      {/* Top bar — simplified */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1"><Timer className="w-3.5 h-3.5" />{formatTime(elapsed)}</span>
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <Timer className="w-3.5 h-3.5" />
+          <span>{formatTime(elapsed)}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="flex items-center gap-1"><Hash className="w-3.5 h-3.5" />{state.moves}</span>
           <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
             state.difficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
@@ -638,12 +641,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
           }`}>{state.difficulty}</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={handleHint} className="h-8 px-2">
-            <Lightbulb className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleUndo} disabled={history.length === 0} className="h-8 px-2">
-            <Undo2 className="w-4 h-4" />
-          </Button>
           <Button variant="ghost" size="sm" onClick={handleNewGame} className="h-8 px-2">
             <RotateCcw className="w-4 h-4" />
           </Button>
@@ -653,11 +650,17 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         </div>
       </div>
 
+      {/* Win probability bar */}
+      <WinProbabilityBar
+        probability={winProbability}
+        visible={mcts.available && !state.isWon && state.moves >= 5}
+      />
+
       {/* Game area */}
       <div
-        className="flex-1 flex flex-col items-center pt-3 pb-4 overflow-auto"
+        className="flex-1 flex flex-col items-center pt-3 overflow-auto"
         style={{
-          padding: `12px ${SIDE_PAD}px 16px`,
+          padding: `12px ${SIDE_PAD}px 136px`,
           boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.06)',
         }}
       >

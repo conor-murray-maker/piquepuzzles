@@ -3,6 +3,7 @@ import {
   createFreeCellGame,
   moveToFreeCell,
   moveFreeCellToFoundation,
+  moveFreeCellToTableau,
   moveTableauToFoundation as fcMoveTableauToFoundation,
   moveTableauToTableau as fcMoveTableauToTableau,
   canMoveToFoundation as fcCanMoveToFoundation,

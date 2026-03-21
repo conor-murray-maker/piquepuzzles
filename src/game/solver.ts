@@ -23,7 +23,7 @@ export function solveKlondike(seed: number, drawMode: DrawMode, maxSims = 15): S
   }
 }
 
-export function solveFreecell(seed: number, maxSims = 12): SolverResult {
+export function solveFreecell(seed: number, maxSims = 25): SolverResult {
   try {
     const engine = EngineRegistry.get('freecell');
     const deal = engine.generateDeal(seed);

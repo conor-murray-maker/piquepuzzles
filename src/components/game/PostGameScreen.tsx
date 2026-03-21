@@ -6,7 +6,8 @@ import { PuzzleIQBadge, RatingChange } from './PuzzleIQBadge';
 import { TierProgressBar } from './TierProgressBar';
 import { Button } from '@/components/ui/button';
 import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft, Swords } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { ChallengeService } from '@/services/ChallengeService';
+import { formatTimeRaw } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 

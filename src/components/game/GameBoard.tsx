@@ -800,7 +800,18 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         </div>
       </div>
 
-      {/* Win overlay */}
+      {/* Bottom action bar */}
+      {!state.isWon && (
+        <GameActionBar
+          onHint={handleHint}
+          onUndo={handleUndo}
+          undoDisabled={history.length === 0}
+          moveCount={state.moves}
+          hintLoading={hintLoading}
+        />
+      )}
+
+
       <AnimatePresence>
         {state.isWon && (
           <motion.div

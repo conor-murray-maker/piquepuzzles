@@ -78,9 +78,9 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
       </div>
       <div className="space-y-3">
         {[
-          { text: 'Win a hard deal → big rating boost', emoji: '🚀' },
-          { text: 'Win an easy deal → small boost', emoji: '📈' },
-          { text: 'Use hints → smaller bonus', emoji: '💡' },
+          { text: 'Win a hard deal: big rating boost', emoji: '🚀' },
+          { text: 'Win an easy deal: small boost', emoji: '📈' },
+          { text: 'Use hints: smaller bonus', emoji: '💡' },
         ].map((item, i) => (
           <motion.div
             key={item.text}

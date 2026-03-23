@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { GameTooltips } from '@/components/onboarding/GameTooltips';
+import { useAuth } from '@/contexts/AuthContext';
 import { FreeCellState, Card, rankValue, isRed } from '@/game/types';
 import {
   moveToFreeCell,
@@ -163,7 +165,9 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const mcts = useMCTSWorker();
   const [winProbability, setWinProbability] = useState<number | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintJustUsed, setHintJustUsed] = useState(false);
   const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
+  const { profile: authProfile } = useAuth();
 
   useEffect(() => {
     const update = () => setCardW(computeCardWidth(window.innerWidth));
@@ -364,6 +368,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const handleHint = useCallback(async () => {
     if (hintLoading) return;
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
+    setHintJustUsed(true);
+    setTimeout(() => setHintJustUsed(false), 3000);
 
     if (mcts.available) {
       setHintLoading(true);
@@ -732,6 +738,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
           hintLoading={hintLoading}
         />
       )}
+
+      <GameTooltips
+        gamesPlayed={authProfile?.games_played ?? 0}
+        moveCount={state.moves}
+        hintJustUsed={hintJustUsed}
+        gameWon={state.isWon}
+      />
 
       {/* Win overlay */}
       <AnimatePresence>

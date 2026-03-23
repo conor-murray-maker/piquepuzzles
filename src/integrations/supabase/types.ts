@@ -373,7 +373,12 @@ export type Database = {
           games_played: number
           games_won: number
           id: string
+          last_win_date: string | null
+          premium_expires_at: string | null
           rating: number
+          streak_freezes_remaining: number
+          subscription_status: string
+          subscription_tier: string | null
           updated_at: string
         }
         Insert: {
@@ -385,7 +390,12 @@ export type Database = {
           games_played?: number
           games_won?: number
           id: string
+          last_win_date?: string | null
+          premium_expires_at?: string | null
           rating?: number
+          streak_freezes_remaining?: number
+          subscription_status?: string
+          subscription_tier?: string | null
           updated_at?: string
         }
         Update: {
@@ -397,7 +407,12 @@ export type Database = {
           games_played?: number
           games_won?: number
           id?: string
+          last_win_date?: string | null
+          premium_expires_at?: string | null
           rating?: number
+          streak_freezes_remaining?: number
+          subscription_status?: string
+          subscription_tier?: string | null
           updated_at?: string
         }
         Relationships: []

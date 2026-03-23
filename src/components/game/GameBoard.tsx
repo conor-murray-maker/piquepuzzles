@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { GameTooltips } from '@/components/onboarding/GameTooltips';
+import { useAuth } from '@/contexts/AuthContext';
 import { KlondikeState, DrawMode, Card } from '@/game/types';
 import {
   drawFromStock,
@@ -143,8 +145,10 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   const mcts = useMCTSWorker();
   const [winProbability, setWinProbability] = useState<number | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintJustUsed, setHintJustUsed] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const lastMoveTimeRef = useRef(Date.now());
+  const { profile: authProfile } = useAuth();
 
   // Responsive card width
   useEffect(() => {
@@ -376,6 +380,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   const handleHint = useCallback(async () => {
     if (hintLoading) return;
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
+    setHintJustUsed(true);
+    setTimeout(() => setHintJustUsed(false), 3000);
 
     if (mcts.available) {
       setHintLoading(true);
@@ -775,6 +781,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
           hintLoading={hintLoading}
         />
       )}
+
+      <GameTooltips
+        gamesPlayed={authProfile?.games_played ?? 0}
+        moveCount={state.moves}
+        hintJustUsed={hintJustUsed}
+        gameWon={state.isWon}
+      />
 
 
       <AnimatePresence>

@@ -43,22 +43,20 @@ export class ChallengeService {
     displayName: string | null;
   }): Promise<string | null> {
     try {
-      const { data, error } = await (supabase as any).from('challenges').insert({
-        challenger_id: params.challengerId,
-        deal_seed: params.dealSeed,
-        game_mode: params.gameMode,
-        draw_mode: params.drawMode,
-        difficulty: params.difficulty,
-        challenger_moves: params.moves,
-        challenger_time_seconds: params.timeSeconds,
-        challenger_rating: params.rating,
-        challenger_rating_change: params.ratingChange,
-        challenger_won: params.won,
-        challenger_display_name: params.displayName,
-      }).select('id').single();
+      const { data, error } = await (supabase as any).rpc('create_challenge', {
+        p_deal_seed: params.dealSeed,
+        p_game_mode: params.gameMode,
+        p_draw_mode: params.drawMode,
+        p_difficulty: params.difficulty,
+        p_moves: params.moves,
+        p_time_seconds: params.timeSeconds,
+        p_rating_change: params.ratingChange,
+        p_won: params.won,
+        p_display_name: params.displayName,
+      });
 
       if (error || !data) throw error;
-      return data.id;
+      return data as string;
     } catch (err) {
       console.error('Failed to create challenge:', err);
       return null;

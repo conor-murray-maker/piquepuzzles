@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
       .select('id');
 
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
+      console.error('[seed-calibration-pool] DB error:', error);
+      return new Response(JSON.stringify({ error: 'An internal error occurred' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

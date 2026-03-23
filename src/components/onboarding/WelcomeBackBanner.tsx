@@ -27,11 +27,11 @@ export function WelcomeBackBanner({ currentStreak, dailyCompleted, dailyAttempts
 
     // Priority 1: Streak
     if (currentStreak >= 2) {
-      setMessage(`🔥 ${currentStreak} game streak — keep it going`);
+      setMessage(`🔥 ${currentStreak} game streak. Keep it going!`);
     }
     // Priority 2: Daily challenge
     else if (!dailyCompleted) {
-      setMessage(`Today's challenge is live${dailyAttempts ? ` — ${dailyAttempts} players have attempted it` : ''}`);
+      setMessage(`Today's challenge is live${dailyAttempts ? `. ${dailyAttempts} players have attempted it` : ''}`);
     }
     // No message needed otherwise
 

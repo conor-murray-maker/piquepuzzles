@@ -202,7 +202,7 @@ export default function Landing() {
               <Flame className="w-4 h-4 text-destructive" />
               <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Today's Challenge</span>
             </div>
-            <p className="text-sm font-semibold">Expert Deal • Daily challenge for all players</p>
+            <p className="text-sm font-semibold">Expert Deal: Daily challenge for all players</p>
             <Button variant="outline" size="sm" onClick={handleGuestPlay}>
               <Zap className="w-3.5 h-3.5 mr-1" />
               Try Today's Challenge

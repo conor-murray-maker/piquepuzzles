@@ -110,7 +110,7 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
         {firstDealDifficulty} Deal
       </div>
       <p className="text-sm text-muted-foreground">
-        This is a {firstDealDifficulty.toLowerCase()} deal — a good starting point.
+        This is a {firstDealDifficulty.toLowerCase()} deal. A good starting point.
       </p>
     </div>,
   ];

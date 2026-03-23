@@ -336,5 +336,5 @@ export function getProgressiveHint(
     if (!recentPositions.has(`${c.cardId}@${c.to}`)) return c;
   }
 
-  return { noHint: true, message: 'No helpful moves found — consider undoing' };
+  return { noHint: true, message: 'No helpful moves found. Consider undoing.' };
 }

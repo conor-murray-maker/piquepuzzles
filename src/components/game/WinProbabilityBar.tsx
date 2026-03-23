@@ -84,7 +84,7 @@ export function WinProbabilityBar({ probability, visible }: WinProbabilityBarPro
             exit={{ opacity: 0, y: -4 }}
             onClick={handleDismissIntro}
           >
-            Win probability — updates as you play
+            Win probability: updates as you play
           </motion.div>
         )}
       </AnimatePresence>

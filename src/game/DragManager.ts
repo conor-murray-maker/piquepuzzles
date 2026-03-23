@@ -89,6 +89,9 @@ class DragManagerClass {
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
 
+    // Use the card element's visual bounding rect for offset calculation.
+    // This correctly handles waste pile fan offsets where the card element is
+    // positioned absolutely inside a container.
     const rect = el.getBoundingClientRect();
     this.s.active = true;
     this.s.thresholdMet = false;

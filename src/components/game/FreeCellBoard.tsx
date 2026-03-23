@@ -149,13 +149,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const [showStuckModal, setShowStuckModal] = useState(false);
   const [stuckDismissedAtMove, setStuckDismissedAtMove] = useState(-1);
+  const [autoSendChain, setAutoSendChain] = useState(false);
   const stuckTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);
-  const lastTapRef = useRef<{ source: string; cardIndex: number; time: number } | null>(null);
 
   const cardH = Math.round(cardW * 1.4);
 

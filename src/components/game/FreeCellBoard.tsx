@@ -739,6 +739,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         />
       )}
 
+      <GameTooltips
+        gamesPlayed={authProfile?.games_played ?? 0}
+        moveCount={state.moves}
+        hintJustUsed={hintJustUsed}
+        gameWon={state.isWon}
+      />
+
       {/* Win overlay */}
       <AnimatePresence>
         {state.isWon && (

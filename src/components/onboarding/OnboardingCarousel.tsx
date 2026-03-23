@@ -67,7 +67,7 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
           </div>
         ))}
       </div>
-      <p className="text-xs text-primary font-medium">You start at Silver — prove you belong</p>
+      <p className="text-xs text-primary font-medium">You start at Silver. Prove you belong.</p>
     </div>,
 
     // Step 3: How scoring works

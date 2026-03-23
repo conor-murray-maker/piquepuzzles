@@ -137,9 +137,9 @@ export default function Landing() {
         <h2 className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-6 text-center">How it works</h2>
         <div className="space-y-5">
           {[
-            { icon: Layers, title: 'Play any deal', desc: 'Klondike or FreeCell — every deal is verified solvable' },
-            { icon: BarChart3, title: 'Get rated instantly', desc: 'Your performance is scored against the deal\'s difficulty' },
-            { icon: Trophy, title: 'Climb the ranks', desc: 'From Bronze to Elite — prove your skill over time' },
+            { icon: Layers, title: 'Play any deal', desc: 'Every deal is verified solvable before you see it' },
+            { icon: BarChart3, title: 'Get rated instantly', desc: 'Your performance is scored against the deal difficulty' },
+            { icon: Trophy, title: 'Climb the ranks', desc: 'From Bronze to Elite, prove your skill over time' },
           ].map(({ icon: Icon, title, desc }, i) => (
             <motion.div
               key={title}

@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
       .select('id');
 
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
+      console.error('[seed-calibration-pool] DB error:', error);
+      return new Response(JSON.stringify({ error: 'An internal error occurred' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -77,8 +78,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    console.error('[seed-calibration-pool] internal error:', err);
+    return new Response(JSON.stringify({ error: 'An internal error occurred' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

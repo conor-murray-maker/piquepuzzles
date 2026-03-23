@@ -475,6 +475,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_challenge: {
+        Args: {
+          p_deal_seed: number
+          p_difficulty: string
+          p_display_name?: string
+          p_draw_mode: number
+          p_game_mode: string
+          p_moves: number
+          p_rating_change: number
+          p_time_seconds: number
+          p_won: boolean
+        }
+        Returns: string
+      }
       get_rating_percentile: { Args: { user_rating: number }; Returns: number }
     }
     Enums: {

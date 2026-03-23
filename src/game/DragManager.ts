@@ -83,8 +83,8 @@ class DragManagerClass {
   startDrag(e: React.PointerEvent, source: string, cardIndex: number, config: DragConfig) {
     if (e.button !== 0) return;
     if (this.s.active) return;
-    e.preventDefault();
-    e.stopPropagation();
+    // Do NOT preventDefault/stopPropagation here — let click events fire for taps.
+    // We only suppress default once the drag threshold is met (in onPointerMove).
 
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);

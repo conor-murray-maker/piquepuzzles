@@ -782,6 +782,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         />
       )}
 
+      <GameTooltips
+        gamesPlayed={authProfile?.games_played ?? 0}
+        moveCount={state.moves}
+        hintJustUsed={hintJustUsed}
+        gameWon={state.isWon}
+      />
+
 
       <AnimatePresence>
         {state.isWon && (

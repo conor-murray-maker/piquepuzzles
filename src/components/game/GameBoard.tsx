@@ -537,43 +537,9 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     if (autoCompleting) return;
     if (dragManager.isDragging) return;
 
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
-      lastTapRef.current = null;
-      handleDoubleTap(source, cardIndex);
-      return;
-    }
-    lastTapRef.current = { source, cardIndex, time: now };
-
-    if (selectedCard) {
-      let newState: KlondikeState | null = null;
-      const target = source;
-
-      if (target.startsWith('tableau-')) {
-        const toCol = parseInt(target.split('-')[1]);
-        if (selectedCard.source === 'waste') {
-          newState = moveWasteToTableau(state, toCol);
-        } else if (selectedCard.source.startsWith('tableau-')) {
-          const fromCol = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveTableauToTableau(state, fromCol, selectedCard.cardIndex, toCol);
-        } else if (selectedCard.source.startsWith('foundation-')) {
-          const fIdx = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveFoundationToTableau(state, fIdx, toCol);
-        }
-      }
-
-      if (newState) {
-        pushHistory(state);
-        setState(newState);
-        if (newState.isWon) fireGameEnd(newState);
-      }
-      setSelectedCard(null);
-      return;
-    }
-
-    setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, handleDoubleTap]);
+    // Single click: auto-move the card
+    handleAutoMove(source, cardIndex);
+  }, [autoCompleting, handleAutoMove]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;

@@ -42,10 +42,16 @@ class DragManagerClass {
   private s: InternalState = this.freshState();
   private listeners: (() => void) | null = null;
   private onChange: (() => void) | null = null;
+  private dragOccurred = false;
 
   // Exposed read-only state
   public isDragging = false;
   public dragSource: DragSource | null = null;
+
+  /** Returns true if a drag just completed — used to suppress click events after drag */
+  public wasDragAction(): boolean {
+    return this.dragOccurred;
+  }
 
   private freshState(): InternalState {
     return {

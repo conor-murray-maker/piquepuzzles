@@ -165,7 +165,9 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const mcts = useMCTSWorker();
   const [winProbability, setWinProbability] = useState<number | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintJustUsed, setHintJustUsed] = useState(false);
   const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
+  const { profile: authProfile } = useAuth();
 
   useEffect(() => {
     const update = () => setCardW(computeCardWidth(window.innerWidth));

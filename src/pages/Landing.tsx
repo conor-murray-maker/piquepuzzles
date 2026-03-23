@@ -80,7 +80,7 @@ export default function Landing() {
         </motion.h1>
 
         <motion.p variants={item} className="text-muted-foreground text-base sm:text-lg leading-relaxed mb-8">
-          The puzzle game that measures your skill. Every deal rated. Every move counted. Your Puzzle IQ grows with you.
+          The puzzle platform that measures your skill. Every deal rated. Every move counted. Your Puzzle IQ grows with you.
         </motion.p>
 
         <motion.div variants={item} className="space-y-3">

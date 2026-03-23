@@ -518,7 +518,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   }, [state, applyMove, autoCompleting]);
 
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
-    if (autoCompleting || dragManager.isDragging) return;
+    if (autoCompleting || dragManager.isDragging || dragManager.wasDragAction()) return;
     handleAutoMove(source, cardIndex);
   }, [autoCompleting, handleAutoMove]);
 

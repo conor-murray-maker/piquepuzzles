@@ -337,6 +337,11 @@ class DragManagerClass {
     this.dragSource = null;
     this.onChange?.();
 
+    // Reset dragOccurred after a tick so click events in this cycle are suppressed
+    if (this.dragOccurred) {
+      requestAnimationFrame(() => { this.dragOccurred = false; });
+    }
+
     if (this.listeners) {
       this.listeners();
       this.listeners = null;

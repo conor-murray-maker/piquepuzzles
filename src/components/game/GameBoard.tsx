@@ -259,32 +259,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     }
   }, [state, autoCompleting]);
 
-  // Auto-send chain: after user initiates a foundation move, scan for more
-  useEffect(() => {
-    if (!autoSendChain || state.isWon || autoCompleting || !gameStarted) return;
-    if (dragManager.isDragging) return;
-
-    const info = getKlondikeAutoSend(state);
-    if (!info) {
-      setAutoSendChain(false);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      pushHistory(state);
-      setState(s => {
-        const result = applyKlondikeAutoSend(s, info);
-        if (result.isWon && !gameEndedRef.current) {
-          gameEndedRef.current = true;
-          onGameEnd(result, elapsedRef.current);
-        }
-        return { ...result, moves: s.moves + 1 };
-      });
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [state, autoSendChain, autoCompleting, gameStarted, onGameEnd, pushHistory]);
-
   // Stuck detection
   useEffect(() => {
     if (state.isWon || autoCompleting) return;
@@ -317,6 +291,32 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     if (newState.isWon) fireGameEnd(newState);
     return true;
   }, [state, pushHistory, fireGameEnd, gameStarted]);
+
+  // Auto-send chain: after user initiates a foundation move, scan for more
+  useEffect(() => {
+    if (!autoSendChain || state.isWon || autoCompleting || !gameStarted) return;
+    if (dragManager.isDragging) return;
+
+    const info = getKlondikeAutoSend(state);
+    if (!info) {
+      setAutoSendChain(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      pushHistory(state);
+      setState(s => {
+        const result = applyKlondikeAutoSend(s, info);
+        if (result.isWon && !gameEndedRef.current) {
+          gameEndedRef.current = true;
+          onGameEnd(result, elapsedRef.current);
+        }
+        return { ...result, moves: s.moves + 1 };
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [state, autoSendChain, autoCompleting, gameStarted, onGameEnd, pushHistory]);
 
   // Drag and drop handler
   const handleDrop = useCallback((source: DragSource, targetId: string | null) => {

@@ -89,7 +89,7 @@ export default function Landing() {
             onClick={handleGuestPlay}
             className="w-full h-14 text-base font-semibold"
           >
-            Play Free — No Sign Up Needed
+            Play Free. No Sign Up Needed
             <ChevronRight className="w-5 h-5 ml-1" />
           </Button>
 

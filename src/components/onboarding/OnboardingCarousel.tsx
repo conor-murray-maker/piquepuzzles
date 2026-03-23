@@ -57,7 +57,7 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
         <PuzzleIQBadge rating={1000} size="lg" />
       </div>
       <p className="text-sm text-muted-foreground">
-        Every deal has a difficulty rating. Beat hard deals, gain more points. Every move is measured — speed, efficiency, hints used.
+        Every deal has a difficulty rating. Beat hard deals, gain more points. Speed, efficiency, and hints all factor in.
       </p>
       <div className="flex items-center justify-center gap-2 pt-2">
         {TIERS.map((tier) => (

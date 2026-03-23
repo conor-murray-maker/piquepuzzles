@@ -456,7 +456,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
     let newState: FreeCellState | null = null;
 
-    // Priority 1: Foundation (single cards only)
+    // Priority 1: Foundation (single cards only) - triggers auto-send chain
     if (!isStack) {
       if (source.startsWith('tableau-')) {
         const colIdx = parseInt(source.split('-')[1]);
@@ -467,7 +467,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         const cellIdx = parseInt(source.split('-')[1]);
         newState = moveFreeCellToFoundation(state, cellIdx);
       }
-      if (newState) { applyMove(newState); return; }
+      if (newState) { applyMove(newState, true); return; }
     }
 
     // Priority 2: Tableau on another card

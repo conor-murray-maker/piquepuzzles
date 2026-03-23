@@ -259,27 +259,31 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     }
   }, [state, autoCompleting]);
 
-  // Auto-send to foundation
+  // Auto-send chain: after user initiates a foundation move, scan for more
   useEffect(() => {
-    if (state.isWon || autoCompleting || !gameStarted) return;
+    if (!autoSendChain || state.isWon || autoCompleting || !gameStarted) return;
     if (dragManager.isDragging) return;
 
     const info = getKlondikeAutoSend(state);
-    if (!info) return;
+    if (!info) {
+      setAutoSendChain(false);
+      return;
+    }
 
     const timer = setTimeout(() => {
+      pushHistory(state);
       setState(s => {
         const result = applyKlondikeAutoSend(s, info);
         if (result.isWon && !gameEndedRef.current) {
           gameEndedRef.current = true;
           onGameEnd(result, elapsedRef.current);
         }
-        return result;
+        return { ...result, moves: s.moves + 1 };
       });
-    }, 200);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [state, autoCompleting, gameStarted, onGameEnd]);
+  }, [state, autoSendChain, autoCompleting, gameStarted, onGameEnd, pushHistory]);
 
   // Stuck detection
   useEffect(() => {

@@ -239,27 +239,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     if (!autoCompleting && !state.isWon && isAutoCompletable(state)) setAutoCompleting(true);
   }, [state, autoCompleting]);
 
-  // Auto-send to foundation
-  useEffect(() => {
-    if (state.isWon || autoCompleting || !gameStarted) return;
-    if (dragManager.isDragging) return;
-
-    const info = getFreeCellAutoSend(state);
-    if (!info) return;
-
-    const timer = setTimeout(() => {
-      setState(s => {
-        const result = applyFreeCellAutoSend(s, info);
-        if (result.isWon && !gameEndedRef.current) {
-          gameEndedRef.current = true;
-          onGameEnd(result, elapsedRef.current);
-        }
-        return result;
-      });
-    }, 200);
-
-    return () => clearTimeout(timer);
-  }, [state, autoCompleting, gameStarted, onGameEnd]);
+  // Auto-send is now user-initiated via auto-send chain (no automatic sends)
 
   // Stuck detection
   useEffect(() => {
@@ -282,14 +262,41 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     onGameEnd(s, elapsedRef.current);
   }, [onGameEnd]);
 
-  const applyMove = useCallback((newState: FreeCellState | null) => {
+  const applyMove = useCallback((newState: FreeCellState | null, triggersAutoSend = false) => {
     if (!newState) return false;
     if (!gameStarted) setGameStarted(true);
     pushHistory(state);
     setState(newState);
+    if (triggersAutoSend) setAutoSendChain(true);
     if (newState.isWon) fireGameEnd(newState);
     return true;
   }, [state, pushHistory, fireGameEnd, gameStarted]);
+
+  // Auto-send chain: after user initiates a foundation move, scan for more
+  useEffect(() => {
+    if (!autoSendChain || state.isWon || autoCompleting || !gameStarted) return;
+    if (dragManager.isDragging) return;
+
+    const info = getFreeCellAutoSend(state);
+    if (!info) {
+      setAutoSendChain(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      pushHistory(state);
+      setState(s => {
+        const result = applyFreeCellAutoSend(s, info);
+        if (result.isWon && !gameEndedRef.current) {
+          gameEndedRef.current = true;
+          onGameEnd(result, elapsedRef.current);
+        }
+        return { ...result, moves: s.moves + 1 };
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [state, autoSendChain, autoCompleting, gameStarted, onGameEnd, pushHistory]);
 
   // Drag and drop
   const handleDrop = useCallback((source: DragSource, targetId: string | null) => {

@@ -322,12 +322,10 @@ class DragManagerClass {
   }
 
   private cleanup() {
-    // Don't remove ghost here if snap-back is animating
-    if (!this.s.ghostEl) {
-      this.s.originElements.forEach(el => {
-        el.style.opacity = '';
-      });
-    }
+    // Always reset opacity on all origin elements — prevents stuck translucent cards
+    this.s.originElements.forEach(el => {
+      el.style.opacity = '';
+    });
     this.s.originElements = [];
     this.s.active = false;
     this.s.thresholdMet = false;

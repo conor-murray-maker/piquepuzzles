@@ -368,6 +368,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const handleHint = useCallback(async () => {
     if (hintLoading) return;
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
+    setHintJustUsed(true);
+    setTimeout(() => setHintJustUsed(false), 3000);
 
     if (mcts.available) {
       setHintLoading(true);

@@ -4,11 +4,20 @@ import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, Grid3X3 } from '
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
+import { useAuth } from '@/contexts/AuthContext';
+import { OnboardingCarousel } from '@/components/onboarding/OnboardingCarousel';
+import { WelcomeBackBanner } from '@/components/onboarding/WelcomeBackBanner';
 import { useState, useEffect } from 'react';
+
+function SkeletonCard({ className = '' }: { className?: string }) {
+  return <div className={`stat-card animate-pulse bg-muted/50 ${className}`} />;
+}
 
 export default function Index() {
   const navigate = useNavigate();
-  const { puzzleIQ, wins, winRate, currentStreak } = usePlayerStats();
+  const { profile } = useAuth();
+  const stats = usePlayerStats();
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -16,6 +25,21 @@ export default function Index() {
     setIsDark(prefersDark);
     document.documentElement.classList.toggle('dark', prefersDark);
   }, []);
+
+  // Check if first-time user
+  useEffect(() => {
+    if (profile && profile.games_played === 0) {
+      const onboardingDone = localStorage.getItem('pique-onboarding-done');
+      if (!onboardingDone) {
+        setShowOnboarding(true);
+      }
+    }
+  }, [profile]);
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('pique-onboarding-done', 'true');
+    setShowOnboarding(false);
+  };
 
   const toggleTheme = () => {
     setIsDark(!isDark);
@@ -31,8 +55,24 @@ export default function Index() {
     show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
   };
 
+  const userName = profile?.display_name?.split(' ')[0] || 'Player';
+
+  if (showOnboarding) {
+    return (
+      <OnboardingCarousel
+        userName={userName}
+        onComplete={handleOnboardingComplete}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col pb-16">
+      <WelcomeBackBanner
+        currentStreak={stats.currentStreak}
+        dailyCompleted={false}
+      />
+
       <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Spade className="w-6 h-6 text-primary" />
@@ -44,70 +84,90 @@ export default function Index() {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
-        <motion.div className="w-full max-w-md space-y-8" variants={container} initial="hidden" animate="show">
-          <motion.div variants={item} className="text-center space-y-3">
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Sharpen your mind.</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Premium puzzle games with a competitive edge. Track your Puzzle IQ across every game, every deal.
-            </p>
-          </motion.div>
-
-          <motion.div variants={item} className="stat-card text-center space-y-3 py-5">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Your Puzzle IQ</p>
-            <PuzzleIQBadge rating={puzzleIQ} size="lg" />
-            <TierProgressBar rating={puzzleIQ} />
-          </motion.div>
-
-          <motion.div variants={item} className="space-y-3">
-            <h2 className="text-xs text-muted-foreground uppercase tracking-wider font-medium px-1">Games</h2>
-
-            <button
-              onClick={() => navigate('/play?mode=klondike')}
-              className="w-full stat-card flex items-center gap-4 text-left group hover:border-primary/30 transition-colors"
-            >
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Layers className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">Klondike Solitaire</p>
-                <p className="text-xs text-muted-foreground">Classic • 3-card draw</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-            </button>
-
-            <button
-              onClick={() => navigate('/play?mode=freecell')}
-              className="w-full stat-card flex items-center gap-4 text-left group hover:border-primary/30 transition-colors"
-            >
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Grid3X3 className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">FreeCell</p>
-                <p className="text-xs text-muted-foreground">Strategic • All cards visible</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-            </button>
-          </motion.div>
-
-          <motion.div variants={item} className="grid grid-cols-3 gap-3">
-            <div className="stat-card text-center py-3">
-              <Trophy className="w-4 h-4 text-gold mx-auto mb-1" />
-              <p className="font-mono font-semibold text-sm">{wins}</p>
-              <p className="text-xs text-muted-foreground">Wins</p>
+        {stats.loading ? (
+          // Skeleton loading state
+          <div className="w-full max-w-md space-y-8">
+            <div className="text-center space-y-3">
+              <div className="h-8 w-48 bg-muted/50 rounded-lg mx-auto animate-pulse" />
+              <div className="h-4 w-64 bg-muted/50 rounded mx-auto animate-pulse" />
             </div>
-            <div className="stat-card text-center py-3">
-              <Flame className="w-4 h-4 text-destructive mx-auto mb-1" />
-              <p className="font-mono font-semibold text-sm">{currentStreak}</p>
-              <p className="text-xs text-muted-foreground">Streak</p>
+            <SkeletonCard className="h-32" />
+            <div className="space-y-3">
+              <SkeletonCard className="h-16" />
+              <SkeletonCard className="h-16" />
             </div>
-            <div className="stat-card text-center py-3">
-              <BarChart3 className="w-4 h-4 text-primary mx-auto mb-1" />
-              <p className="font-mono font-semibold text-sm">{winRate}%</p>
-              <p className="text-xs text-muted-foreground">Win Rate</p>
+            <div className="grid grid-cols-3 gap-3">
+              <SkeletonCard className="h-20" />
+              <SkeletonCard className="h-20" />
+              <SkeletonCard className="h-20" />
             </div>
+          </div>
+        ) : (
+          <motion.div className="w-full max-w-md space-y-8" variants={container} initial="hidden" animate="show">
+            <motion.div variants={item} className="text-center space-y-3">
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Sharpen your mind.</h1>
+              <p className="text-muted-foreground text-sm sm:text-base">
+                Premium puzzle games with a competitive edge. Track your Puzzle IQ across every game, every deal.
+              </p>
+            </motion.div>
+
+            <motion.div variants={item} className="stat-card text-center space-y-3 py-5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Your Puzzle IQ</p>
+              <PuzzleIQBadge rating={stats.puzzleIQ} size="lg" />
+              <TierProgressBar rating={stats.puzzleIQ} />
+            </motion.div>
+
+            <motion.div variants={item} className="space-y-3">
+              <h2 className="text-xs text-muted-foreground uppercase tracking-wider font-medium px-1">Games</h2>
+
+              <button
+                onClick={() => navigate('/play?mode=klondike')}
+                className="w-full stat-card flex items-center gap-4 text-left group hover:border-primary/30 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Layers className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">Klondike Solitaire</p>
+                  <p className="text-xs text-muted-foreground">Classic • 3-card draw</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
+
+              <button
+                onClick={() => navigate('/play?mode=freecell')}
+                className="w-full stat-card flex items-center gap-4 text-left group hover:border-primary/30 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Grid3X3 className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">FreeCell</p>
+                  <p className="text-xs text-muted-foreground">Strategic • All cards visible</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
+            </motion.div>
+
+            <motion.div variants={item} className="grid grid-cols-3 gap-3">
+              <div className="stat-card text-center py-3">
+                <Trophy className="w-4 h-4 text-gold mx-auto mb-1" />
+                <p className="font-mono font-semibold text-sm">{stats.wins}</p>
+                <p className="text-xs text-muted-foreground">Wins</p>
+              </div>
+              <div className="stat-card text-center py-3">
+                <Flame className="w-4 h-4 text-destructive mx-auto mb-1" />
+                <p className="font-mono font-semibold text-sm">{stats.currentStreak}</p>
+                <p className="text-xs text-muted-foreground">Streak</p>
+              </div>
+              <div className="stat-card text-center py-3">
+                <BarChart3 className="w-4 h-4 text-primary mx-auto mb-1" />
+                <p className="font-mono font-semibold text-sm">{stats.winRate}%</p>
+                <p className="text-xs text-muted-foreground">Win Rate</p>
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
+        )}
       </main>
 
       <footer className="py-4 text-center border-t border-border">

@@ -484,7 +484,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
     let newState: KlondikeState | null = null;
 
-    // Priority 1: Foundation (single cards only)
+    // Priority 1: Foundation (single cards only) - triggers auto-send chain
     if (!isStack) {
       if (source === 'waste') {
         newState = moveWasteToFoundation(state);
@@ -492,7 +492,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         const colIdx = parseInt(source.split('-')[1]);
         newState = moveTableauToFoundation(state, colIdx);
       }
-      if (newState) { applyMove(newState); return; }
+      if (newState) { applyMove(newState, true); return; }
     }
 
     // Priority 2: Tableau on another card (prefer most face-up cards)

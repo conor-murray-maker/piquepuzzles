@@ -455,8 +455,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     setSelectedCard(null);
   }, [state, pushHistory, gameStarted]);
 
-  // Smart auto-move on double-tap: foundation → tableau → empty col (stacks supported)
-  const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
+  // Single-click auto-move: foundation first, then tableau, then empty col
+  const handleAutoMove = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
     setSelectedCard(null);
 

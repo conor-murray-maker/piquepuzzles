@@ -369,5 +369,5 @@ export function getProgressiveHint(
     return { from: 'stock', to: 'waste', description: 'Draw from stock' };
   }
 
-  return { noHint: true, message: 'No helpful moves found — consider undoing' };
+  return { noHint: true, message: 'No helpful moves found. Consider undoing.' };
 }

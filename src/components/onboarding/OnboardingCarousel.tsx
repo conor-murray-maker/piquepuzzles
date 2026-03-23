@@ -57,7 +57,7 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
         <PuzzleIQBadge rating={1000} size="lg" />
       </div>
       <p className="text-sm text-muted-foreground">
-        Every deal has a difficulty rating. Beat hard deals, gain more points. Every move is measured — speed, efficiency, hints used.
+        Every deal has a difficulty rating. Beat hard deals, gain more points. Speed, efficiency, and hints all factor in.
       </p>
       <div className="flex items-center justify-center gap-2 pt-2">
         {TIERS.map((tier) => (
@@ -67,7 +67,7 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
           </div>
         ))}
       </div>
-      <p className="text-xs text-primary font-medium">You start at Silver — prove you belong</p>
+      <p className="text-xs text-primary font-medium">You start at Silver. Prove you belong.</p>
     </div>,
 
     // Step 3: How scoring works
@@ -78,9 +78,9 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
       </div>
       <div className="space-y-3">
         {[
-          { text: 'Win a hard deal → big rating boost', emoji: '🚀' },
-          { text: 'Win an easy deal → small boost', emoji: '📈' },
-          { text: 'Use hints → smaller bonus', emoji: '💡' },
+          { text: 'Win a hard deal: big rating boost', emoji: '🚀' },
+          { text: 'Win an easy deal: small boost', emoji: '📈' },
+          { text: 'Use hints: smaller bonus', emoji: '💡' },
         ].map((item, i) => (
           <motion.div
             key={item.text}
@@ -110,7 +110,7 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
         {firstDealDifficulty} Deal
       </div>
       <p className="text-sm text-muted-foreground">
-        This is a {firstDealDifficulty.toLowerCase()} deal — a good starting point.
+        This is a {firstDealDifficulty.toLowerCase()} deal. A good starting point.
       </p>
     </div>,
   ];

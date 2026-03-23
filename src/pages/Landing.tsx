@@ -80,7 +80,7 @@ export default function Landing() {
         </motion.h1>
 
         <motion.p variants={item} className="text-muted-foreground text-base sm:text-lg leading-relaxed mb-8">
-          The puzzle game that measures your skill. Every deal rated. Every move counted. Your Puzzle IQ grows with you.
+          The puzzle platform that measures your skill. Every deal rated. Every move counted. Your Puzzle IQ grows with you.
         </motion.p>
 
         <motion.div variants={item} className="space-y-3">
@@ -89,7 +89,7 @@ export default function Landing() {
             onClick={handleGuestPlay}
             className="w-full h-14 text-base font-semibold"
           >
-            Play Free — No Sign Up Needed
+            Play Free. No Sign Up Needed
             <ChevronRight className="w-5 h-5 ml-1" />
           </Button>
 
@@ -137,9 +137,9 @@ export default function Landing() {
         <h2 className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-6 text-center">How it works</h2>
         <div className="space-y-5">
           {[
-            { icon: Layers, title: 'Play any deal', desc: 'Klondike or FreeCell — every deal is verified solvable' },
-            { icon: BarChart3, title: 'Get rated instantly', desc: 'Your performance is scored against the deal\'s difficulty' },
-            { icon: Trophy, title: 'Climb the ranks', desc: 'From Bronze to Elite — prove your skill over time' },
+            { icon: Layers, title: 'Play any deal', desc: 'Every deal is verified solvable before you see it' },
+            { icon: BarChart3, title: 'Get rated instantly', desc: 'Your performance is scored against the deal difficulty' },
+            { icon: Trophy, title: 'Climb the ranks', desc: 'From Bronze to Elite, prove your skill over time' },
           ].map(({ icon: Icon, title, desc }, i) => (
             <motion.div
               key={title}
@@ -202,7 +202,7 @@ export default function Landing() {
               <Flame className="w-4 h-4 text-destructive" />
               <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Today's Challenge</span>
             </div>
-            <p className="text-sm font-semibold">Expert Deal • Daily challenge for all players</p>
+            <p className="text-sm font-semibold">Expert Deal: Daily challenge for all players</p>
             <Button variant="outline" size="sm" onClick={handleGuestPlay}>
               <Zap className="w-3.5 h-3.5 mr-1" />
               Try Today's Challenge

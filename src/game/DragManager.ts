@@ -89,6 +89,9 @@ class DragManagerClass {
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
 
+    // Use the card element's visual bounding rect for offset calculation.
+    // This correctly handles waste pile fan offsets where the card element is
+    // positioned absolutely inside a container.
     const rect = el.getBoundingClientRect();
     this.s.active = true;
     this.s.thresholdMet = false;
@@ -217,6 +220,10 @@ class DragManagerClass {
     } else {
       const clone = originEl.cloneNode(true) as HTMLElement;
       clone.style.position = 'relative';
+      // Clear any absolute positioning styles from the original element
+      // (e.g., waste pile fan offset left/top values)
+      clone.style.left = '0';
+      clone.style.top = '0';
       ghost.appendChild(clone);
       originEl.style.opacity = '0.3';
     }

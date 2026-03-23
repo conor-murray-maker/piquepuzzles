@@ -128,8 +128,8 @@ export default function Index() {
                   <Layers className="w-5 h-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">Klondike Solitaire</p>
-                  <p className="text-xs text-muted-foreground">Classic • 3-card draw</p>
+                  <p className="font-semibold text-sm">Klondike</p>
+                  <p className="text-xs text-muted-foreground">Classic card puzzle</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
@@ -143,7 +143,7 @@ export default function Index() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">FreeCell</p>
-                  <p className="text-xs text-muted-foreground">Strategic • All cards visible</p>
+                  <p className="text-xs text-muted-foreground">Strategic card puzzle</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
@@ -171,7 +171,7 @@ export default function Index() {
       </main>
 
       <footer className="py-4 text-center border-t border-border">
-        <p className="text-xs text-muted-foreground">Pique — Puzzle games for sharp minds</p>
+        <p className="text-xs text-muted-foreground">Pique: Puzzle games for sharp minds</p>
       </footer>
     </div>
   );

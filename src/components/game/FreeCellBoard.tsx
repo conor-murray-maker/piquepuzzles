@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { GameTooltips } from '@/components/onboarding/GameTooltips';
+import { useAuth } from '@/contexts/AuthContext';
 import { FreeCellState, Card, rankValue, isRed } from '@/game/types';
 import {
   moveToFreeCell,

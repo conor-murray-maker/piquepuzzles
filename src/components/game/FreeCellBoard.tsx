@@ -423,8 +423,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     else handleNewGame();
   }, [state, onGiveUp, handleNewGame]);
 
-  // Smart auto-move
-  const handleDoubleTap = useCallback((source: string, cardIndex: number) => {
+  // Single-click auto-move
+  const handleAutoMove = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
     setSelectedCard(null);
 

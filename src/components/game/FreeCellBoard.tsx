@@ -335,7 +335,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
       }
     }
 
-    applyMove(newState);
+    const isFoundationDrop = targetId.startsWith('foundation-') && newState !== null;
+    applyMove(newState, isFoundationDrop);
   }, [state, applyMove, autoCompleting]);
 
   const dragConfig = useMemo(() => ({

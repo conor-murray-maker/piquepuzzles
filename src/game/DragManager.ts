@@ -137,6 +137,7 @@ class DragManagerClass {
       if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
       this.s.thresholdMet = true;
       this.isDragging = true;
+      this.dragOccurred = true;
       this.dragSource = this.s.source;
       this.cacheDropTargets();
       this.createGhost(e);

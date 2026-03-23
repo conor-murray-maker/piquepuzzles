@@ -42,10 +42,16 @@ class DragManagerClass {
   private s: InternalState = this.freshState();
   private listeners: (() => void) | null = null;
   private onChange: (() => void) | null = null;
+  private dragOccurred = false;
 
   // Exposed read-only state
   public isDragging = false;
   public dragSource: DragSource | null = null;
+
+  /** Returns true if a drag just completed — used to suppress click events after drag */
+  public wasDragAction(): boolean {
+    return this.dragOccurred;
+  }
 
   private freshState(): InternalState {
     return {
@@ -83,8 +89,8 @@ class DragManagerClass {
   startDrag(e: React.PointerEvent, source: string, cardIndex: number, config: DragConfig) {
     if (e.button !== 0) return;
     if (this.s.active) return;
-    e.preventDefault();
-    e.stopPropagation();
+    // Do NOT preventDefault/stopPropagation here — let click events fire for taps.
+    // We only suppress default once the drag threshold is met (in onPointerMove).
 
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
@@ -131,6 +137,7 @@ class DragManagerClass {
       if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
       this.s.thresholdMet = true;
       this.isDragging = true;
+      this.dragOccurred = true;
       this.dragSource = this.s.source;
       this.cacheDropTargets();
       this.createGhost(e);
@@ -329,6 +336,11 @@ class DragManagerClass {
     this.isDragging = false;
     this.dragSource = null;
     this.onChange?.();
+
+    // Reset dragOccurred after a tick so click events in this cycle are suppressed
+    if (this.dragOccurred) {
+      requestAnimationFrame(() => { this.dragOccurred = false; });
+    }
 
     if (this.listeners) {
       this.listeners();

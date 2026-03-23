@@ -535,7 +535,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
-    if (dragManager.isDragging) return;
+    if (dragManager.isDragging || dragManager.wasDragAction()) return;
 
     // Single click: auto-move the card
     handleAutoMove(source, cardIndex);

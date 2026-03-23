@@ -7,10 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// TODO: Replace with real Stripe price IDs after creating products in Stripe Dashboard
 const PRICES = {
-  monthly: "price_monthly_placeholder",
-  annual: "price_annual_placeholder",
+  monthly: "price_1TDxLkCBJJFQtBSRGrL5M8SW",
+  annual: "price_1TDxM1CBJJFQtBSRMfZxDSLg",
 };
 
 serve(async (req) => {

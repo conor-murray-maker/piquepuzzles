@@ -519,44 +519,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting || dragManager.isDragging) return;
-
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last && last.source === source && last.cardIndex === cardIndex && now - last.time < 300) {
-      lastTapRef.current = null;
-      handleDoubleTap(source, cardIndex);
-      return;
-    }
-    lastTapRef.current = { source, cardIndex, time: now };
-
-    if (selectedCard) {
-      let newState: FreeCellState | null = null;
-      if (source.startsWith('tableau-')) {
-        const toCol = parseInt(source.split('-')[1]);
-        if (selectedCard.source.startsWith('tableau-')) {
-          const fromCol = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveTableauToTableau(state, fromCol, selectedCard.cardIndex, toCol);
-        } else if (selectedCard.source.startsWith('freecell-')) {
-          const cellIdx = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveFreeCellToTableau(state, cellIdx, toCol);
-        } else if (selectedCard.source.startsWith('foundation-')) {
-          const fIdx = parseInt(selectedCard.source.split('-')[1]);
-          newState = moveFoundationToTableau(state, fIdx, toCol);
-        }
-      } else if (source.startsWith('freecell-')) {
-        if (selectedCard.source.startsWith('tableau-')) {
-          const fromCol = parseInt(selectedCard.source.split('-')[1]);
-          if (selectedCard.cardIndex === state.tableau[fromCol].length - 1) {
-            newState = moveToFreeCell(state, fromCol);
-          }
-        }
-      }
-      if (newState) { pushHistory(state); setState(newState); if (newState.isWon) fireGameEnd(newState); }
-      setSelectedCard(null);
-      return;
-    }
-    setSelectedCard({ source, cardIndex });
-  }, [selectedCard, state, pushHistory, fireGameEnd, autoCompleting, handleDoubleTap]);
+    handleAutoMove(source, cardIndex);
+  }, [autoCompleting, handleAutoMove]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;

@@ -145,8 +145,10 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   const mcts = useMCTSWorker();
   const [winProbability, setWinProbability] = useState<number | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintJustUsed, setHintJustUsed] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const lastMoveTimeRef = useRef(Date.now());
+  const { profile: authProfile } = useAuth();
 
   // Responsive card width
   useEffect(() => {

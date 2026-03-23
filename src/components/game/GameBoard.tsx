@@ -308,11 +308,12 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     onGameEnd(s, elapsedRef.current);
   }, [onGameEnd]);
 
-  const applyMove = useCallback((newState: KlondikeState | null) => {
+  const applyMove = useCallback((newState: KlondikeState | null, triggersAutoSend = false) => {
     if (!newState) return false;
     if (!gameStarted) setGameStarted(true);
     pushHistory(state);
     setState(newState);
+    if (triggersAutoSend) setAutoSendChain(true);
     if (newState.isWon) fireGameEnd(newState);
     return true;
   }, [state, pushHistory, fireGameEnd, gameStarted]);

@@ -80,6 +80,7 @@ function AppContent() {
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/play" element={<GuestOrAuthRoute><Play onActiveGameChange={setIsGameActive} /></GuestOrAuthRoute>} />
           <Route path="/daily" element={<ProtectedRoute><Daily /></ProtectedRoute>} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />

@@ -220,6 +220,10 @@ class DragManagerClass {
     } else {
       const clone = originEl.cloneNode(true) as HTMLElement;
       clone.style.position = 'relative';
+      // Clear any absolute positioning styles from the original element
+      // (e.g., waste pile fan offset left/top values)
+      clone.style.left = '0';
+      clone.style.top = '0';
       ghost.appendChild(clone);
       originEl.style.opacity = '0.3';
     }

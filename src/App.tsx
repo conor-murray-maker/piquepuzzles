@@ -23,6 +23,7 @@ const Stats = lazy(() => import("./pages/Stats.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
 const Challenge = lazy(() => import("./pages/Challenge.tsx"));
 const Daily = lazy(() => import("./pages/Daily.tsx"));
+const Privacy = lazy(() => import("./pages/Privacy.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient();

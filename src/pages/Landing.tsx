@@ -233,6 +233,15 @@ export default function Landing() {
           </p>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="px-4 py-6 border-t border-border">
+        <div className="max-w-md mx-auto text-center">
+          <a href="/privacy" className="text-xs text-muted-foreground hover:text-foreground transition-colors underline">
+            Privacy Policy
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

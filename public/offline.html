@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pique - Offline</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f1f5f9;
+      color: #1B2340;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .container {
+      text-align: center;
+      max-width: 320px;
+    }
+    .logo {
+      width: 64px;
+      height: 64px;
+      background: #1B2340;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      color: white;
+      font-size: 28px;
+      font-weight: 800;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      font-size: 0.875rem;
+      color: #64748b;
+      line-height: 1.5;
+      margin-bottom: 1.5rem;
+    }
+    .retry-btn {
+      display: inline-block;
+      background: #1B2340;
+      color: white;
+      border: none;
+      padding: 0.75rem 2rem;
+      border-radius: 12px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .retry-btn:hover { opacity: 0.9; }
+    .saved-game {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .saved-game p { margin-bottom: 0.5rem; color: #1B2340; font-weight: 500; }
+    .saved-game small { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">P</div>
+    <h1>You're offline</h1>
+    <p>Check your connection and try again. Your progress is saved locally.</p>
+    <button class="retry-btn" onclick="window.location.reload()">Try again</button>
+    <div class="saved-game" id="savedGame" style="display: none;">
+      <p>Your last game is saved</p>
+      <small>It will be waiting when you reconnect</small>
+    </div>
+  </div>
+  <script>
+    try {
+      const saved = localStorage.getItem('pique-game-state') || localStorage.getItem('pique-fc-game-state');
+      if (saved) document.getElementById('savedGame').style.display = 'block';
+    } catch(e) {}
+  </script>
+</body>
+</html>

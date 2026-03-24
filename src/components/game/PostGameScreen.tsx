@@ -53,9 +53,7 @@ export function PostGameScreen({
     else haptic.heavy();
   }, []);
   const timeSeconds = elapsedSeconds;
-  const percentile = gameState.isWon
-    ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)
-    : 0;
+  // Performance percentile removed from post-game — use server-side percentile on Stats page instead
 
   const formatTime = formatTimeRaw;
 

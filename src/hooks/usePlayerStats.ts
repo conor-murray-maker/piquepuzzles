@@ -36,15 +36,22 @@ export function usePlayerStats() {
     staleTime: 30000,
   });
 
-  const { data: percentile = 50 } = useQuery({
+  // Only show percentile when there are 10+ players with 3+ games
+  const { data: percentile = 0 } = useQuery({
     queryKey: ['rating-percentile', profile?.rating],
     queryFn: async () => {
+      // First check if we have enough qualified players
+      const { count } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .gte('games_played', 3);
+      if (!count || count < 10) return 0; // Not enough data
       const { data } = await supabase.rpc('get_rating_percentile', {
         user_rating: profile?.rating ?? 1000,
       });
-      return (data as number) ?? 50;
+      return (data as number) ?? 0;
     },
-    enabled: !!profile,
+    enabled: !!profile && (profile.games_played ?? 0) >= 3,
     staleTime: 30000,
   });
 

@@ -157,7 +157,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const previousRating = profile?.rating ?? 1000;
     const isDaily = !!dailyDate;
     const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
-    setRatingResult(result ? { ...result, previousRating: result.previousRating } : null);
+    setRatingResult(result);
 
     // Save daily challenge completion on give up
     if (dailyDate && dailyDealId && user) {

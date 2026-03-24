@@ -134,10 +134,18 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Alternate game mode by day (even date = klondike, odd = freecell)
-      const preferredMode = dateObj.getUTCDate() % 2 === 0 ? 'klondike' : 'freecell';
-      const modeFiltered = pool.filter((c: any) => c.game_mode === preferredMode);
-      const finalPool = modeFiltered.length > 0 ? modeFiltered : pool;
+      // Monday: prefer monday_challenge reserved deals; other days alternate game mode
+      let finalPool = pool;
+      if (dayOfWeek === 1) {
+        const mondayReserved = pool.filter((c: any) => c.reserved_for === 'monday_challenge');
+        if (mondayReserved.length > 0) {
+          finalPool = mondayReserved;
+        }
+      } else {
+        const preferredMode = dateObj.getUTCDate() % 2 === 0 ? 'klondike' : 'freecell';
+        const modeFiltered = pool.filter((c: any) => c.game_mode === preferredMode);
+        finalPool = modeFiltered.length > 0 ? modeFiltered : pool;
+      }
 
       // Pick randomly
       const pick = finalPool[Math.floor(Math.random() * finalPool.length)];

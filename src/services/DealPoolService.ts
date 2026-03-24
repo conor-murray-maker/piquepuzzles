@@ -133,6 +133,57 @@ export class DealPoolService {
     }
   }
 
+  /**
+   * Serve Easy or low-Medium deals for new players (games_played < 3).
+   * Prioritizes onboarding-reserved Easy deals, then any deal with dds_blended <= 40.
+   */
+  private static async popOnboardingDeal(gameMode: string): Promise<VerifiedDeal | null> {
+    try {
+      // First try reserved onboarding deals (Easy)
+      const { data: easyDeals } = await (supabase as any)
+        .from('deals')
+        .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended')
+        .eq('game_mode', gameMode)
+        .eq('reserved_for', 'onboarding')
+        .limit(5);
+
+      let deal = easyDeals?.[0];
+
+      // Fallback: any Easy or low-Medium deal (dds_blended <= 40)
+      if (!deal) {
+        const { data: lowDeals } = await (supabase as any)
+          .from('deals')
+          .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended')
+          .eq('game_mode', gameMode)
+          .lte('dds_blended', 40)
+          .order('dds_blended', { ascending: true })
+          .limit(10);
+
+        if (lowDeals?.length) {
+          deal = lowDeals[Math.floor(Math.random() * lowDeals.length)];
+        }
+      }
+
+      if (!deal) return null;
+
+      return {
+        dealUuid: deal.id,
+        seed: deal.seed,
+        gameMode: deal.game_mode,
+        tier: 'onboarding',
+        minMoves: deal.min_moves,
+        ddsInitial: deal.dds_initial,
+        ddsBlended: deal.dds_blended,
+        difficulty: DDSService.ddsToLabel(deal.dds_blended),
+        difficultyScore: deal.dds_blended,
+        drawMode: deal.draw_mode,
+      };
+    } catch (err) {
+      console.warn('Failed to pop onboarding deal:', err);
+      return null;
+    }
+  }
+
   private static generateFreshDeal(gameMode: string, drawMode: number): VerifiedDeal | null {
     try {
       const engine = EngineRegistry.get(gameMode);

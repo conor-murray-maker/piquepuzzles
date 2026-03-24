@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { StreakMilestoneModal } from './StreakMilestoneModal';
 import { motion } from 'framer-motion';
 import { KlondikeState } from '@/game/types';
 import { getPerformancePercentile } from '@/game/rating';
@@ -29,14 +30,21 @@ interface PostGameScreenProps {
     challengerTime: number;
     challengerRating: number;
   } | null;
+  streakUpdate?: {
+    currentStreak: number;
+    bestStreak: number;
+    freezeUsed: boolean;
+    milestoneReached: number | null;
+  } | null;
 }
 
 export function PostGameScreen({
   gameState, currentRating, previousRating, ratingChange, onPlayAgain, onGoHome, elapsedSeconds,
-  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData,
+  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData, streakUpdate,
 }: PostGameScreenProps) {
   const { user, profile } = useAuth();
   const [sharing, setSharing] = useState(false);
+  const [showMilestone, setShowMilestone] = useState(!!streakUpdate?.milestoneReached);
   const timeSeconds = elapsedSeconds;
   const percentile = gameState.isWon
     ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)
@@ -82,6 +90,16 @@ export function PostGameScreen({
   const isChallenge = !!challengeData;
   const playerWonChallenge = isChallenge && gameState.isWon && challengeData &&
     gameState.moves <= challengeData.challengerMoves;
+
+  // Show milestone modal before the main screen
+  if (showMilestone && streakUpdate?.milestoneReached) {
+    return (
+      <StreakMilestoneModal
+        milestone={streakUpdate.milestoneReached}
+        onDismiss={() => setShowMilestone(false)}
+      />
+    );
+  }
 
   return (
     <motion.div

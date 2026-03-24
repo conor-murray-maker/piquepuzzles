@@ -2,7 +2,6 @@ import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { Layers, Calendar, BarChart3, User } from 'lucide-react';
 import { haptic } from '@/lib/haptics';
-import { Layers, Calendar, BarChart3, User } from 'lucide-react';
 
 interface BottomNavProps {
   hidden?: boolean;

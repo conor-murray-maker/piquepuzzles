@@ -5,6 +5,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+// Server-side DDS computation — same curves used by recalibrate-dds
+function klondikeComplexity(minMoves: number): number {
+  if (minMoves < 100) return Math.round((minMoves / 100) * 25);
+  if (minMoves < 130) return Math.round(26 + ((minMoves - 100) / (130 - 100)) * 29);
+  if (minMoves < 160) return Math.round(56 + ((minMoves - 130) / (160 - 130)) * 24);
+  return Math.round(Math.min(100, 81 + ((minMoves - 160) / 60) * 19));
+}
+
+function freecellComplexity(minMoves: number): number {
+  if (minMoves < 125) return Math.round((minMoves / 125) * 25);
+  if (minMoves < 175) return Math.round(26 + ((minMoves - 125) / (175 - 125)) * 29);
+  if (minMoves < 250) return Math.round(56 + ((minMoves - 175) / (250 - 175)) * 24);
+  return Math.round(Math.min(100, 81 + ((minMoves - 250) / 100) * 19));
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });

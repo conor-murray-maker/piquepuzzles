@@ -21,7 +21,13 @@ export class DealPoolService {
   /**
    * Get next deal for a user. Tries queue first, then generates on demand.
    */
-  static async getNextDeal(userId: string, gameMode: GameMode, drawMode: number = 3): Promise<VerifiedDeal | null> {
+  static async getNextDeal(userId: string, gameMode: GameMode, drawMode: number = 3, gamesPlayed: number = 999): Promise<VerifiedDeal | null> {
+    // New players (< 3 games) get Easy/low-Medium deals exclusively
+    if (gamesPlayed < 3) {
+      const onboarding = await this.popOnboardingDeal(gameMode);
+      if (onboarding) return onboarding;
+    }
+
     // 1. Pop from user's pre-buffered queue
     const queued = await this.popFromQueue(userId, gameMode);
     if (queued) return queued;

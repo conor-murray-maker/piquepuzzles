@@ -869,6 +869,19 @@ Deno.serve(async (req) => {
         return json(snapshot);
       }
 
+      case "flag_deals": {
+        const { dealIds, reservedFor } = params || {};
+        if (!dealIds || !Array.isArray(dealIds) || !reservedFor) {
+          return json({ error: "Missing dealIds or reservedFor" }, 400);
+        }
+        const { error } = await adminClient
+          .from("deals")
+          .update({ reserved_for: reservedFor })
+          .in("id", dealIds);
+        if (error) throw error;
+        return json({ success: true, updated: dealIds.length });
+      }
+
       default:
         return json({ error: "Unknown action" }, 400);
     }

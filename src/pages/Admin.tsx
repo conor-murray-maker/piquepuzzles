@@ -45,7 +45,7 @@ export default function Admin() {
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-4 py-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)' }}>
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="mb-6 flex-wrap h-auto gap-1">
             {tabs.map(t => (

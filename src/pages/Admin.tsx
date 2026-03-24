@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminOverview } from "@/components/admin/AdminOverview";
 import { AdminUsers } from "@/components/admin/AdminUsers";
@@ -8,22 +9,45 @@ import { AdminDeals } from "@/components/admin/AdminDeals";
 import { AdminGames } from "@/components/admin/AdminGames";
 import { AdminStreaks } from "@/components/admin/AdminStreaks";
 import { AdminSystem } from "@/components/admin/AdminSystem";
-import { LayoutDashboard, Users, Database, Gamepad2, Flame, Settings } from "lucide-react";
-
-const ADMIN_EMAILS = ["conor-murray@hotmail.com"];
+import { LayoutDashboard, Users, Database, Gamepad2, Flame, Settings, Loader2 } from "lucide-react";
 
 export default function Admin() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState("overview");
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!loading && (!user || !ADMIN_EMAILS.includes(user.email || ""))) {
+    if (loading) return;
+    if (!user) {
       navigate("/", { replace: true });
+      return;
     }
+
+    // Server-side admin check via admin-query edge function
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("admin-query", {
+          body: { action: "ping" },
+        });
+        if (error || !data?.ok) {
+          navigate("/", { replace: true });
+        } else {
+          setIsAdmin(true);
+        }
+      } catch {
+        navigate("/", { replace: true });
+      }
+    })();
   }, [user, loading, navigate]);
 
-  if (loading || !user || !ADMIN_EMAILS.includes(user.email || "")) return null;
+  if (loading || isAdmin === null) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const tabs = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },

@@ -54,6 +54,11 @@ Deno.serve(async (req) => {
     const { action, params } = await req.json();
 
     switch (action) {
+      case "ping": {
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       case "overview_stats": {
         const today = new Date().toISOString().split("T")[0];
         const weekAgo = new Date(Date.now() - 7 * 86400000)

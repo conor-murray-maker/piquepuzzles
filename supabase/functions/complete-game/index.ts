@@ -78,7 +78,13 @@ async function updateStreak(
   }
 
   const conditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
-  const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : 'two_wins';
+  const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : (dailyWinsToday >= 2 ? 'two_wins' : 'none');
+
+  console.log('[complete-game] streak debug:', {
+    conditionMet, lastStreakDate, today, dailyWinsToday,
+    dailyChallengeCompletedToday, isWin: result === 'win',
+    willWrite: conditionMet && lastStreakDate !== today,
+  });
 
   let currentStreak = profile.current_streak as number;
   let bestStreak = profile.best_streak as number;

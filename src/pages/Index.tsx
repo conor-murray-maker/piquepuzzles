@@ -111,7 +111,13 @@ export default function Index() {
               </p>
             </motion.div>
 
-            <motion.div variants={item} className="stat-card text-center space-y-3 py-5">
+            <motion.div variants={item} className="stat-card text-center space-y-3 py-5 relative">
+              {stats.currentStreak >= 2 && (
+                <div className="absolute top-3 right-3 flex items-center gap-1 text-sm">
+                  <Flame className="w-4 h-4 text-destructive" />
+                  <span className="font-mono font-bold">{stats.currentStreak}</span>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Your Puzzle IQ</p>
               <PuzzleIQBadge rating={stats.puzzleIQ} size="lg" />
               <TierProgressBar rating={stats.puzzleIQ} />

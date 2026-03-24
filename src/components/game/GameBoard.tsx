@@ -631,6 +631,12 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
           <span className="flex items-center gap-1 text-xs">
             <Layers className="w-3 h-3" />D{state.drawMode}
           </span>
+          {(authProfile as any)?.current_streak >= 2 && (
+            <span className="flex items-center gap-0.5 text-xs">
+              <Flame className="w-3 h-3 text-destructive" />
+              <span className="font-mono font-bold">{(authProfile as any)?.current_streak}</span>
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={handleNewGame} className="h-8 px-2">

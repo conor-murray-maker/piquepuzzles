@@ -288,7 +288,7 @@ export default function Daily() {
                   Play Today's Challenge
                 </Button>
                 <p className="text-xs text-muted-foreground text-center mt-2">
-                  Daily challenges earn 1.2× rating points
+                  Complete to extend your streak
                 </p>
               </motion.div>
             )}

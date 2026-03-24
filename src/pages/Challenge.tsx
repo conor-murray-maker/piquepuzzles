@@ -32,7 +32,7 @@ export default function Challenge() {
 
   if (!challenge) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="bg-background flex items-center justify-center p-4" style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}>
         <div className="text-center">
           <p className="text-lg font-semibold">Challenge not found</p>
           <Button className="mt-4" onClick={() => navigate('/')}>

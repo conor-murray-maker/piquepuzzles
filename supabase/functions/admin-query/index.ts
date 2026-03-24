@@ -781,7 +781,7 @@ Deno.serve(async (req) => {
         const ts = now.toISOString();
 
         if (recentZeroDDS > 0) alerts.push({ severity: "critical", code: "ZERO_DDS_GAMES", message: `${recentZeroDDS} games in last 24h have dealDDS = 0`, affectedCount: recentZeroDDS, detectedAt: ts });
-        if ((cronRes as any[]).length === 0) alerts.push({ severity: "critical", code: "NO_CRON_JOBS", message: "No cron jobs registered in pg_cron", affectedCount: 0, detectedAt: ts });
+        if (cronRes !== null && (cronRes as any[]).length === 0) alerts.push({ severity: "critical", code: "NO_CRON_JOBS", message: "No cron jobs registered in pg_cron", affectedCount: 0, detectedAt: ts });
         if (ratingValidityScore < 0.8) alerts.push({ severity: "critical", code: "LOW_VALIDITY_SCORE", message: `Rating validity score is ${ratingValidityScore} (threshold: 0.8)`, affectedCount: totalGamesCount, detectedAt: ts });
         if (!dc) alerts.push({ severity: "critical", code: "NO_DAILY_CHALLENGE", message: "No daily challenge seeded for today", affectedCount: 0, detectedAt: ts });
 

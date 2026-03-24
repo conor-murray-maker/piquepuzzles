@@ -39,7 +39,7 @@ interface PostGameScreenProps {
 
 export function PostGameScreen({
   gameState, currentRating, previousRating, ratingChange, onPlayAgain, onGoHome, elapsedSeconds,
-  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData,
+  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData, streakUpdate,
 }: PostGameScreenProps) {
   const { user, profile } = useAuth();
   const [sharing, setSharing] = useState(false);

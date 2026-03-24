@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       if (pool.length === 0) {
         const { data: organicCandidates } = await supabaseAdmin
           .from('deals')
-          .select('id, dds_blended, game_mode, confidence')
+          .select('id, dds_blended, game_mode, confidence, reserved_for')
           .eq('is_calibration', false)
           .gte('dds_blended', ddsRange.min)
           .lte('dds_blended', ddsRange.max)

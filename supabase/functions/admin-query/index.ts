@@ -849,10 +849,10 @@ Deno.serve(async (req) => {
             milestonesReached, freezesUsedThisWeek: freezesThisWeek, atRiskToday: atRisk,
           },
           systemHealth: {
-            cronJobs: (cronRes as any[]).map((j: any) => ({
+            cronJobs: cronRes !== null ? (cronRes as any[]).map((j: any) => ({
               name: j.jobname || j.name, schedule: j.schedule, lastRun: j.last_run || null,
               lastRunStatus: j.last_run_status || (j.active ? "active" : "unknown"),
-            })),
+            })) : [{ name: "unknown", schedule: "RPC unavailable", lastRunStatus: "could not query" }],
             edgeFunctions: {
               "complete-game": { lastRun: null, status: "unknown" },
               "refill-deal-queue": { lastRun: null, status: "unknown" },

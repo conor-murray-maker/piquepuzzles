@@ -25,6 +25,7 @@ const Challenge = lazy(() => import("./pages/Challenge.tsx"));
 const Daily = lazy(() => import("./pages/Daily.tsx"));
 const Privacy = lazy(() => import("./pages/Privacy.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const Admin = lazy(() => import("./pages/Admin.tsx"));
 
 const queryClient = new QueryClient();
 

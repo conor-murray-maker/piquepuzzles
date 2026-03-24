@@ -14,6 +14,41 @@ export function AdminSystem() {
   const { data: daily } = useAdminData("system_daily", undefined, { refetchInterval: 30000 });
   const action = useAdminAction();
   const { toast } = useToast();
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotData, setSnapshotData] = useState<string | null>(null);
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
+
+  const exportSnapshot = async () => {
+    setSnapshotLoading(true);
+    try {
+      const result = await action.mutateAsync({ action: "diagnostic_snapshot" });
+      const jsonStr = JSON.stringify(result, null, 2);
+      setSnapshotData(jsonStr);
+      setSnapshotOpen(true);
+    } catch (e: any) {
+      toast({ title: "Export failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSnapshotLoading(false);
+    }
+  };
+
+  const downloadSnapshot = () => {
+    if (!snapshotData) return;
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const blob = new Blob([snapshotData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pique-diagnostic-${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copySnapshot = async () => {
+    if (!snapshotData) return;
+    await navigator.clipboard.writeText(snapshotData);
+    toast({ title: "Copied to clipboard" });
+  };
 
   const triggerAction = async (act: string, label: string) => {
     try {

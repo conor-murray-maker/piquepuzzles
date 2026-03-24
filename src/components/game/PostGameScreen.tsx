@@ -266,6 +266,7 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
   actualTime: number;
   actualMoves: number;
 }) {
+  console.log('[ScoreBreakdownCard received]', { won, breakdown, ratingChange });
   if (ratingChange === 0 && !breakdown) return null;
 
   const bd = breakdown;

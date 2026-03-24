@@ -51,7 +51,8 @@ export default function Challenge() {
 
   return (
     <motion.div
-      className="min-h-screen bg-background flex items-center justify-center p-4"
+      className="bg-background overflow-y-auto overscroll-contain flex items-center justify-center p-4"
+      style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)', WebkitOverflowScrolling: 'touch' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >

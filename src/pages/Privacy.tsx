@@ -2,7 +2,7 @@ import { Spade } from 'lucide-react';
 
 export default function Privacy() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="bg-background overflow-y-auto overscroll-contain" style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)', WebkitOverflowScrolling: 'touch' }}>
       <div className="max-w-2xl mx-auto px-6 py-12">
         {/* Logo */}
         <div className="flex justify-center mb-10">

@@ -67,13 +67,22 @@ export default function Index() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-16">
+    <div
+      className="bg-background flex flex-col"
+      style={{
+        minHeight: '100dvh',
+        paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 16px)',
+      }}
+    >
       <WelcomeBackBanner
         currentStreak={stats.currentStreak}
         dailyCompleted={false}
       />
 
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
+      <header
+        className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border"
+        style={{ paddingTop: 'calc(16px + var(--safe-area-top, 0px))' }}
+      >
         <div className="flex items-center gap-2">
           <Spade className="w-6 h-6 text-primary" />
           <span className="text-lg font-bold tracking-tight">Pique</span>

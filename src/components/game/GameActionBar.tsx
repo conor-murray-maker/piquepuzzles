@@ -11,8 +11,9 @@ interface GameActionBarProps {
 export function GameActionBar({ onHint, onUndo, undoDisabled, moveCount, hintLoading }: GameActionBarProps) {
   return (
     <div
-      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+56px)] left-0 right-0 z-40 bg-card border-t flex items-stretch"
+      className="fixed left-0 right-0 z-40 bg-card border-t flex items-stretch"
       style={{
+        bottom: 'calc(56px + var(--safe-area-bottom, 0px))',
         borderColor: '#e2e8f0',
         padding: '12px 0',
         boxShadow: '0 -1px 4px rgba(0,0,0,0.08)',

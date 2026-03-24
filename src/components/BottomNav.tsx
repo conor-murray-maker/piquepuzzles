@@ -19,7 +19,10 @@ export function BottomNav({ hidden }: BottomNavProps) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border"
+      style={{ paddingBottom: 'var(--safe-area-bottom)' }}
+    >
       <div className="flex items-center justify-around h-14 max-w-lg mx-auto">
         {tabs.map(({ path, icon: Icon, label }) => {
           const isActive = location.pathname === path;
@@ -27,7 +30,7 @@ export function BottomNav({ hidden }: BottomNavProps) {
             <NavLink
               key={path}
               to={path}
-              className={`flex flex-col items-center justify-center gap-0.5 w-16 h-full transition-colors ${
+              className={`flex flex-col items-center justify-center gap-0.5 w-16 h-full min-h-[44px] transition-colors ${
                 isActive ? 'text-foreground' : 'text-muted-foreground'
               }`}
             >

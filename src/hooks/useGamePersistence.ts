@@ -68,7 +68,7 @@ export function useGamePersistence() {
 
       if (error) throw error;
 
-      console.log('[useGamePersistence raw response]', JSON.stringify(data));
+      
 
       const r = data as any;
       await refreshProfile();

@@ -25,6 +25,7 @@ const Challenge = lazy(() => import("./pages/Challenge.tsx"));
 const Daily = lazy(() => import("./pages/Daily.tsx"));
 const Privacy = lazy(() => import("./pages/Privacy.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const Admin = lazy(() => import("./pages/Admin.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -83,6 +84,7 @@ function AppContent() {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

@@ -46,6 +46,12 @@ export function PostGameScreen({
   const { user, profile } = useAuth();
   const [sharing, setSharing] = useState(false);
   const [showMilestone, setShowMilestone] = useState(!!streakUpdate?.milestoneReached);
+
+  // Haptic on mount based on result
+  useEffect(() => {
+    if (gameState.isWon) haptic.success();
+    else haptic.heavy();
+  }, []);
   const timeSeconds = elapsedSeconds;
   const percentile = gameState.isWon
     ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)

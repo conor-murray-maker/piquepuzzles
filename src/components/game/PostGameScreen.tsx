@@ -116,9 +116,6 @@ export function PostGameScreen({
       }}
     >
     <div className="flex items-center justify-center p-4" style={{ minHeight: '100%' }}>
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
       <motion.div
         className="bg-card border border-border rounded-2xl p-6 sm:p-8 max-w-md w-full space-y-6"
         initial={{ y: 20, opacity: 0 }}

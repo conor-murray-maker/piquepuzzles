@@ -49,7 +49,9 @@ interface LeaderboardEntry {
 
 export default function Daily() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const currentStreak = (profile as any)?.current_streak ?? 0;
+  const dayOfWeek = getDayOfWeekUTC();
   const [challenge, setChallenge] = useState<DailyChallenge | null>(null);
   const [myCompletion, setMyCompletion] = useState<Completion | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);

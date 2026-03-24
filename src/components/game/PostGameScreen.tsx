@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { StreakMilestoneModal } from './StreakMilestoneModal';
 import { motion } from 'framer-motion';
 import { KlondikeState } from '@/game/types';
 import { getPerformancePercentile } from '@/game/rating';

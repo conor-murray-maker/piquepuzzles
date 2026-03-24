@@ -229,6 +229,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
         dealSeed={lastResult.seed}
         drawMode={drawMode}
         challengeData={challengeData}
+        streakUpdate={ratingResult?.streakUpdate}
+        breakdown={ratingResult?.breakdown}
       />
     );
   }

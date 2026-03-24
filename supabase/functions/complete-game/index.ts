@@ -140,18 +140,16 @@ async function updateStreak(
     }
   }
 
-  // Update profile with streak data
+  // Update profile with streak data — always write daily counters even if condition not met
   const streakUpdate: Record<string, unknown> = {
     daily_wins_today: dailyWinsToday,
     daily_challenge_completed_today: dailyChallengeCompletedToday,
     current_streak: currentStreak,
     best_streak: bestStreak,
     streak_freezes_remaining: freezesRemaining,
+    last_streak_date: conditionMet ? today : (lastStreakDate ?? today),
   };
 
-  if (conditionMet && lastStreakDate !== today) {
-    streakUpdate.last_streak_date = today;
-  }
   if (freezeUsed) {
     streakUpdate.streak_freeze_used_on = freezeUsedOn;
   }

@@ -58,6 +58,7 @@ export function PostGameScreen({
   const formatTime = formatTimeRaw;
 
   const handleChallenge = useCallback(async () => {
+    haptic.medium();
     if (!user || !profile || dealSeed === undefined) return;
     setSharing(true);
     try {

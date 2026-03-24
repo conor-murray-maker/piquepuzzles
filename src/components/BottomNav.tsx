@@ -32,6 +32,7 @@ export function BottomNav({ hidden }: BottomNavProps) {
             <NavLink
               key={path}
               to={path}
+              onClick={() => haptic.light()}
               className={`flex flex-col items-center justify-center gap-0.5 w-16 h-full min-h-[44px] transition-colors ${
                 isActive ? 'text-foreground' : 'text-muted-foreground'
               }`}

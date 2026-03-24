@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.seed-today-challenge]
 verify_jwt = false
+
+[functions.admin-query]
+verify_jwt = false

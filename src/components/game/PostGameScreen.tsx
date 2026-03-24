@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { haptic } from '@/lib/haptics';
 import { StreakMilestoneModal } from './StreakMilestoneModal';
 import { motion } from 'framer-motion';
 import { KlondikeState } from '@/game/types';

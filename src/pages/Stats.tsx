@@ -8,6 +8,7 @@ import { formatTime } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TrendingUp, TrendingDown, Trophy, Target, Timer, Hash, Flame, BarChart3, Users } from 'lucide-react';
+import { StreakCalendar } from '@/components/game/StreakCalendar';
 
 interface GameRecord {
   id: string;

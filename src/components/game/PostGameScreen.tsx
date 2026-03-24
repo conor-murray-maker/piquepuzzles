@@ -91,6 +91,16 @@ export function PostGameScreen({
   const playerWonChallenge = isChallenge && gameState.isWon && challengeData &&
     gameState.moves <= challengeData.challengerMoves;
 
+  // Show milestone modal before the main screen
+  if (showMilestone && streakUpdate?.milestoneReached) {
+    return (
+      <StreakMilestoneModal
+        milestone={streakUpdate.milestoneReached}
+        onDismiss={() => setShowMilestone(false)}
+      />
+    );
+  }
+
   return (
     <motion.div
       className="min-h-screen bg-background flex items-center justify-center p-4"

@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Registers a deal in the deals table if it doesn't already have a UUID from the queue.
- * Returns the deal UUID.
+ * Returns the deal UUID. Uses server-side edge function to bypass RLS.
  */
 export async function registerDeal(params: {
   seed: number;
@@ -12,17 +12,20 @@ export async function registerDeal(params: {
   difficultyScore: number;
 }): Promise<string | null> {
   try {
-    const { data } = await (supabase as any).from('deals').upsert({
-      seed: params.seed,
-      game_mode: params.gameMode,
-      draw_mode: params.drawMode,
-      min_moves: params.minMoves || 0,
-      dds_initial: params.difficultyScore,
-      dds_blended: params.difficultyScore,
-      tier: 'fresh',
-    }, { onConflict: 'seed,game_mode,draw_mode', ignoreDuplicates: true })
-    .select('id')
-    .single();
+    const { data, error } = await supabase.functions.invoke('register-deal', {
+      body: {
+        seed: params.seed,
+        gameMode: params.gameMode,
+        drawMode: params.drawMode,
+        minMoves: params.minMoves || 0,
+        difficultyScore: params.difficultyScore,
+      },
+    });
+
+    if (error) {
+      console.error('Failed to register deal via edge function:', error);
+      return null;
+    }
 
     return data?.id ?? null;
   } catch (err) {

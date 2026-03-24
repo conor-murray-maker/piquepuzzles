@@ -57,6 +57,7 @@ export default function Admin() {
     { id: "games", label: "Games", icon: Gamepad2 },
     { id: "streaks", label: "Streaks", icon: Flame },
     { id: "system", label: "System", icon: Settings },
+    { id: "releases", label: "Releases", icon: BookOpen },
   ];
 
   return (

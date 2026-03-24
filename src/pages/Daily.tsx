@@ -165,8 +165,17 @@ export default function Daily() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <header className="px-4 sm:px-6 py-4 border-b border-border">
+    <div
+      className="bg-background"
+      style={{
+        minHeight: '100dvh',
+        paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)',
+      }}
+    >
+      <header
+        className="px-4 sm:px-6 py-4 border-b border-border"
+        style={{ paddingTop: 'calc(16px + var(--safe-area-top, 0px))' }}
+      >
         <div className="flex items-center gap-2">
           <Calendar className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-bold">Daily Challenge</h1>

@@ -665,10 +665,11 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
       {/* Game area */}
       <div
-        className="flex-1 flex flex-col items-center pt-3 overflow-auto"
+        className="flex-1 flex flex-col items-center overflow-auto"
         style={{
-          padding: `12px ${SIDE_PAD}px 136px`,
+          padding: `12px ${SIDE_PAD}px calc(136px + var(--safe-area-bottom, 0px))`,
           boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.06)',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
         <div style={{ width: boardWidth, maxWidth: '100%' }}>

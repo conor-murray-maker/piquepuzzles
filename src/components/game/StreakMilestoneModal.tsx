@@ -39,6 +39,10 @@ export function StreakMilestoneModal({ milestone, onDismiss, onShowPaywall }: St
     <AnimatePresence>
       <motion.div
         className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        style={{
+          paddingTop: 'var(--safe-area-top, 0px)',
+          paddingBottom: 'var(--safe-area-bottom, 0px)',
+        }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}

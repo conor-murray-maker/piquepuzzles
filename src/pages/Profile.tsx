@@ -43,8 +43,17 @@ export default function Profile() {
   }, [stats]);
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="max-w-lg mx-auto px-4 pt-6 space-y-5">
+    <div
+      className="bg-background"
+      style={{
+        minHeight: '100dvh',
+        paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)',
+      }}
+    >
+      <div
+        className="max-w-lg mx-auto px-4 space-y-5"
+        style={{ paddingTop: 'calc(24px + var(--safe-area-top, 0px))' }}
+      >
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <User className="w-5 h-5 text-primary" />

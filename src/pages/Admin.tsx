@@ -9,7 +9,8 @@ import { AdminDeals } from "@/components/admin/AdminDeals";
 import { AdminGames } from "@/components/admin/AdminGames";
 import { AdminStreaks } from "@/components/admin/AdminStreaks";
 import { AdminSystem } from "@/components/admin/AdminSystem";
-import { LayoutDashboard, Users, Database, Gamepad2, Flame, Settings, Loader2 } from "lucide-react";
+import { AdminReleases } from "@/components/admin/AdminReleases";
+import { LayoutDashboard, Users, Database, Gamepad2, Flame, Settings, Loader2, BookOpen } from "lucide-react";
 
 export default function Admin() {
   const { user, loading } = useAuth();

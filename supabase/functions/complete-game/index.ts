@@ -64,7 +64,11 @@ async function updateStreak(
   let dailyWinsToday = profile.daily_wins_today as number;
   let dailyChallengeCompletedToday = profile.daily_challenge_completed_today as boolean;
 
-  if (!lastStreakDate || lastStreakDate < today) {
+  // Reset daily counters if last_win_date is not today
+  // Use last_win_date (set by step 6 on every win) rather than last_streak_date
+  // to avoid resetting counters when streak hasn't been earned yet
+  const lastWinDate = profile.last_win_date as string | null;
+  if (!lastWinDate || lastWinDate < today) {
     dailyWinsToday = 0;
     dailyChallengeCompletedToday = false;
   }
@@ -80,10 +84,20 @@ async function updateStreak(
   const conditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
   const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : (dailyWinsToday >= 2 ? 'two_wins' : 'none');
 
+  // Check if streak was already earned today
+  const { data: existingStreakToday } = await supabaseAdmin
+    .from('streak_history')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('date', today)
+    .limit(1);
+  const streakAlreadyEarnedToday = (existingStreakToday?.length ?? 0) > 0;
+
   console.log('[complete-game] streak debug:', {
-    conditionMet, lastStreakDate, today, dailyWinsToday,
+    conditionMet, lastStreakDate, lastWinDate, today, dailyWinsToday,
     dailyChallengeCompletedToday, isWin: result === 'win',
-    willWrite: conditionMet && lastStreakDate !== today,
+    streakAlreadyEarnedToday,
+    willWrite: conditionMet && !streakAlreadyEarnedToday,
   });
 
   let currentStreak = profile.current_streak as number;
@@ -93,7 +107,7 @@ async function updateStreak(
   let freezeUsed = false;
   let milestoneReached: number | null = null;
 
-  if (conditionMet && lastStreakDate !== today) {
+  if (conditionMet && !streakAlreadyEarnedToday) {
     const yesterday = addDays(today, -1);
     const dayBeforeYesterday = addDays(today, -2);
 

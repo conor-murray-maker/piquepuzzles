@@ -4,8 +4,18 @@ import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ddsToLabel, formatTimeRaw } from '@/lib/format';
-import { Calendar, Timer, Hash, Trophy, Clock, Users } from 'lucide-react';
+import { Calendar, Timer, Hash, Trophy, Clock, Users, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { StreakBadge } from '@/components/game/StreakBadge';
+
+const DAY_LABELS: Record<number, string> = {
+  1: 'Monday Reset — fresh start',
+  0: 'Sunday Expert — this week\'s ultimate challenge',
+};
+
+function getDayOfWeekUTC(): number {
+  return new Date().getUTCDay();
+}
 
 interface DailyChallenge {
   id: string;

@@ -6,15 +6,16 @@ import { DealPoolService, VerifiedDeal } from '@/services/DealPoolService';
 export type { VerifiedDeal as QueuedDeal };
 
 export function useDealQueue() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const popNextDeal = useCallback(async (
     gameMode: GameMode,
     drawMode: DrawMode = 3
   ): Promise<VerifiedDeal | null> => {
     if (!user) return null;
-    return DealPoolService.getNextDeal(user.id, gameMode, drawMode);
-  }, [user]);
+    const gamesPlayed = profile?.games_played ?? 0;
+    return DealPoolService.getNextDeal(user.id, gameMode, drawMode, gamesPlayed);
+  }, [user, profile]);
 
   const refillQueue = useCallback(async (gameMode: GameMode, drawMode: DrawMode = 3) => {
     if (!user) return;

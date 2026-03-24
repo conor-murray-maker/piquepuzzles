@@ -207,6 +207,7 @@ Deno.serve(async (req) => {
       dealUuid: clientDealUuid,
       isDaily: clientIsDaily = false,
       timezoneOffset = 0,
+      dealDDS: clientDealDDS = 0,
     } = body;
 
     // Input validation

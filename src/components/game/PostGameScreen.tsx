@@ -327,41 +327,33 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
       />
 
       {/* Time line */}
-      {avgTime !== null ? (
-        timeBP >= 0 ? (
-          <BreakdownLine
-            label="Faster than average"
-            subLabel={`${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg`}
-            value={timeBP}
-          />
-        ) : (
-          <BreakdownLine
-            label="Slower than average"
-            subLabel={`${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg`}
-            value={timeBP}
-          />
-        )
+      {timeBP >= 0 ? (
+        <BreakdownLine
+          label="Faster than expected"
+          subLabel={avgTime !== null ? `${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg` : undefined}
+          value={timeBP}
+        />
       ) : (
-        <BreakdownLine label={`Time ${formatTimeRaw(actualTime)}`} value={null} />
+        <BreakdownLine
+          label="Slower than expected"
+          subLabel={avgTime !== null ? `${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg` : undefined}
+          value={timeBP}
+        />
       )}
 
       {/* Moves line */}
-      {avgMoves !== null ? (
-        moveBP >= 0 ? (
-          <BreakdownLine
-            label="Fewer moves than average"
-            subLabel={`${actualMoves} vs ${Math.round(avgMoves)} avg`}
-            value={moveBP}
-          />
-        ) : (
-          <BreakdownLine
-            label="More moves than average"
-            subLabel={`${actualMoves} vs ${Math.round(avgMoves)} avg`}
-            value={moveBP}
-          />
-        )
+      {moveBP >= 0 ? (
+        <BreakdownLine
+          label="Fewer moves than expected"
+          subLabel={avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined}
+          value={moveBP}
+        />
       ) : (
-        <BreakdownLine label={`Moves ${actualMoves}`} value={null} />
+        <BreakdownLine
+          label="More moves than expected"
+          subLabel={avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined}
+          value={moveBP}
+        />
       )}
 
       {/* Hints line */}

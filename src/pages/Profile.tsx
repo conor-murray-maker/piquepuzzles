@@ -44,7 +44,7 @@ export default function Profile() {
 
   return (
     <div
-      className="bg-background overflow-y-auto"
+      className="bg-background overflow-y-auto overscroll-contain"
       style={{
         height: '100dvh',
         paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)',

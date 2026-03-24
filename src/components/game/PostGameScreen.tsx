@@ -109,7 +109,7 @@ export function PostGameScreen({
 
   return (
     <div
-      className="bg-background overflow-y-auto"
+      className="bg-background overflow-y-auto overscroll-contain"
       style={{
         height: '100dvh',
         paddingTop: 'var(--safe-area-top, 0px)',

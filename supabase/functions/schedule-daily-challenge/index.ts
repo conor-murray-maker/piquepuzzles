@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
       // Query calibration deals within DDS range with confidence >= 0.8
       const { data: calibrationCandidates } = await supabaseAdmin
         .from('deals')
-        .select('id, dds_blended, game_mode, confidence')
+        .select('id, dds_blended, game_mode, confidence, reserved_for')
         .eq('is_calibration', true)
         .gte('dds_blended', ddsRange.min)
         .lte('dds_blended', ddsRange.max)

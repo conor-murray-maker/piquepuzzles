@@ -166,10 +166,11 @@ export default function Daily() {
 
   return (
     <div
-      className="bg-background"
+      className="bg-background overflow-y-auto"
       style={{
-        minHeight: '100dvh',
+        height: '100dvh',
         paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
       <header

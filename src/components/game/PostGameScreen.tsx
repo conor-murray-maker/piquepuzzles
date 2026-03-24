@@ -254,6 +254,66 @@ export function PostGameScreen({
           </Button>
         )}
       </motion.div>
+    </div>
+    </div>
+  );
+}
+
+function ScoreBreakdown({ won, ratingChange, difficulty, moves, timeSeconds, hintsUsed, undosUsed }: {
+  won: boolean; ratingChange: number; difficulty: string; moves: number;
+  timeSeconds: number; hintsUsed: number; undosUsed: number;
+}) {
+  if (ratingChange === 0) return null;
+
+  const factors: string[] = [];
+
+  if (won) {
+    // Difficulty factor
+    if (difficulty === 'Hard' || difficulty === 'Expert') {
+      factors.push(`${difficulty} deal, bigger reward`);
+    } else if (difficulty === 'Easy') {
+      factors.push('Easy deal, modest reward');
+    } else {
+      factors.push('Medium deal, solid reward');
+    }
+
+    // Speed factor
+    if (timeSeconds < 120) factors.push('Fast solve, nice bonus');
+    else if (timeSeconds < 240) factors.push('Good pace');
+
+    // Efficiency factor
+    if (hintsUsed === 0 && undosUsed === 0) {
+      factors.push('No hints or undos, well played');
+    } else if (hintsUsed > 0 || undosUsed > 0) {
+      const parts = [];
+      if (hintsUsed > 0) parts.push(`${hintsUsed} hint${hintsUsed > 1 ? 's' : ''}`);
+      if (undosUsed > 0) parts.push(`${undosUsed} undo${undosUsed > 1 ? 's' : ''}`);
+      factors.push(`${parts.join(' and ')} used, small adjustment`);
+    }
+  } else {
+    if (difficulty === 'Hard' || difficulty === 'Expert') {
+      factors.push(`${difficulty} deal, smaller penalty`);
+    } else {
+      factors.push(`${difficulty} deal`);
+    }
+    if (moves > 0) {
+      factors.push('Progress counted, keep going');
+    }
+  }
+
+  return (
+    <motion.div
+      className="text-left space-y-1 pt-1"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: 0.5 }}
+    >
+      {factors.map((f, i) => (
+        <p key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+          <span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${won ? 'bg-rating-up' : 'bg-muted-foreground'}`} />
+          {f}
+        </p>
+      ))}
     </motion.div>
   );
 }

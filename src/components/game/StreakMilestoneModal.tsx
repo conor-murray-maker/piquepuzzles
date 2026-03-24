@@ -17,7 +17,9 @@ export function StreakMilestoneModal({ milestone, onDismiss, onShowPaywall }: St
   const { user, isPremium } = useAuth();
   const [dismissing, setDismissing] = useState(false);
 
-  useEffect(() => { if (show) haptic.success(); }, [show]);
+  useEffect(() => { if (milestone) haptic.success(); }, [milestone]);
+
+  const handleShare = useCallback(async () => {
     const text = `🔥 ${milestone} Day Streak on Pique!\nI've been sharpening my mind for ${milestone} days straight.\n\nPlay at piquepuzzles.lovable.app`;
     if (navigator.share) {
       try { await navigator.share({ title: 'Pique Streak', text }); } catch {}

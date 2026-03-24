@@ -885,6 +885,29 @@ Deno.serve(async (req) => {
         return json({ success: true, updated: dealIds.length });
       }
 
+      case "list_releases": {
+        const { data, error } = await adminClient
+          .from("releases")
+          .select("*")
+          .order("released_at", { ascending: false });
+        if (error) throw error;
+        return json(data);
+      }
+
+      case "create_release": {
+        const { version, title, notes } = params as { version: string; title: string; notes: string[] };
+        if (!version || !title || !notes?.length) {
+          return json({ error: "version, title, and notes are required" }, 400);
+        }
+        const { data, error } = await adminClient
+          .from("releases")
+          .insert({ version, title, notes })
+          .select()
+          .single();
+        if (error) throw error;
+        return json(data);
+      }
+
       default:
         return json({ error: "Unknown action" }, 400);
     }

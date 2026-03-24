@@ -477,6 +477,262 @@ Deno.serve(async (req) => {
         return json(result);
       }
 
+      case "diagnostic_snapshot": {
+        const today = new Date().toISOString().split("T")[0];
+        const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+
+        // Fetch all data in parallel
+        const [
+          profilesRes, allDealsRes, recentGamesRes, allGamesRes,
+          streakHistRes, dailyChalRes, dailyCompRes, tableCountsRes,
+          dealQueueRes,
+        ] = await Promise.all([
+          adminClient.from("profiles").select("*"),
+          adminClient.from("deals").select("*"),
+          adminClient.from("game_history").select("*").order("played_at", { ascending: false }).limit(200),
+          adminClient.from("game_history").select("won, difficulty, performance_modifier, final_delta, base_delta, time_seconds, moves, game_mode, deal_uuid, played_at").limit(1000),
+          adminClient.from("streak_history").select("*").gte("date", weekAgo),
+          adminClient.from("daily_challenges").select("*, deals(*)").eq("date", today).maybeSingle(),
+          adminClient.from("daily_challenge_completions").select("*, profiles(display_name)").eq("date", today).order("actual_time", { ascending: true }),
+          Promise.all(
+            ["deals","game_history","profiles","deal_queue","user_played_deals","streak_history","daily_challenges"].map(async t => {
+              const { count } = await adminClient.from(t).select("id", { count: "exact", head: true });
+              return [t, count || 0] as [string, number];
+            })
+          ),
+          adminClient.from("deal_queue").select("user_id, game_mode, served_at"),
+        ]);
+
+        const profiles = profilesRes.data || [];
+        const allDeals = allDealsRes.data || [];
+        const recentGames = recentGamesRes.data || [];
+        const allGames = allGamesRes.data || [];
+        const completions = dailyCompRes.data || [];
+        const dealQueue = dealQueueRes.data || [];
+
+        // Users
+        const users = profiles.map((p: any) => ({
+          userId: p.id,
+          displayName: p.display_name,
+          puzzleIQ: p.rating,
+          tier: p.subscription_tier || "free",
+          gamesPlayed: p.games_played,
+          wins: p.games_won,
+          winRate: p.games_played > 0 ? +(p.games_won / p.games_played).toFixed(3) : 0,
+          currentStreak: p.current_streak,
+          bestStreak: p.best_streak,
+          subscriptionStatus: p.subscription_status,
+          joinedAt: p.created_at,
+          lastActiveAt: p.updated_at,
+        }));
+
+        // Deal pool
+        const byTier: Record<string, number> = { starter: 0, organic: 0, daily_challenge: 0 };
+        const byMode: Record<string, number> = { klondike: 0, freecell: 0 };
+        const byDiff: Record<string, number> = { easy: 0, medium: 0, hard: 0, expert: 0 };
+        let totalConf = 0, totalInitial = 0, totalBlended = 0, totalDrift = 0;
+        let solverOnly = 0, blending = 0, empiricalOnly = 0;
+        for (const d of allDeals) {
+          byTier[d.tier] = (byTier[d.tier] || 0) + 1;
+          byMode[d.game_mode] = (byMode[d.game_mode] || 0) + 1;
+          totalConf += d.confidence;
+          totalInitial += d.dds_initial;
+          totalBlended += d.dds_blended;
+          totalDrift += Math.abs(d.dds_blended - d.dds_initial);
+          if (d.pool_attempts < 30) solverOnly++;
+          else if (d.pool_attempts < 100) blending++;
+          else empiricalOnly++;
+          const dds = d.dds_blended;
+          if (dds < 35) byDiff.easy++;
+          else if (dds < 58) byDiff.medium++;
+          else if (dds < 78) byDiff.hard++;
+          else byDiff.expert++;
+        }
+        const n = allDeals.length || 1;
+
+        // Recent games mapped
+        const dailyDealId = dailyChalRes.data?.deal_id;
+        const mappedGames = recentGames.map((g: any) => ({
+          gameId: g.id,
+          userId: g.user_id,
+          gameMode: g.game_mode,
+          result: g.won ? "win" : "loss",
+          actualMoves: g.moves,
+          actualTimeSeconds: g.time_seconds,
+          hintsUsed: g.hints_used,
+          performanceModifier: g.performance_modifier,
+          baseDelta: g.base_delta,
+          finalDelta: g.final_delta,
+          ratingBefore: g.rating_before,
+          ratingAfter: g.rating_after,
+          dealDDS: 0,
+          isDailyChallenge: g.deal_uuid === dailyDealId,
+          completedAt: g.played_at,
+        }));
+
+        // Scoring distribution
+        const pms = allGames.map((g: any) => g.performance_modifier).filter((v: any) => v != null) as number[];
+        const deltas = allGames.map((g: any) => g.final_delta).filter((v: any) => v != null) as number[];
+        pms.sort((a, b) => a - b);
+        deltas.sort((a, b) => a - b);
+        const median = (arr: number[]) => arr.length === 0 ? 0 : arr.length % 2 === 0 ? (arr[arr.length/2-1] + arr[arr.length/2]) / 2 : arr[Math.floor(arr.length/2)];
+        const mean = (arr: number[]) => arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length;
+
+        const pmDist: Record<string, number> = { "0.5-0.7": 0, "0.7-0.9": 0, "0.9-1.1": 0, "1.1-1.3": 0, "1.3-1.5": 0 };
+        for (const v of pms) {
+          if (v < 0.7) pmDist["0.5-0.7"]++;
+          else if (v < 0.9) pmDist["0.7-0.9"]++;
+          else if (v < 1.1) pmDist["0.9-1.1"]++;
+          else if (v < 1.3) pmDist["1.1-1.3"]++;
+          else pmDist["1.3-1.5"]++;
+        }
+
+        const eloDist: Record<string, number> = { negative: 0, zero: 0, "1-5": 0, "6-15": 0, "16-30": 0, "30+": 0 };
+        let nullOrZero = 0, winFloor = 0, lossCeiling = 0;
+        for (const v of deltas) {
+          if (v == null || v === 0) { nullOrZero++; eloDist.zero++; }
+          else if (v < 0) { eloDist.negative++; if (v >= -3) lossCeiling++; }
+          else if (v <= 5) { eloDist["1-5"]++; if (v <= 2) winFloor++; }
+          else if (v <= 15) eloDist["6-15"]++;
+          else if (v <= 30) eloDist["16-30"]++;
+          else eloDist["30+"]++;
+        }
+
+        const byDiffGames: Record<string, { wins: number; total: number; moves: number; time: number }> = {};
+        for (const g of allGames) {
+          const d = (g.difficulty || "medium").toLowerCase();
+          if (!byDiffGames[d]) byDiffGames[d] = { wins: 0, total: 0, moves: 0, time: 0 };
+          byDiffGames[d].total++;
+          if (g.won) byDiffGames[d].wins++;
+          byDiffGames[d].moves += g.moves || 0;
+          byDiffGames[d].time += g.time_seconds || 0;
+        }
+        const wrByDiff: Record<string, number> = {};
+        const avgMoves: Record<string, number> = {};
+        const avgTime: Record<string, number> = {};
+        for (const [k, v] of Object.entries(byDiffGames)) {
+          wrByDiff[k] = v.total > 0 ? +(v.wins / v.total).toFixed(3) : 0;
+          avgMoves[k] = v.total > 0 ? +(v.moves / v.total).toFixed(1) : 0;
+          avgTime[k] = v.total > 0 ? +(v.time / v.total).toFixed(1) : 0;
+        }
+
+        // Streaks
+        const activeStreaks = profiles.filter((p: any) => p.current_streak >= 2);
+        const streakDist: Record<string, number> = { "2-6": 0, "7-13": 0, "14-29": 0, "30+": 0 };
+        for (const p of activeStreaks) {
+          const s = p.current_streak;
+          if (s <= 6) streakDist["2-6"]++;
+          else if (s <= 13) streakDist["7-13"]++;
+          else if (s <= 29) streakDist["14-29"]++;
+          else streakDist["30+"]++;
+        }
+        const milestones = [3, 7, 14, 30, 50, 100];
+        const milestonesReached: Record<number, number> = {};
+        for (const m of milestones) {
+          milestonesReached[m] = profiles.filter((p: any) => p.best_streak >= m).length;
+        }
+        const freezesThisWeek = (streakHistRes.data || []).filter((s: any) => s.condition_met === "freeze").length;
+        const atRisk = profiles.filter((p: any) => p.current_streak >= 3 && p.last_streak_date !== today).length;
+
+        // Deal queue health
+        const queueMap: Record<string, Record<string, number>> = {};
+        for (const q of dealQueue) {
+          if (q.served_at) continue;
+          const key = `${q.user_id}|${q.game_mode}`;
+          if (!queueMap[key]) queueMap[key] = { count: 0 };
+          queueMap[key].count++;
+        }
+        const dealQueueHealth = Object.entries(queueMap).map(([key, val]) => {
+          const [userId, gameMode] = key.split("|");
+          return { userId, gameMode, queueDepth: val.count, flagged: val.count <= 1 };
+        });
+
+        // Daily challenge today
+        const dc = dailyChalRes.data;
+        const dcCompletions = completions;
+        const dcWins = dcCompletions.filter((c: any) => c.result === "won").length;
+        const dailyChallengeToday = {
+          exists: !!dc,
+          dealId: dc?.deal_id || null,
+          gameMode: dc?.game_mode || null,
+          targetDDSMin: dc?.target_dds_min || 0,
+          targetDDSMax: dc?.target_dds_max || 0,
+          attemptsToday: dcCompletions.length,
+          completionsToday: dcCompletions.length,
+          winRateToday: dcCompletions.length > 0 ? +(dcWins / dcCompletions.length).toFixed(3) : 0,
+          leaderboardTop5: dcCompletions.slice(0, 5).map((c: any) => ({
+            displayName: c.profiles?.display_name || "Unknown",
+            result: c.result,
+            moves: c.actual_moves,
+            time: c.actual_time,
+            delta: c.final_delta,
+          })),
+        };
+
+        const tableCounts: Record<string, number> = {};
+        for (const [t, c] of tableCountsRes) tableCounts[t] = c;
+
+        const snapshot = {
+          generatedAt: new Date().toISOString(),
+          userCount: profiles.length,
+          users,
+          dealPool: {
+            total: allDeals.length,
+            byTier, byMode, byDifficulty: byDiff,
+            avgConfidence: +(totalConf / n).toFixed(3),
+            ddsBlendStage: { solverOnly, blending, empiricalOnly },
+            avgDDSInitial: +(totalInitial / n).toFixed(1),
+            avgDDSBlended: +(totalBlended / n).toFixed(1),
+            avgDDSDrift: +(totalDrift / n).toFixed(2),
+          },
+          recentGames: mappedGames,
+          scoringDistribution: {
+            performanceModifiers: {
+              min: pms.length ? pms[0] : 0,
+              max: pms.length ? pms[pms.length - 1] : 0,
+              mean: +mean(pms).toFixed(3),
+              median: +median(pms).toFixed(3),
+              distribution: pmDist,
+            },
+            eloDeltas: {
+              min: deltas.length ? deltas[0] : 0,
+              max: deltas.length ? deltas[deltas.length - 1] : 0,
+              mean: +mean(deltas).toFixed(1),
+              median: +median(deltas),
+              distribution: eloDist,
+            },
+            winRateByDifficulty: wrByDiff,
+            avgMovesPerDifficulty: avgMoves,
+            avgTimePerDifficulty: avgTime,
+            nullOrZeroDeltaCount: nullOrZero,
+            winFloorTriggeredCount: winFloor,
+            lossCeilingTriggeredCount: lossCeiling,
+          },
+          streakData: {
+            usersWithActiveStreak: activeStreaks.length,
+            streakDistribution: streakDist,
+            milestonesReached,
+            freezesUsedThisWeek: freezesThisWeek,
+            atRiskToday: atRisk,
+          },
+          systemHealth: {
+            cronJobs: [],
+            edgeFunctions: {
+              "complete-game": { lastRun: null, status: "unknown" },
+              "refill-deal-queue": { lastRun: null, status: "unknown" },
+              "schedule-daily-challenge": { lastRun: null, status: "unknown" },
+              "award-streak-freezes": { lastRun: null, status: "unknown" },
+              "streak-risk-notifications": { lastRun: null, status: "unknown" },
+            },
+            dealQueueHealth,
+            dailyChallengeToday,
+            tableRowCounts: tableCounts,
+          },
+        };
+
+        return json(snapshot);
+      }
+
       default:
         return json({ error: "Unknown action" }, 400);
     }

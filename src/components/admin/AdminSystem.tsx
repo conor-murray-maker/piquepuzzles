@@ -64,6 +64,38 @@ export function AdminSystem() {
 
   return (
     <div className="space-y-6">
+      {/* Diagnostic Export */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-4">
+            <Button onClick={exportSnapshot} disabled={snapshotLoading} className="gap-2">
+              {snapshotLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Export Diagnostic Snapshot
+            </Button>
+            <p className="text-xs text-muted-foreground pt-2">Generates a full system snapshot for external analysis.</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={snapshotOpen} onOpenChange={setSnapshotOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Diagnostic Snapshot</DialogTitle>
+          </DialogHeader>
+          <div className="flex gap-2 pb-2">
+            <Button size="sm" variant="outline" onClick={copySnapshot} className="gap-1.5">
+              <Copy className="h-3.5 w-3.5" /> Copy to clipboard
+            </Button>
+            <Button size="sm" variant="outline" onClick={downloadSnapshot} className="gap-1.5">
+              <Download className="h-3.5 w-3.5" /> Download as JSON
+            </Button>
+          </div>
+          <ScrollArea className="flex-1 min-h-0 rounded border bg-muted/50 p-4">
+            <pre className="text-xs font-mono whitespace-pre-wrap break-all">{snapshotData}</pre>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
       {/* Daily Challenge Status */}
       <Card>
         <CardHeader><CardTitle className="text-base">Today's Daily Challenge</CardTitle></CardHeader>

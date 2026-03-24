@@ -160,23 +160,32 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          day_of_week: number | null
           deal_id: string
           game_mode: string
           id: string
+          target_dds_max: number | null
+          target_dds_min: number | null
         }
         Insert: {
           created_at?: string
           date: string
+          day_of_week?: number | null
           deal_id: string
           game_mode?: string
           id?: string
+          target_dds_max?: number | null
+          target_dds_min?: number | null
         }
         Update: {
           created_at?: string
           date?: string
+          day_of_week?: number | null
           deal_id?: string
           game_mode?: string
           id?: string
+          target_dds_max?: number | null
+          target_dds_min?: number | null
         }
         Relationships: [
           {
@@ -369,16 +378,22 @@ export type Database = {
           best_streak: number
           created_at: string
           current_streak: number
+          daily_challenge_completed_today: boolean
+          daily_wins_today: number
           display_name: string | null
           games_played: number
           games_won: number
           id: string
+          last_streak_date: string | null
           last_win_date: string | null
+          pending_milestone: number | null
           premium_expires_at: string | null
           rating: number
+          streak_freeze_used_on: string | null
           streak_freezes_remaining: number
           subscription_status: string
           subscription_tier: string | null
+          timezone_offset: number
           updated_at: string
         }
         Insert: {
@@ -386,16 +401,22 @@ export type Database = {
           best_streak?: number
           created_at?: string
           current_streak?: number
+          daily_challenge_completed_today?: boolean
+          daily_wins_today?: number
           display_name?: string | null
           games_played?: number
           games_won?: number
           id: string
+          last_streak_date?: string | null
           last_win_date?: string | null
+          pending_milestone?: number | null
           premium_expires_at?: string | null
           rating?: number
+          streak_freeze_used_on?: string | null
           streak_freezes_remaining?: number
           subscription_status?: string
           subscription_tier?: string | null
+          timezone_offset?: number
           updated_at?: string
         }
         Update: {
@@ -403,17 +424,53 @@ export type Database = {
           best_streak?: number
           created_at?: string
           current_streak?: number
+          daily_challenge_completed_today?: boolean
+          daily_wins_today?: number
           display_name?: string | null
           games_played?: number
           games_won?: number
           id?: string
+          last_streak_date?: string | null
           last_win_date?: string | null
+          pending_milestone?: number | null
           premium_expires_at?: string | null
           rating?: number
+          streak_freeze_used_on?: string | null
           streak_freezes_remaining?: number
           subscription_status?: string
           subscription_tier?: string | null
+          timezone_offset?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      streak_history: {
+        Row: {
+          condition_met: string
+          created_at: string
+          date: string
+          id: string
+          streak_day_number: number
+          streak_length_at_time: number
+          user_id: string
+        }
+        Insert: {
+          condition_met: string
+          created_at?: string
+          date: string
+          id?: string
+          streak_day_number: number
+          streak_length_at_time: number
+          user_id: string
+        }
+        Update: {
+          condition_met?: string
+          created_at?: string
+          date?: string
+          id?: string
+          streak_day_number?: number
+          streak_length_at_time?: number
+          user_id?: string
         }
         Relationships: []
       }

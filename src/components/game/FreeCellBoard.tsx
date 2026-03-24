@@ -28,6 +28,7 @@ import { registerDeal } from '@/services/DealRegistrationService';
 import { RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { haptic } from '@/lib/haptics';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,

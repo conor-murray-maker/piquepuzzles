@@ -27,9 +27,8 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_ANON_KEY')!,
         { global: { headers: { Authorization: authHeader } } }
       );
-      const token = authHeader.replace('Bearer ', '');
-      const { data: claimsData } = await anonClient.auth.getClaims(token);
-      if (claimsData?.claims?.email === 'conor-murray@hotmail.com') {
+      const { data: { user: authUser } } = await anonClient.auth.getUser(authHeader.replace('Bearer ', ''));
+      if (authUser?.email === 'conor-murray@hotmail.com') {
         authorized = true;
       }
     }

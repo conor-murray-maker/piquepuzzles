@@ -50,6 +50,7 @@ export function useGamePersistence() {
           dealId: gameState.dealId,
           dealUuid: effectiveDealUuid,
           isDaily: isDaily || false,
+          dealDDS: gameState.difficultyScore || 0,
         },
       });
 

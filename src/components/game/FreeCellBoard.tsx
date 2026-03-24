@@ -28,6 +28,7 @@ import { registerDeal } from '@/services/DealRegistrationService';
 import { RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { haptic } from '@/lib/haptics';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -271,8 +272,16 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     if (!gameStarted) setGameStarted(true);
     pushHistory(state);
     setState(newState);
-    if (triggersAutoSend) setAutoSendChain(true);
-    if (newState.isWon) fireGameEnd(newState);
+    if (triggersAutoSend) {
+      setAutoSendChain(true);
+      haptic.medium();
+    } else {
+      haptic.light();
+    }
+    if (newState.isWon) {
+      haptic.success();
+      fireGameEnd(newState);
+    }
     return true;
   }, [state, pushHistory, fireGameEnd, gameStarted]);
 
@@ -360,6 +369,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
+    haptic.medium();
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
     setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
@@ -367,6 +377,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const handleHint = useCallback(async () => {
     if (hintLoading) return;
+    haptic.light();
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
     setHintJustUsed(true);
     setTimeout(() => setHintJustUsed(false), 3000);
@@ -424,6 +435,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const handleGiveUp = useCallback(() => {
     setShowGiveUpDialog(false);
+    haptic.heavy();
     clearFreeCellStorage();
     const lostState: FreeCellState = { ...state, isWon: false };
     if (onGiveUp) onGiveUp(lostState, elapsedRef.current);

@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { haptic } from '@/lib/haptics';
 import { StreakMilestoneModal } from './StreakMilestoneModal';
 import { motion } from 'framer-motion';
 import { KlondikeState } from '@/game/types';
@@ -45,6 +46,12 @@ export function PostGameScreen({
   const { user, profile } = useAuth();
   const [sharing, setSharing] = useState(false);
   const [showMilestone, setShowMilestone] = useState(!!streakUpdate?.milestoneReached);
+
+  // Haptic on mount based on result
+  useEffect(() => {
+    if (gameState.isWon) haptic.success();
+    else haptic.heavy();
+  }, []);
   const timeSeconds = elapsedSeconds;
   const percentile = gameState.isWon
     ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)

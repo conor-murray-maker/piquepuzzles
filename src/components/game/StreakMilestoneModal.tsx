@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
+import { haptic } from '@/lib/haptics';
 
 interface StreakMilestoneModalProps {
   milestone: number;
@@ -15,6 +16,8 @@ interface StreakMilestoneModalProps {
 export function StreakMilestoneModal({ milestone, onDismiss, onShowPaywall }: StreakMilestoneModalProps) {
   const { user, isPremium } = useAuth();
   const [dismissing, setDismissing] = useState(false);
+
+  useEffect(() => { if (milestone) haptic.success(); }, [milestone]);
 
   const handleShare = useCallback(async () => {
     const text = `🔥 ${milestone} Day Streak on Pique!\nI've been sharpening my mind for ${milestone} days straight.\n\nPlay at piquepuzzles.lovable.app`;

@@ -500,7 +500,7 @@ Deno.serve(async (req) => {
             })
           ),
           adminClient.from("deal_queue").select("user_id, game_mode, served_at"),
-          (async () => { try { const { data } = await adminClient.rpc("get_cron_jobs"); return data || []; } catch { return []; } })(),
+          (async () => { try { const { data, error } = await adminClient.rpc("get_cron_jobs"); if (error) { console.warn("get_cron_jobs RPC error:", error.message); return null; } return data || []; } catch (e) { console.warn("get_cron_jobs exception:", e); return null; } })(),
         ]);
 
         const profiles = profilesRes.data || [];
@@ -781,7 +781,7 @@ Deno.serve(async (req) => {
         const ts = now.toISOString();
 
         if (recentZeroDDS > 0) alerts.push({ severity: "critical", code: "ZERO_DDS_GAMES", message: `${recentZeroDDS} games in last 24h have dealDDS = 0`, affectedCount: recentZeroDDS, detectedAt: ts });
-        if ((cronRes as any[]).length === 0) alerts.push({ severity: "critical", code: "NO_CRON_JOBS", message: "No cron jobs registered in pg_cron", affectedCount: 0, detectedAt: ts });
+        if (cronRes !== null && (cronRes as any[]).length === 0) alerts.push({ severity: "critical", code: "NO_CRON_JOBS", message: "No cron jobs registered in pg_cron", affectedCount: 0, detectedAt: ts });
         if (ratingValidityScore < 0.8) alerts.push({ severity: "critical", code: "LOW_VALIDITY_SCORE", message: `Rating validity score is ${ratingValidityScore} (threshold: 0.8)`, affectedCount: totalGamesCount, detectedAt: ts });
         if (!dc) alerts.push({ severity: "critical", code: "NO_DAILY_CHALLENGE", message: "No daily challenge seeded for today", affectedCount: 0, detectedAt: ts });
 
@@ -849,10 +849,10 @@ Deno.serve(async (req) => {
             milestonesReached, freezesUsedThisWeek: freezesThisWeek, atRiskToday: atRisk,
           },
           systemHealth: {
-            cronJobs: (cronRes as any[]).map((j: any) => ({
+            cronJobs: cronRes !== null ? (cronRes as any[]).map((j: any) => ({
               name: j.jobname || j.name, schedule: j.schedule, lastRun: j.last_run || null,
               lastRunStatus: j.last_run_status || (j.active ? "active" : "unknown"),
-            })),
+            })) : [{ name: "unknown", schedule: "RPC unavailable", lastRunStatus: "could not query" }],
             edgeFunctions: {
               "complete-game": { lastRun: null, status: "unknown" },
               "refill-deal-queue": { lastRun: null, status: "unknown" },

@@ -23,7 +23,7 @@ import { WinProbabilityBar } from './WinProbabilityBar';
 import { GameActionBar } from './GameActionBar';
 import { useMCTSWorker } from '@/hooks/useMCTSWorker';
 import { registerDeal } from '@/services/DealRegistrationService';
-import { Timer, Hash, Trophy, Layers, X, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Timer, Hash, Trophy, Layers, X, ArrowLeft, RotateCcw, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import {

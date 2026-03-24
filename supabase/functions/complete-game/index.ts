@@ -147,8 +147,12 @@ async function updateStreak(
     current_streak: currentStreak,
     best_streak: bestStreak,
     streak_freezes_remaining: freezesRemaining,
-    last_streak_date: conditionMet ? today : (lastStreakDate ?? today),
   };
+
+  // Only set last_streak_date when condition is actually met — prevents blocking future writes today
+  if (conditionMet && lastStreakDate !== today) {
+    streakUpdate.last_streak_date = today;
+  }
 
   if (freezeUsed) {
     streakUpdate.streak_freeze_used_on = freezeUsedOn;

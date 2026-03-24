@@ -274,6 +274,9 @@ export function AdminSystem() {
             <Button variant="outline" onClick={() => triggerAction("trigger_refill", "Refill queues")} disabled={action.isPending}>
               <RefreshCw className="h-4 w-4 mr-2" /> Refill All Deal Queues
             </Button>
+            <Button variant="outline" onClick={() => triggerAction("seed_starter_pool", "Seed starter pool")} disabled={action.isPending}>
+              <Database className="h-4 w-4 mr-2" /> Seed Starter Pool
+            </Button>
           </div>
         </CardContent>
       </Card>

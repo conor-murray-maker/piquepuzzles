@@ -29,6 +29,12 @@ interface PostGameScreenProps {
     challengerTime: number;
     challengerRating: number;
   } | null;
+  streakUpdate?: {
+    currentStreak: number;
+    bestStreak: number;
+    freezeUsed: boolean;
+    milestoneReached: number | null;
+  } | null;
 }
 
 export function PostGameScreen({

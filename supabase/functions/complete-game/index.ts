@@ -491,14 +491,38 @@ Deno.serve(async (req) => {
       freshProfile || profile,
     );
 
-    // 9. Return result
+    // 9. Compute breakdown points that sum exactly to finalDelta
+    let timeBonusPoints = 0;
+    let movesBonusPoints = 0;
+    let hintPenaltyPoints = 0;
+    const baseDeltaForBreakdown = baseDelta;
+
+    if (isWin) {
+      timeBonusPoints = Math.round(baseDelta * (timeEfficiency - 1.0) * 0.4);
+      movesBonusPoints = Math.round(baseDelta * (moveEfficiency - 1.0) * 0.4);
+      hintPenaltyPoints = Math.round(baseDelta * (1 - hintPenalty));
+      // Fix rounding: adjust baseDelta display so sum equals finalDelta
+      const partialSum = timeBonusPoints + movesBonusPoints - hintPenaltyPoints;
+      // finalDelta = baseDeltaDisplay + timeBonusPoints + movesBonusPoints - hintPenaltyPoints
+      // so baseDeltaDisplay = finalDelta - partialSum
+    }
+    const baseDeltaDisplay = isWin ? (finalDelta - timeBonusPoints - movesBonusPoints + hintPenaltyPoints) : finalDelta;
+
+    // 10. Return result
     return new Response(JSON.stringify({
       finalDelta,
+      baseDelta: baseDeltaDisplay,
       newRating,
       previousRating: playerRating,
       newTier: getTierName(newRating),
       performanceModifier,
       dealDDS: dds,
+      dealAvgTime: dealAvgTime,
+      dealAvgMoves: dealAvgMoves,
+      timeBonusPoints,
+      movesBonusPoints,
+      hintPenaltyPoints,
+      hintsUsed,
       currentStreak: streakResult.currentStreak,
       streakUpdate: {
         currentStreak: streakResult.currentStreak,

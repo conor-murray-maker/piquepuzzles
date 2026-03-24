@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { Layers, Calendar, BarChart3, User } from 'lucide-react';
+import { haptic } from '@/lib/haptics';
 
 interface BottomNavProps {
   hidden?: boolean;
@@ -30,6 +31,7 @@ export function BottomNav({ hidden }: BottomNavProps) {
             <NavLink
               key={path}
               to={path}
+              onClick={() => haptic.light()}
               className={`flex flex-col items-center justify-center gap-0.5 w-16 h-full min-h-[44px] transition-colors ${
                 isActive ? 'text-foreground' : 'text-muted-foreground'
               }`}

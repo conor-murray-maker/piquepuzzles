@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { haptic } from '@/lib/haptics';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
@@ -151,6 +152,7 @@ export default function Daily() {
 
   const handlePlay = () => {
     if (!challenge?.deals) return;
+    haptic.medium();
     navigate(
       `/play?mode=${challenge.game_mode}&seed=${challenge.deals.seed}&drawMode=${challenge.deals.draw_mode}&daily=${todayStr}&dailyDealId=${challenge.deal_id}`
     );
@@ -166,10 +168,11 @@ export default function Daily() {
 
   return (
     <div
-      className="bg-background"
+      className="bg-background overflow-y-auto"
       style={{
-        minHeight: '100dvh',
+        height: '100dvh',
         paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
       <header

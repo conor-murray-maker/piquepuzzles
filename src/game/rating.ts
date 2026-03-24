@@ -6,15 +6,15 @@ import { Difficulty } from './types';
 
 export function estimateDDS(minMoves: number, gameMode: 'klondike' | 'freecell'): number {
   if (gameMode === 'klondike') {
-    if (minMoves < 60) return Math.round((minMoves / 60) * 25);
-    if (minMoves < 90) return Math.round(26 + ((minMoves - 60) / 30) * 29);
-    if (minMoves < 120) return Math.round(56 + ((minMoves - 90) / 30) * 24);
-    return Math.round(Math.min(100, 81 + ((minMoves - 120) / 50) * 19));
+    if (minMoves < 100) return Math.round((minMoves / 100) * 25);
+    if (minMoves < 130) return Math.round(26 + ((minMoves - 100) / 30) * 29);
+    if (minMoves < 160) return Math.round(56 + ((minMoves - 130) / 30) * 24);
+    return Math.round(Math.min(100, 81 + ((minMoves - 160) / 60) * 19));
   }
-  if (minMoves < 50) return Math.round((minMoves / 50) * 25);
-  if (minMoves < 80) return Math.round(26 + ((minMoves - 50) / 30) * 29);
-  if (minMoves < 110) return Math.round(56 + ((minMoves - 80) / 30) * 24);
-  return Math.round(Math.min(100, 81 + ((minMoves - 110) / 40) * 19));
+  if (minMoves < 125) return Math.round((minMoves / 125) * 25);
+  if (minMoves < 175) return Math.round(26 + ((minMoves - 125) / 50) * 29);
+  if (minMoves < 250) return Math.round(56 + ((minMoves - 175) / 75) * 24);
+  return Math.round(Math.min(100, 81 + ((minMoves - 250) / 100) * 19));
 }
 
 export function dealRatingFromDDS(dds: number): number {

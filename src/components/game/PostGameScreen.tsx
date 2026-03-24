@@ -7,7 +7,7 @@ import { getPerformancePercentile } from '@/game/rating';
 import { PuzzleIQBadge, RatingChange } from './PuzzleIQBadge';
 import { TierProgressBar } from './TierProgressBar';
 import { Button } from '@/components/ui/button';
-import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft, Swords } from 'lucide-react';
+import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft, Share2 } from 'lucide-react';
 import { ChallengeService } from '@/services/ChallengeService';
 import { formatTimeRaw } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';

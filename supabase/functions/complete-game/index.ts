@@ -163,8 +163,8 @@ async function updateStreak(
     streak_freezes_remaining: freezesRemaining,
   };
 
-  // Only set last_streak_date when condition is actually met — prevents blocking future writes today
-  if (conditionMet && lastStreakDate !== today) {
+  // Only set last_streak_date when condition is actually met and streak earned
+  if (conditionMet && !streakAlreadyEarnedToday) {
     streakUpdate.last_streak_date = today;
   }
 

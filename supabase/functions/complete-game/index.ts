@@ -30,18 +30,140 @@ function getTierName(rating: number): string {
   return 'Elite';
 }
 
-/** Get today's date string in YYYY-MM-DD UTC */
-function todayUTC(): string {
+const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
+
+/** Get a date string in the user's local timezone given their UTC offset in minutes */
+function getUserLocalDate(timezoneOffset: number): string {
   const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-    .toISOString().split('T')[0];
+  const localMs = now.getTime() + timezoneOffset * 60000;
+  const local = new Date(localMs);
+  return local.toISOString().split('T')[0];
 }
 
-/** Get yesterday's date string in YYYY-MM-DD UTC */
-function yesterdayUTC(): string {
-  const now = new Date();
-  const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-  return yesterday.toISOString().split('T')[0];
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+/** Update streak after game completion */
+async function updateStreak(
+  supabaseAdmin: any,
+  userId: string,
+  result: string,
+  isDailyChallenge: boolean,
+  profile: any,
+): Promise<{
+  currentStreak: number;
+  bestStreak: number;
+  freezeUsed: boolean;
+  milestoneReached: number | null;
+}> {
+  const tzOffset = (profile.timezone_offset as number) ?? 0;
+  const today = getUserLocalDate(tzOffset);
+  const lastStreakDate = profile.last_streak_date as string | null;
+
+  let dailyWinsToday = profile.daily_wins_today as number;
+  let dailyChallengeCompletedToday = profile.daily_challenge_completed_today as boolean;
+
+  // Reset daily counters if it's a new day
+  if (lastStreakDate !== today && profile.last_streak_date !== null) {
+    // Check if last_streak_date is before today (new day)
+    const lastDate = profile.last_streak_date as string | null;
+    // We check based on whether any counter update happened today
+    // Simple: if last_streak_date != today, we may need to reset counters
+    // But we should track the "counter date" separately. Use a simpler approach:
+    // Reset if the stored date is not today
+  }
+
+  // We need a separate "counter_date" concept. Let's use the profile fields directly:
+  // If last_streak_date < today, reset counters
+  if (!lastStreakDate || lastStreakDate < today) {
+    dailyWinsToday = 0;
+    dailyChallengeCompletedToday = false;
+  }
+
+  // Update daily counters
+  const isWin = result === 'win';
+  if (isDailyChallenge && isWin) {
+    dailyChallengeCompletedToday = true;
+  }
+  if (isWin) {
+    dailyWinsToday += 1;
+  }
+
+  // Check if streak condition met today
+  const conditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
+  const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : 'two_wins';
+
+  let currentStreak = profile.current_streak as number;
+  let bestStreak = profile.best_streak as number;
+  let freezesRemaining = profile.streak_freezes_remaining as number;
+  let freezeUsedOn = profile.streak_freeze_used_on as string | null;
+  let freezeUsed = false;
+  let milestoneReached: number | null = null;
+
+  if (conditionMet && lastStreakDate !== today) {
+    const yesterday = addDays(today, -1);
+    const dayBeforeYesterday = addDays(today, -2);
+
+    if (lastStreakDate === yesterday) {
+      // Continuing streak
+      currentStreak += 1;
+    } else if (
+      lastStreakDate === dayBeforeYesterday &&
+      freezesRemaining > 0 &&
+      freezeUsedOn !== yesterday
+    ) {
+      // Missed yesterday — auto-apply freeze
+      currentStreak += 1;
+      freezesRemaining -= 1;
+      freezeUsedOn = yesterday;
+      freezeUsed = true;
+    } else {
+      // Streak broken or first day
+      currentStreak = 1;
+    }
+
+    bestStreak = Math.max(currentStreak, bestStreak);
+
+    // Check milestones
+    if (STREAK_MILESTONES.includes(currentStreak)) {
+      milestoneReached = currentStreak;
+    }
+
+    // Insert streak history
+    await supabaseAdmin.from('streak_history').insert({
+      user_id: userId,
+      date: today,
+      streak_day_number: currentStreak,
+      condition_met: conditionType,
+      streak_length_at_time: currentStreak,
+    });
+  }
+
+  // Update profile with streak data
+  const streakUpdate: Record<string, unknown> = {
+    daily_wins_today: dailyWinsToday,
+    daily_challenge_completed_today: dailyChallengeCompletedToday,
+    current_streak: currentStreak,
+    best_streak: bestStreak,
+    streak_freezes_remaining: freezesRemaining,
+  };
+
+  if (conditionMet && lastStreakDate !== today) {
+    streakUpdate.last_streak_date = today;
+  }
+  if (freezeUsed) {
+    streakUpdate.streak_freeze_used_on = freezeUsedOn;
+  }
+  if (milestoneReached !== null) {
+    streakUpdate.pending_milestone = milestoneReached;
+  }
+
+  await supabaseAdmin.from('profiles').update(streakUpdate).eq('id', userId);
+
+  return { currentStreak, bestStreak, freezeUsed, milestoneReached };
 }
 
 Deno.serve(async (req) => {
@@ -92,6 +214,7 @@ Deno.serve(async (req) => {
       dealId: clientDealId,
       dealUuid: clientDealUuid,
       isDaily: clientIsDaily = false,
+      timezoneOffset = 0,
     } = body;
 
     // Input validation
@@ -119,11 +242,13 @@ Deno.serve(async (req) => {
     // Server-side isDaily verification
     let isDaily = false;
     if (clientIsDaily && clientDealUuid) {
-      const today = todayUTC();
+      const now = new Date();
+      const todayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+        .toISOString().split('T')[0];
       const { data: dc } = await supabaseAdmin
         .from('daily_challenges')
         .select('deal_id')
-        .eq('date', today)
+        .eq('date', todayStr)
         .single();
       isDaily = dc?.deal_id === clientDealUuid;
     }
@@ -142,6 +267,12 @@ Deno.serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Update timezone offset on profile
+    if (Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840) {
+      await supabaseAdmin.from('profiles').update({ timezone_offset: timezoneOffset }).eq('id', userId);
+      profile.timezone_offset = timezoneOffset;
     }
 
     // 2. Fetch deal
@@ -191,7 +322,7 @@ Deno.serve(async (req) => {
       ));
     }
 
-    // 4. ELO calculation
+    // 4. ELO calculation — pure formula, no daily/context multipliers
     const dealRating = 800 + (dds / 100) * 1200;
     const playerRating = profile.rating as number;
     const gamesPlayed = profile.games_played as number;
@@ -203,10 +334,7 @@ Deno.serve(async (req) => {
 
     let finalDelta = Math.round(baseDelta * performanceModifier);
 
-    if (isDaily) {
-      finalDelta = Math.round(finalDelta * 1.2);
-    }
-
+    // Win floor and loss ceiling — no other adjustments
     if (isWin) finalDelta = Math.max(1, finalDelta);
     else finalDelta = Math.max(-20, finalDelta);
 
@@ -251,57 +379,16 @@ Deno.serve(async (req) => {
       }).eq('id', deal.id);
     }
 
-    // 6. Calendar-day streak logic
-    const today = todayUTC();
-    const yesterday = yesterdayUTC();
-    const lastWinDate = profile.last_win_date as string | null;
-    const currentStreak = profile.current_streak as number;
-    const bestStreak = profile.best_streak as number;
-    const isPremium = profile.subscription_status === 'premium';
-    let freezesRemaining = profile.streak_freezes_remaining as number;
-
-    let newStreak: number;
-    let streakFrozen = false;
-
-    if (isWin) {
-      if (lastWinDate === today) {
-        // Already won today, streak unchanged
-        newStreak = currentStreak;
-      } else if (lastWinDate === yesterday || lastWinDate === null) {
-        // Consecutive day or first win ever
-        newStreak = currentStreak + 1;
-      } else {
-        // Gap of more than 1 day
-        if (isPremium && freezesRemaining > 0) {
-          // Streak freeze saves it
-          freezesRemaining--;
-          newStreak = currentStreak + 1;
-          streakFrozen = true;
-        } else {
-          // Streak resets, start fresh
-          newStreak = 1;
-        }
-      }
-    } else {
-      // Loss does not break streak (only missing a calendar day does)
-      newStreak = currentStreak;
-    }
-
+    // 6. Update profile rating and game counts
     const profileUpdate: Record<string, unknown> = {
       rating: newRating,
       games_played: gamesPlayed + 1,
       games_won: (profile.games_won as number) + (isWin ? 1 : 0),
-      current_streak: newStreak,
-      best_streak: Math.max(bestStreak, newStreak),
       updated_at: new Date().toISOString(),
     };
 
     if (isWin) {
-      profileUpdate.last_win_date = today;
-    }
-
-    if (streakFrozen) {
-      profileUpdate.streak_freezes_remaining = freezesRemaining;
+      profileUpdate.last_win_date = new Date().toISOString().split('T')[0];
     }
 
     await supabaseAdmin.from('profiles').update(profileUpdate).eq('id', userId);
@@ -327,7 +414,23 @@ Deno.serve(async (req) => {
       deal_uuid: deal?.id || null,
     } as Record<string, unknown>);
 
-    // 8. Return result
+    // 8. Streak update — separate from ELO, retention layer only
+    // Re-fetch profile to get latest state after rating update
+    const { data: freshProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    const streakResult = await updateStreak(
+      supabaseAdmin,
+      userId,
+      result,
+      isDaily,
+      freshProfile || profile,
+    );
+
+    // 9. Return result
     return new Response(JSON.stringify({
       finalDelta,
       newRating,
@@ -335,8 +438,13 @@ Deno.serve(async (req) => {
       newTier: getTierName(newRating),
       performanceModifier,
       dealDDS: dds,
-      streakFrozen,
-      currentStreak: newStreak,
+      currentStreak: streakResult.currentStreak,
+      streakUpdate: {
+        currentStreak: streakResult.currentStreak,
+        bestStreak: streakResult.bestStreak,
+        freezeUsed: streakResult.freezeUsed,
+        milestoneReached: streakResult.milestoneReached,
+      },
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

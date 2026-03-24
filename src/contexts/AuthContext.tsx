@@ -16,6 +16,12 @@ interface Profile {
   premium_expires_at: string | null;
   last_win_date: string | null;
   streak_freezes_remaining: number;
+  last_streak_date: string | null;
+  streak_freeze_used_on: string | null;
+  timezone_offset: number;
+  daily_wins_today: number;
+  daily_challenge_completed_today: boolean;
+  pending_milestone: number | null;
 }
 
 interface SubscriptionInfo {

@@ -4,8 +4,18 @@ import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ddsToLabel, formatTimeRaw } from '@/lib/format';
-import { Calendar, Timer, Hash, Trophy, Clock, Users } from 'lucide-react';
+import { Calendar, Timer, Hash, Trophy, Clock, Users, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { StreakBadge } from '@/components/game/StreakBadge';
+
+const DAY_LABELS: Record<number, string> = {
+  1: 'Monday Reset — fresh start',
+  0: 'Sunday Expert — this week\'s ultimate challenge',
+};
+
+function getDayOfWeekUTC(): number {
+  return new Date().getUTCDay();
+}
 
 interface DailyChallenge {
   id: string;
@@ -39,7 +49,9 @@ interface LeaderboardEntry {
 
 export default function Daily() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const currentStreak = (profile as any)?.current_streak ?? 0;
+  const dayOfWeek = getDayOfWeekUTC();
   const [challenge, setChallenge] = useState<DailyChallenge | null>(null);
   const [myCompletion, setMyCompletion] = useState<Completion | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -162,6 +174,20 @@ export default function Daily() {
       </header>
 
       <main className="px-4 sm:px-6 py-6 max-w-md mx-auto space-y-6">
+        {/* Streak status */}
+        {currentStreak >= 2 ? (
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <Flame className="w-4 h-4 text-destructive" />
+            <span className="font-medium">Day {currentStreak} of your streak</span>
+          </div>
+        ) : (
+          <div className="text-center text-sm text-muted-foreground">Start a streak today</div>
+        )}
+
+        {/* Day label */}
+        {DAY_LABELS[dayOfWeek] && (
+          <p className="text-center text-xs text-muted-foreground font-medium">{DAY_LABELS[dayOfWeek]}</p>
+        )}
         {/* Countdown */}
         <motion.div
           className="stat-card text-center py-4"
@@ -262,7 +288,7 @@ export default function Daily() {
                   Play Today's Challenge
                 </Button>
                 <p className="text-xs text-muted-foreground text-center mt-2">
-                  Daily challenges earn 1.2× rating points
+                  Complete to extend your streak
                 </p>
               </motion.div>
             )}

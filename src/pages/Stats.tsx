@@ -8,6 +8,7 @@ import { formatTime } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TrendingUp, TrendingDown, Trophy, Target, Timer, Hash, Flame, BarChart3, Users } from 'lucide-react';
+import { StreakCalendar } from '@/components/game/StreakCalendar';
 
 interface GameRecord {
   id: string;
@@ -158,6 +159,15 @@ function StatsContent({ games, stats }: {
           <p className="text-2xl font-bold font-mono">{formatTime(localStats?.avgTime ?? 0)}</p>
           <p className="text-xs text-muted-foreground">Best: {formatTime(localStats?.bestTime ?? 0)}</p>
         </div>
+      </motion.div>
+
+      {/* Streak Calendar */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <StreakCalendar />
+          </CardContent>
+        </Card>
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>

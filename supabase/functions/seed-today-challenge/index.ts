@@ -11,6 +11,36 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Auth check: require service role key or valid admin JWT
+    const authHeader = req.headers.get('Authorization');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    let authorized = false;
+
+    // Check if caller is using the service role key directly (internal/cron calls)
+    if (authHeader === `Bearer ${serviceRoleKey}`) {
+      authorized = true;
+    } else if (authHeader?.startsWith('Bearer ')) {
+      // Verify JWT and check admin email
+      const anonClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const token = authHeader.replace('Bearer ', '');
+      const { data: claimsData } = await anonClient.auth.getClaims(token);
+      if (claimsData?.claims?.email === 'conor-murray@hotmail.com') {
+        authorized = true;
+      }
+    }
+
+    if (!authorized) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!

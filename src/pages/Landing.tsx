@@ -61,7 +61,7 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background overflow-y-auto overscroll-contain" style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)', WebkitOverflowScrolling: 'touch' }}>
       {/* Hero */}
       <motion.section
         className="px-4 pt-12 pb-10 text-center max-w-md mx-auto"

@@ -68,10 +68,11 @@ export default function Index() {
 
   return (
     <div
-      className="bg-background flex flex-col"
+      className="bg-background flex flex-col overflow-y-auto overscroll-contain"
       style={{
-        minHeight: '100dvh',
-        paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 16px)',
+        height: '100dvh',
+        paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
       <WelcomeBackBanner

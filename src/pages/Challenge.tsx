@@ -24,7 +24,7 @@ export default function Challenge() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="bg-background flex items-center justify-center" style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}>
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -32,7 +32,7 @@ export default function Challenge() {
 
   if (!challenge) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="bg-background flex items-center justify-center p-4" style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}>
         <div className="text-center">
           <p className="text-lg font-semibold">Challenge not found</p>
           <Button className="mt-4" onClick={() => navigate('/')}>
@@ -51,7 +51,8 @@ export default function Challenge() {
 
   return (
     <motion.div
-      className="min-h-screen bg-background flex items-center justify-center p-4"
+      className="bg-background overflow-y-auto overscroll-contain flex items-center justify-center p-4"
+      style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)', WebkitOverflowScrolling: 'touch' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >

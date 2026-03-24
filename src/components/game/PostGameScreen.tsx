@@ -113,7 +113,8 @@ export function PostGameScreen({
       style={{
         height: '100dvh',
         paddingTop: 'var(--safe-area-top, 0px)',
-        paddingBottom: 'var(--safe-area-bottom, 0px)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
     <div className="flex items-center justify-center p-4" style={{ minHeight: '100%' }}>

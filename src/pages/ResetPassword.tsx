@@ -42,7 +42,7 @@ export default function ResetPassword() {
   if (!ready) return null;
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="bg-background overflow-y-auto overscroll-contain flex items-center justify-center p-4" style={{ height: '100dvh', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)', WebkitOverflowScrolling: 'touch' }}>
       <motion.div
         className="w-full max-w-sm space-y-6"
         initial={{ opacity: 0, y: 16 }}

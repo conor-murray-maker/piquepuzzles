@@ -32,7 +32,6 @@ function getTierName(rating: number): string {
 
 const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
 
-/** Get a date string in the user's local timezone given their UTC offset in minutes */
 function getUserLocalDate(timezoneOffset: number): string {
   const now = new Date();
   const localMs = now.getTime() + timezoneOffset * 60000;
@@ -46,7 +45,6 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().split('T')[0];
 }
 
-/** Update streak after game completion */
 async function updateStreak(
   supabaseAdmin: any,
   userId: string,
@@ -66,24 +64,11 @@ async function updateStreak(
   let dailyWinsToday = profile.daily_wins_today as number;
   let dailyChallengeCompletedToday = profile.daily_challenge_completed_today as boolean;
 
-  // Reset daily counters if it's a new day
-  if (lastStreakDate !== today && profile.last_streak_date !== null) {
-    // Check if last_streak_date is before today (new day)
-    const lastDate = profile.last_streak_date as string | null;
-    // We check based on whether any counter update happened today
-    // Simple: if last_streak_date != today, we may need to reset counters
-    // But we should track the "counter date" separately. Use a simpler approach:
-    // Reset if the stored date is not today
-  }
-
-  // We need a separate "counter_date" concept. Let's use the profile fields directly:
-  // If last_streak_date < today, reset counters
   if (!lastStreakDate || lastStreakDate < today) {
     dailyWinsToday = 0;
     dailyChallengeCompletedToday = false;
   }
 
-  // Update daily counters
   const isWin = result === 'win';
   if (isDailyChallenge && isWin) {
     dailyChallengeCompletedToday = true;
@@ -92,7 +77,6 @@ async function updateStreak(
     dailyWinsToday += 1;
   }
 
-  // Check if streak condition met today
   const conditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
   const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : 'two_wins';
 
@@ -108,38 +92,46 @@ async function updateStreak(
     const dayBeforeYesterday = addDays(today, -2);
 
     if (lastStreakDate === yesterday) {
-      // Continuing streak
       currentStreak += 1;
     } else if (
       lastStreakDate === dayBeforeYesterday &&
       freezesRemaining > 0 &&
       freezeUsedOn !== yesterday
     ) {
-      // Missed yesterday — auto-apply freeze
       currentStreak += 1;
       freezesRemaining -= 1;
       freezeUsedOn = yesterday;
       freezeUsed = true;
+    } else if (!lastStreakDate) {
+      // First ever streak day
+      currentStreak = 1;
     } else {
-      // Streak broken or first day
       currentStreak = 1;
     }
 
     bestStreak = Math.max(currentStreak, bestStreak);
 
-    // Check milestones
     if (STREAK_MILESTONES.includes(currentStreak)) {
       milestoneReached = currentStreak;
     }
 
-    // Insert streak history
-    await supabaseAdmin.from('streak_history').insert({
-      user_id: userId,
-      date: today,
-      streak_day_number: currentStreak,
-      condition_met: conditionType,
-      streak_length_at_time: currentStreak,
-    });
+    // Insert streak history — wrapped in try/catch to prevent silent failures
+    try {
+      const { error: shError } = await supabaseAdmin.from('streak_history').insert({
+        user_id: userId,
+        date: today,
+        streak_day_number: currentStreak,
+        condition_met: conditionType,
+        streak_length_at_time: currentStreak,
+      });
+      if (shError) {
+        console.error('[complete-game] streak_history insert failed:', shError);
+      } else {
+        console.log('[complete-game] streak_history written: day', currentStreak, 'for user', userId);
+      }
+    } catch (shErr) {
+      console.error('[complete-game] streak_history insert exception:', shErr);
+    }
   }
 
   // Update profile with streak data
@@ -239,6 +231,26 @@ Deno.serve(async (req) => {
       });
     }
 
+    // === Step 5: Duplicate detection ===
+    // Check for duplicate game within last 30 seconds
+    const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
+    const { data: existingGame } = await supabaseAdmin
+      .from('game_history')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('deal_id', clientDealId || `deal-${dealSeed}`)
+      .eq('won', result === 'win')
+      .eq('moves', actualMoves)
+      .gte('played_at', thirtySecsAgo)
+      .limit(1);
+
+    if (existingGame && existingGame.length > 0) {
+      console.log('[complete-game] duplicate detected, skipping:', existingGame[0].id);
+      return new Response(JSON.stringify({ error: 'duplicate_game', message: 'Game already recorded' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Server-side isDaily verification
     let isDaily = false;
     if (clientIsDaily && clientDealUuid) {
@@ -275,7 +287,7 @@ Deno.serve(async (req) => {
       profile.timezone_offset = timezoneOffset;
     }
 
-    // 2. Fetch deal
+    // 2. Fetch deal — with robust fallback for DDS
     let deal: any = null;
     if (clientDealUuid) {
       const { data } = await supabaseAdmin
@@ -296,20 +308,46 @@ Deno.serve(async (req) => {
       deal = data;
     }
 
-    const dds = deal ? (deal.dds_blended as number) : 50;
+    // === Step 3: Robust DDS — never proceed with 0 ===
+    let dds = deal ? (deal.dds_blended as number) : 0;
     const minMoves = deal ? (deal.min_moves as number) : 0;
 
-    // 3. Performance modifier
+    // If dds_blended is 0 but we have min_moves, recalculate
+    if (dds === 0 && minMoves > 0) {
+      if (gameMode === 'freecell') {
+        if (minMoves < 40) dds = Math.round((minMoves / 40) * 25);
+        else if (minMoves < 65) dds = Math.round(26 + ((minMoves - 40) / 25) * 29);
+        else if (minMoves < 90) dds = Math.round(56 + ((minMoves - 65) / 25) * 24);
+        else dds = Math.round(Math.min(100, 81 + ((minMoves - 90) / 50) * 19));
+      } else {
+        if (minMoves < 52) dds = Math.round((minMoves / 52) * 25);
+        else if (minMoves < 80) dds = Math.round(26 + ((minMoves - 52) / 28) * 29);
+        else if (minMoves < 110) dds = Math.round(56 + ((minMoves - 80) / 30) * 24);
+        else dds = Math.round(Math.min(100, 81 + ((minMoves - 110) / 60) * 19));
+      }
+      console.log('[complete-game] recalculated DDS from min_moves:', { minMoves, dds, gameMode });
+    }
+
+    // Final guard: if still 0, use a sensible default (50 = Medium)
+    if (dds === 0) {
+      console.warn('[complete-game] DDS is 0 even after fallback. Using default 50. Deal:', deal?.id, 'seed:', dealSeed);
+      dds = 50;
+    }
+
+    // 3. Performance modifier — with fallbacks that actually produce non-1.0 values
     let performanceModifier = 1.0;
 
     if (isWin) {
-      const poolAvgTime = (deal && (deal.pool_attempts as number) >= 10)
+      // Use pool averages if enough data, otherwise derive from min_moves
+      const hasPoolData = deal && (deal.pool_attempts as number) >= 10;
+      
+      const poolAvgTime = hasPoolData
         ? (deal.pool_avg_time as number)
         : (minMoves > 0 ? minMoves * 4 : 300);
       const expectedTime = Math.max(poolAvgTime, 30);
       const timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 10)));
 
-      const poolAvgMoves = (deal && (deal.pool_attempts as number) >= 10)
+      const poolAvgMoves = hasPoolData
         ? (deal.pool_avg_moves as number)
         : (minMoves > 0 ? minMoves * 1.8 : 150);
       const expectedMoves = Math.max(poolAvgMoves, 20);
@@ -320,9 +358,15 @@ Deno.serve(async (req) => {
       performanceModifier = Math.max(0.5, Math.min(1.5,
         (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty
       ));
+
+      console.log('[complete-game] perf calc:', {
+        expectedTime, actualTime, timeEfficiency,
+        expectedMoves, actualMoves, moveEfficiency,
+        hintPenalty, performanceModifier, minMoves, hasPoolData,
+      });
     }
 
-    // 4. ELO calculation — pure formula, no daily/context multipliers
+    // 4. ELO calculation — pure formula, no context multipliers
     const dealRating = 800 + (dds / 100) * 1200;
     const playerRating = profile.rating as number;
     const gamesPlayed = profile.games_played as number;
@@ -339,6 +383,12 @@ Deno.serve(async (req) => {
     else finalDelta = Math.max(-20, finalDelta);
 
     const newRating = Math.max(0, playerRating + finalDelta);
+
+    console.log('[complete-game] ELO:', {
+      playerRating, dealRating, dds, K, expected: expected.toFixed(3),
+      outcome, baseDelta, performanceModifier: performanceModifier.toFixed(3),
+      finalDelta, newRating,
+    });
 
     // 5. Update deal pool stats
     if (deal) {
@@ -414,8 +464,7 @@ Deno.serve(async (req) => {
       deal_uuid: deal?.id || null,
     } as Record<string, unknown>);
 
-    // 8. Streak update — separate from ELO, retention layer only
-    // Re-fetch profile to get latest state after rating update
+    // 8. Streak update
     const { data: freshProfile } = await supabaseAdmin
       .from('profiles')
       .select('*')

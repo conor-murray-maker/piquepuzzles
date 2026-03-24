@@ -49,10 +49,10 @@ class FreeCellEngineImpl implements PuzzleEngine {
   }
 
   getComplexityScore(minSolutionLength: number): number {
-    if (minSolutionLength < 50) return Math.round((minSolutionLength / 50) * 25);
-    if (minSolutionLength < 80) return Math.round(26 + ((minSolutionLength - 50) / 30) * 29);
-    if (minSolutionLength < 110) return Math.round(56 + ((minSolutionLength - 80) / 30) * 24);
-    return Math.round(Math.min(100, 81 + ((minSolutionLength - 110) / 40) * 19));
+    if (minSolutionLength < 40) return Math.round((minSolutionLength / 40) * 25);
+    if (minSolutionLength < 65) return Math.round(26 + ((minSolutionLength - 40) / (65 - 40)) * 29);
+    if (minSolutionLength < 90) return Math.round(56 + ((minSolutionLength - 65) / (90 - 65)) * 24);
+    return Math.round(Math.min(100, 81 + ((minSolutionLength - 90) / 50) * 19));
   }
 
   private runSim(seed: number): { won: boolean; moves: number; foundationCards: number } {

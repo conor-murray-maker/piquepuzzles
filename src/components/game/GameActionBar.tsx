@@ -18,11 +18,6 @@ export function GameActionBar({ onHint, onUndo, undoDisabled, moveCount, hintLoa
         padding: '12px 0',
         boxShadow: '0 -1px 4px rgba(0,0,0,0.08)',
       }}
-      style={{
-        borderColor: '#e2e8f0',
-        padding: '12px 0',
-        boxShadow: '0 -1px 4px rgba(0,0,0,0.08)',
-      }}
     >
       {/* Undo */}
       <button

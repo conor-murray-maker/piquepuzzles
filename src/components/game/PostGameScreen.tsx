@@ -107,13 +107,15 @@ export function PostGameScreen({
   }
 
   return (
-    <motion.div
-      className="bg-background flex items-center justify-center p-4"
+    <div
+      className="bg-background overflow-y-auto"
       style={{
-        minHeight: '100dvh',
+        height: '100dvh',
         paddingTop: 'var(--safe-area-top, 0px)',
         paddingBottom: 'var(--safe-area-bottom, 0px)',
       }}
+    >
+    <div className="flex items-center justify-center p-4" style={{ minHeight: '100%' }}>
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >

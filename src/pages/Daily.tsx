@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { haptic } from '@/lib/haptics';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';

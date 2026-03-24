@@ -219,29 +219,41 @@ export class DealPoolService {
     gameMode: string,
     drawMode: number,
     count: number
-  ): Promise<Array<{ seed: number; minMoves: number; ddsInitial: number }>> {
+  ): Promise<Array<{ seed: number; minMoves: number; ddsInitial: number; simulationCount: number }>> {
     const engine = EngineRegistry.get(gameMode);
-    const deals: Array<{ seed: number; minMoves: number; ddsInitial: number }> = [];
+    const deals: Array<{ seed: number; minMoves: number; ddsInitial: number; simulationCount: number }> = [];
+    const simCount = 50;
 
-    for (let i = 0; i < count; i++) {
+    // Reserve ~25% of batch for Easy deals (DDS < 26)
+    const easyTarget = Math.max(2, Math.floor(count * 0.25));
+    let easyFound = 0;
+
+    for (let i = 0; i < count * 3 && deals.length < count; i++) {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const seed = generateSeed();
           const deal = engine.generateDeal(seed);
-          const result = engine.verifySolvable(deal, 50);
+          const result = engine.verifySolvable(deal, simCount);
           if (result.solvable && result.minSolutionLength > 0) {
-            deals.push({
-              seed,
-              minMoves: result.minSolutionLength,
-              ddsInitial: result.complexityScore,
-            });
-            break;
+            const dds = result.complexityScore;
+            const isEasy = dds < 26;
+
+            // Prioritize Easy deals until we hit the target
+            if (isEasy && easyFound < easyTarget) {
+              deals.unshift({ seed, minMoves: result.minSolutionLength, ddsInitial: dds, simulationCount: simCount });
+              easyFound++;
+              break;
+            } else if (deals.length < count) {
+              deals.push({ seed, minMoves: result.minSolutionLength, ddsInitial: dds, simulationCount: simCount });
+              if (isEasy) easyFound++;
+              break;
+            }
           }
         } catch {
           // Skip failed attempt
         }
       }
     }
-    return deals;
+    return deals.slice(0, count);
   }
 }

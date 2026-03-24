@@ -291,8 +291,16 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     if (!gameStarted) setGameStarted(true);
     pushHistory(state);
     setState(newState);
-    if (triggersAutoSend) setAutoSendChain(true);
-    if (newState.isWon) fireGameEnd(newState);
+    if (triggersAutoSend) {
+      setAutoSendChain(true);
+      haptic.medium();
+    } else {
+      haptic.light();
+    }
+    if (newState.isWon) {
+      haptic.success();
+      fireGameEnd(newState);
+    }
     return true;
   }, [state, pushHistory, fireGameEnd, gameStarted]);
 

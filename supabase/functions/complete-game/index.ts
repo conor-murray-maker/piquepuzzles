@@ -349,24 +349,23 @@ Deno.serve(async (req) => {
 
     // 3. Performance modifier — with fallbacks that actually produce non-1.0 values
     let performanceModifier = 1.0;
+    let timeEfficiency = 1.0;
+    let moveEfficiency = 1.0;
+    let hintPenalty = 1.0;
+    const hasPoolData = deal && (deal.pool_attempts as number) >= 10;
+    const dealAvgTime = hasPoolData ? (deal.pool_avg_time as number) : null;
+    const dealAvgMoves = hasPoolData ? (deal.pool_avg_moves as number) : null;
 
     if (isWin) {
-      // Use pool averages if enough data, otherwise derive from min_moves
-      const hasPoolData = deal && (deal.pool_attempts as number) >= 10;
-      
-      const poolAvgTime = hasPoolData
-        ? (deal.pool_avg_time as number)
-        : (minMoves > 0 ? minMoves * 4 : 300);
+      const poolAvgTime = dealAvgTime ?? (minMoves > 0 ? minMoves * 4 : 300);
       const expectedTime = Math.max(poolAvgTime, 30);
-      const timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 10)));
+      timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 10)));
 
-      const poolAvgMoves = hasPoolData
-        ? (deal.pool_avg_moves as number)
-        : (minMoves > 0 ? minMoves * 1.8 : 150);
+      const poolAvgMoves = dealAvgMoves ?? (minMoves > 0 ? minMoves * 1.8 : 150);
       const expectedMoves = Math.max(poolAvgMoves, 20);
-      const moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 10)));
+      moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 10)));
 
-      const hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
+      hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
 
       performanceModifier = Math.max(0.5, Math.min(1.5,
         (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty
@@ -492,14 +491,38 @@ Deno.serve(async (req) => {
       freshProfile || profile,
     );
 
-    // 9. Return result
+    // 9. Compute breakdown points that sum exactly to finalDelta
+    let timeBonusPoints = 0;
+    let movesBonusPoints = 0;
+    let hintPenaltyPoints = 0;
+    const baseDeltaForBreakdown = baseDelta;
+
+    if (isWin) {
+      timeBonusPoints = Math.round(baseDelta * (timeEfficiency - 1.0) * 0.4);
+      movesBonusPoints = Math.round(baseDelta * (moveEfficiency - 1.0) * 0.4);
+      hintPenaltyPoints = Math.round(baseDelta * (1 - hintPenalty));
+      // Fix rounding: adjust baseDelta display so sum equals finalDelta
+      const partialSum = timeBonusPoints + movesBonusPoints - hintPenaltyPoints;
+      // finalDelta = baseDeltaDisplay + timeBonusPoints + movesBonusPoints - hintPenaltyPoints
+      // so baseDeltaDisplay = finalDelta - partialSum
+    }
+    const baseDeltaDisplay = isWin ? (finalDelta - timeBonusPoints - movesBonusPoints + hintPenaltyPoints) : finalDelta;
+
+    // 10. Return result
     return new Response(JSON.stringify({
       finalDelta,
+      baseDelta: baseDeltaDisplay,
       newRating,
       previousRating: playerRating,
       newTier: getTierName(newRating),
       performanceModifier,
       dealDDS: dds,
+      dealAvgTime: dealAvgTime,
+      dealAvgMoves: dealAvgMoves,
+      timeBonusPoints,
+      movesBonusPoints,
+      hintPenaltyPoints,
+      hintsUsed,
       currentStreak: streakResult.currentStreak,
       streakUpdate: {
         currentStreak: streakResult.currentStreak,

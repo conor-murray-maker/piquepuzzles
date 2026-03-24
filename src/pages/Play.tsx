@@ -5,7 +5,7 @@ import { GameBoard, clearStorage } from '@/components/game/GameBoard';
 import { FreeCellBoard, clearFreeCellStorage } from '@/components/game/FreeCellBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGamePersistence } from '@/hooks/useGamePersistence';
+import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
 
@@ -35,7 +35,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     undosUsed: number; difficultyScore: number; startTime: number; elapsedSeconds: number;
     seed?: number;
   } | null>(null);
-  const [ratingResult, setRatingResult] = useState<{ newRating: number; ratingChange: number; previousRating: number } | null>(null);
+  const [ratingResult, setRatingResult] = useState<GameResult | null>(null);
   const [gameKey, setGameKey] = useState(0);
   const [challengeData, setChallengeData] = useState<{
     challengeId: string;
@@ -101,7 +101,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const previousRating = profile?.rating ?? 1000;
     const isDaily = !!dailyDate;
     const result = await saveGameResult(state, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
-    setRatingResult(result ? { ...result, previousRating: result.previousRating } : null);
+    setRatingResult(result);
 
     // Save challenge completion
     if (challengeId && user) {
@@ -157,7 +157,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const previousRating = profile?.rating ?? 1000;
     const isDaily = !!dailyDate;
     const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
-    setRatingResult(result ? { ...result, previousRating: result.previousRating } : null);
+    setRatingResult(result);
 
     // Save daily challenge completion on give up
     if (dailyDate && dailyDealId && user) {
@@ -229,6 +229,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
         dealSeed={lastResult.seed}
         drawMode={drawMode}
         challengeData={challengeData}
+        streakUpdate={ratingResult?.streakUpdate}
+        breakdown={ratingResult?.breakdown}
       />
     );
   }

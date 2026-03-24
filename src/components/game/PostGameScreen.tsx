@@ -3,15 +3,16 @@ import { haptic } from '@/lib/haptics';
 import { StreakMilestoneModal } from './StreakMilestoneModal';
 import { motion } from 'framer-motion';
 import { KlondikeState } from '@/game/types';
-import { getPerformancePercentile } from '@/game/rating';
 import { PuzzleIQBadge, RatingChange } from './PuzzleIQBadge';
 import { TierProgressBar } from './TierProgressBar';
 import { Button } from '@/components/ui/button';
-import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft, Share2 } from 'lucide-react';
+import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, ArrowLeft, Share2 } from 'lucide-react';
 import { ChallengeService } from '@/services/ChallengeService';
 import { formatTimeRaw } from '@/lib/format';
+import { getDifficultyLabel } from '@/lib/difficulty';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { ScoreBreakdownData } from '@/hooks/useGamePersistence';
 
 interface PostGameScreenProps {
   gameState: KlondikeState;
@@ -37,23 +38,22 @@ interface PostGameScreenProps {
     freezeUsed: boolean;
     milestoneReached: number | null;
   } | null;
+  breakdown?: ScoreBreakdownData | null;
 }
 
 export function PostGameScreen({
   gameState, currentRating, previousRating, ratingChange, onPlayAgain, onGoHome, elapsedSeconds,
-  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData, streakUpdate,
+  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData, streakUpdate, breakdown,
 }: PostGameScreenProps) {
   const { user, profile } = useAuth();
   const [sharing, setSharing] = useState(false);
   const [showMilestone, setShowMilestone] = useState(!!streakUpdate?.milestoneReached);
 
-  // Haptic on mount based on result
   useEffect(() => {
     if (gameState.isWon) haptic.success();
     else haptic.heavy();
   }, []);
   const timeSeconds = elapsedSeconds;
-  // Performance percentile removed from post-game — use server-side percentile on Stats page instead
 
   const formatTime = formatTimeRaw;
 
@@ -97,7 +97,6 @@ export function PostGameScreen({
   const playerWonChallenge = isChallenge && gameState.isWon && challengeData &&
     gameState.moves <= challengeData.challengerMoves;
 
-  // Show milestone modal before the main screen
   if (showMilestone && streakUpdate?.milestoneReached) {
     return (
       <StreakMilestoneModal
@@ -154,16 +153,17 @@ export function PostGameScreen({
             previousRating={previousRating}
             ratingChange={ratingChange}
           />
-          <ScoreBreakdown
-            won={gameState.isWon}
-            ratingChange={ratingChange}
-            difficulty={gameState.difficulty}
-            moves={gameState.moves}
-            timeSeconds={timeSeconds}
-            hintsUsed={gameState.hintsUsed}
-            undosUsed={gameState.undosUsed}
-          />
         </div>
+
+        {/* Score Breakdown Card */}
+        <ScoreBreakdownCard
+          won={gameState.isWon}
+          breakdown={breakdown}
+          ratingChange={ratingChange}
+          difficulty={gameState.difficulty}
+          actualTime={timeSeconds}
+          actualMoves={gameState.moves}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <div className="stat-card flex items-center gap-2">
@@ -196,7 +196,6 @@ export function PostGameScreen({
           </div>
         </div>
 
-        {/* Challenge comparison */}
         {isChallenge && challengeData && (
           <motion.div
             className="bg-secondary/50 rounded-xl p-4 space-y-3"
@@ -229,7 +228,6 @@ export function PostGameScreen({
           </motion.div>
         )}
 
-
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => { haptic.light(); onGoHome(); }} className="flex-1">
             <ArrowLeft className="w-4 h-4 mr-1" />
@@ -257,61 +255,164 @@ export function PostGameScreen({
   );
 }
 
-function ScoreBreakdown({ won, ratingChange, difficulty, moves, timeSeconds, hintsUsed, undosUsed }: {
-  won: boolean; ratingChange: number; difficulty: string; moves: number;
-  timeSeconds: number; hintsUsed: number; undosUsed: number;
+// --- Score Breakdown Card ---
+
+function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTime, actualMoves }: {
+  won: boolean;
+  breakdown?: ScoreBreakdownData | null;
+  ratingChange: number;
+  difficulty: string;
+  actualTime: number;
+  actualMoves: number;
 }) {
-  if (ratingChange === 0) return null;
+  if (ratingChange === 0 && !breakdown) return null;
 
-  const factors: string[] = [];
+  const bd = breakdown;
+  const diffLabel = difficulty || 'Medium';
 
-  if (won) {
-    // Difficulty factor
-    if (difficulty === 'Hard' || difficulty === 'Expert') {
-      factors.push(`${difficulty} deal, bigger reward`);
-    } else if (difficulty === 'Easy') {
-      factors.push('Easy deal, modest reward');
+  if (!won) {
+    // Loss breakdown — single line
+    return (
+      <motion.div
+        className="w-full rounded-xl border border-border bg-card p-4 space-y-3"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
+          Puzzle IQ Lost
+        </p>
+        <BreakdownLine
+          label={`${diffLabel} deal — not solved`}
+          value={ratingChange}
+        />
+        <div className="border-t border-border my-2" />
+        <div className="flex justify-between items-center">
+          <span className="font-bold text-foreground">Total</span>
+          <span className="font-bold text-lg text-destructive font-mono">
+            {ratingChange}
+          </span>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Win breakdown
+  const baseDelta = bd?.baseDelta ?? ratingChange;
+  const timeBP = bd?.timeBonusPoints ?? 0;
+  const moveBP = bd?.movesBonusPoints ?? 0;
+  const hintPP = bd?.hintPenaltyPoints ?? 0;
+  const hintsUsed = bd?.hintsUsed ?? 0;
+  const avgTime = bd?.dealAvgTime ?? null;
+  const avgMoves = bd?.dealAvgMoves ?? null;
+
+  return (
+    <motion.div
+      className="w-full rounded-xl border border-border bg-card p-4 space-y-2"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.4 }}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
+        Puzzle IQ Earned
+      </p>
+
+      {/* Deal difficulty */}
+      <BreakdownLine
+        label={`${diffLabel} deal won`}
+        value={baseDelta}
+      />
+
+      {/* Time line */}
+      {avgTime !== null ? (
+        timeBP >= 0 ? (
+          <BreakdownLine
+            label="Faster than average"
+            subLabel={`${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg`}
+            value={timeBP}
+          />
+        ) : (
+          <BreakdownLine
+            label="Slower than average"
+            subLabel={`${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg`}
+            value={timeBP}
+          />
+        )
+      ) : (
+        <BreakdownLine label={`Time ${formatTimeRaw(actualTime)}`} value={null} />
+      )}
+
+      {/* Moves line */}
+      {avgMoves !== null ? (
+        moveBP >= 0 ? (
+          <BreakdownLine
+            label="Fewer moves than average"
+            subLabel={`${actualMoves} vs ${Math.round(avgMoves)} avg`}
+            value={moveBP}
+          />
+        ) : (
+          <BreakdownLine
+            label="More moves than average"
+            subLabel={`${actualMoves} vs ${Math.round(avgMoves)} avg`}
+            value={moveBP}
+          />
+        )
+      ) : (
+        <BreakdownLine label={`Moves ${actualMoves}`} value={null} />
+      )}
+
+      {/* Hints line */}
+      {hintsUsed > 0 ? (
+        <BreakdownLine
+          label={`Hints used × ${hintsUsed}`}
+          value={-hintPP}
+        />
+      ) : (
+        <BreakdownLine label="Hints" value={null} />
+      )}
+
+      <div className="border-t border-border my-2" />
+      <div className="flex justify-between items-center">
+        <span className="font-bold text-foreground">Total</span>
+        <span className={`font-bold text-lg font-mono ${ratingChange >= 0 ? 'text-rating-up' : 'text-destructive'}`}>
+          {ratingChange > 0 ? '+' : ''}{ratingChange}
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
+function BreakdownLine({ label, subLabel, value }: {
+  label: string;
+  subLabel?: string;
+  value: number | null;
+}) {
+  let valueColor = 'text-muted-foreground';
+  let valueText = '—';
+
+  if (value !== null) {
+    if (value > 0) {
+      valueColor = 'text-rating-up';
+      valueText = `+${value}`;
+    } else if (value < 0) {
+      valueColor = 'text-destructive';
+      valueText = `${value}`;
     } else {
-      factors.push('Medium deal, solid reward');
-    }
-
-    // Speed factor
-    if (timeSeconds < 120) factors.push('Fast solve, nice bonus');
-    else if (timeSeconds < 240) factors.push('Good pace');
-
-    // Efficiency factor
-    if (hintsUsed === 0 && undosUsed === 0) {
-      factors.push('No hints or undos, well played');
-    } else if (hintsUsed > 0 || undosUsed > 0) {
-      const parts = [];
-      if (hintsUsed > 0) parts.push(`${hintsUsed} hint${hintsUsed > 1 ? 's' : ''}`);
-      if (undosUsed > 0) parts.push(`${undosUsed} undo${undosUsed > 1 ? 's' : ''}`);
-      factors.push(`${parts.join(' and ')} used, small adjustment`);
-    }
-  } else {
-    if (difficulty === 'Hard' || difficulty === 'Expert') {
-      factors.push(`${difficulty} deal, smaller penalty`);
-    } else {
-      factors.push(`${difficulty} deal`);
-    }
-    if (moves > 0) {
-      factors.push('Progress counted, keep going');
+      valueText = '0';
     }
   }
 
   return (
-    <motion.div
-      className="text-left space-y-1 pt-1"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.5 }}
-    >
-      {factors.map((f, i) => (
-        <p key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
-          <span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${won ? 'bg-rating-up' : 'bg-muted-foreground'}`} />
-          {f}
-        </p>
-      ))}
-    </motion.div>
+    <div className="flex justify-between items-start text-sm">
+      <div className="space-y-0">
+        <span className="text-foreground/80">{label}</span>
+        {subLabel && (
+          <p className="text-xs text-muted-foreground">{subLabel}</p>
+        )}
+      </div>
+      <span className={`font-mono font-medium ${valueColor} flex-shrink-0 ml-4`}>
+        {valueText}
+      </span>
+    </div>
   );
 }

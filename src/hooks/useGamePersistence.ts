@@ -3,22 +3,34 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { KlondikeState, FreeCellState, GameMode } from '@/game/types';
 
-interface CompleteGameResponse {
+export interface ScoreBreakdownData {
+  baseDelta: number;
   finalDelta: number;
-  newRating: number;
-  previousRating: number;
-  newTier: string;
-  performanceModifier: number;
   dealDDS: number;
+  dealAvgTime: number | null;
+  dealAvgMoves: number | null;
+  timeBonusPoints: number;
+  movesBonusPoints: number;
+  hintPenaltyPoints: number;
+  hintsUsed: number;
+}
+
+export interface GameResult {
+  newRating: number;
+  ratingChange: number;
+  previousRating: number;
+  breakdown: ScoreBreakdownData;
+  streakUpdate?: {
+    currentStreak: number;
+    bestStreak: number;
+    freezeUsed: boolean;
+    milestoneReached: number | null;
+  };
 }
 
 export function useGamePersistence() {
   const { user, profile, refreshProfile } = useAuth();
 
-  /**
-   * Save game result via server-side edge function.
-   * dealUuid is required — if missing, logs an error and does not call the edge function.
-   */
   const saveGameResult = useCallback(async (
     gameState: KlondikeState | FreeCellState,
     gameMode: GameMode = 'klondike',
@@ -26,7 +38,7 @@ export function useGamePersistence() {
     drawMode: number = 3,
     dealUuid?: string,
     isDaily?: boolean
-  ): Promise<{ newRating: number; ratingChange: number; previousRating: number } | null> => {
+  ): Promise<GameResult | null> => {
     if (!user || !profile) return null;
 
     const effectiveDealUuid = dealUuid || (gameState as any).dealUuid;
@@ -56,13 +68,25 @@ export function useGamePersistence() {
 
       if (error) throw error;
 
-      const response = data as CompleteGameResponse;
+      const r = data as any;
       await refreshProfile();
 
       return {
-        newRating: response.newRating,
-        ratingChange: response.finalDelta,
-        previousRating: response.previousRating,
+        newRating: r.newRating,
+        ratingChange: r.finalDelta,
+        previousRating: r.previousRating,
+        breakdown: {
+          baseDelta: r.baseDelta ?? r.finalDelta,
+          finalDelta: r.finalDelta,
+          dealDDS: r.dealDDS ?? 0,
+          dealAvgTime: r.dealAvgTime ?? null,
+          dealAvgMoves: r.dealAvgMoves ?? null,
+          timeBonusPoints: r.timeBonusPoints ?? 0,
+          movesBonusPoints: r.movesBonusPoints ?? 0,
+          hintPenaltyPoints: r.hintPenaltyPoints ?? 0,
+          hintsUsed: r.hintsUsed ?? 0,
+        },
+        streakUpdate: r.streakUpdate,
       };
     } catch (err) {
       console.error('Failed to save game result via edge function:', err);

@@ -107,39 +107,15 @@ export default function Daily() {
             setMyCompletion(comp || null);
           }
 
-          // Leaderboard: top 10
-          const { data: lb } = await (supabase as any)
-            .from('daily_challenge_completions')
-            .select('user_id, actual_moves, actual_time, result')
-            .eq('date', todayStr)
-            .order('result', { ascending: false })
-            .order('actual_moves', { ascending: true })
-            .order('actual_time', { ascending: true })
-            .limit(10);
-
-          // Get display names for leaderboard
+          // Leaderboard via secure RPC
+          const { data: lb } = await (supabase as any).rpc('get_daily_leaderboard', { p_date: todayStr });
           if (lb && lb.length > 0) {
-            const userIds = [...new Set(lb.map((e: any) => e.user_id))];
-            const { data: profiles } = await (supabase as any)
-              .from('profiles')
-              .select('id, display_name')
-              .in('id', userIds);
-
-            const nameMap: Record<string, string> = {};
-            profiles?.forEach((p: any) => { nameMap[p.id] = p.display_name || 'Player'; });
-
-            setLeaderboard(lb.map((e: any) => ({
-              ...e,
-              display_name: nameMap[e.user_id] || 'Player',
-            })));
+            setLeaderboard(lb);
           }
 
-          // Total attempts
-          const { count } = await (supabase as any)
-            .from('daily_challenge_completions')
-            .select('*', { count: 'exact', head: true })
-            .eq('date', todayStr);
-          setTotalAttempts(count ?? 0);
+          // Total attempts via secure RPC
+          const { data: attemptCount } = await (supabase as any).rpc('count_daily_attempts', { p_date: todayStr });
+          setTotalAttempts(attemptCount ?? 0);
         }
       } catch (err) {
         console.warn('Failed to fetch daily challenge:', err);

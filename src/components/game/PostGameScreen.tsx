@@ -44,6 +44,7 @@ export function PostGameScreen({
 }: PostGameScreenProps) {
   const { user, profile } = useAuth();
   const [sharing, setSharing] = useState(false);
+  const [showMilestone, setShowMilestone] = useState(!!streakUpdate?.milestoneReached);
   const timeSeconds = elapsedSeconds;
   const percentile = gameState.isWon
     ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)

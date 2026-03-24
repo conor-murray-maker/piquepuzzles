@@ -35,7 +35,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     undosUsed: number; difficultyScore: number; startTime: number; elapsedSeconds: number;
     seed?: number;
   } | null>(null);
-  const [ratingResult, setRatingResult] = useState<{ newRating: number; ratingChange: number; previousRating: number } | null>(null);
+  const [ratingResult, setRatingResult] = useState<GameResult | null>(null);
   const [gameKey, setGameKey] = useState(0);
   const [challengeData, setChallengeData] = useState<{
     challengeId: string;

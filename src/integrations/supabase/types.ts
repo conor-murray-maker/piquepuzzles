@@ -447,6 +447,30 @@ export type Database = {
         }
         Relationships: []
       }
+      releases: {
+        Row: {
+          id: string
+          notes: string[]
+          released_at: string
+          title: string
+          version: string
+        }
+        Insert: {
+          id?: string
+          notes?: string[]
+          released_at?: string
+          title: string
+          version: string
+        }
+        Update: {
+          id?: string
+          notes?: string[]
+          released_at?: string
+          title?: string
+          version?: string
+        }
+        Relationships: []
+      }
       streak_history: {
         Row: {
           condition_met: string

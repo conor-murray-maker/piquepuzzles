@@ -5,7 +5,7 @@ import { GameBoard, clearStorage } from '@/components/game/GameBoard';
 import { FreeCellBoard, clearFreeCellStorage } from '@/components/game/FreeCellBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGamePersistence } from '@/hooks/useGamePersistence';
+import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
 

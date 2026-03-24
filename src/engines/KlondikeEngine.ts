@@ -39,10 +39,10 @@ class KlondikeEngineImpl implements PuzzleEngine {
   }
 
   getComplexityScore(minSolutionLength: number): number {
-    if (minSolutionLength < 52) return Math.round((minSolutionLength / 52) * 25);
-    if (minSolutionLength < 80) return Math.round(26 + ((minSolutionLength - 52) / (80 - 52)) * 29);
-    if (minSolutionLength < 110) return Math.round(56 + ((minSolutionLength - 80) / (110 - 80)) * 24);
-    return Math.round(Math.min(100, 81 + ((minSolutionLength - 110) / 60) * 19));
+    if (minSolutionLength < 100) return Math.round((minSolutionLength / 100) * 25);
+    if (minSolutionLength < 130) return Math.round(26 + ((minSolutionLength - 100) / (130 - 100)) * 29);
+    if (minSolutionLength < 160) return Math.round(56 + ((minSolutionLength - 130) / (160 - 130)) * 24);
+    return Math.round(Math.min(100, 81 + ((minSolutionLength - 160) / 60) * 19));
   }
 
   private runSim(seed: number): { won: boolean; moves: number; foundationCards: number } {

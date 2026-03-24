@@ -16,9 +16,9 @@ function getNormConfig(gameMode: string) {
 }
 
 function ddsToLabel(dds: number): string {
-  if (dds <= 25) return 'Easy';
-  if (dds <= 55) return 'Medium';
-  if (dds <= 80) return 'Hard';
+  if (dds < 26) return 'Easy';
+  if (dds < 56) return 'Medium';
+  if (dds < 81) return 'Hard';
   return 'Expert';
 }
 
@@ -207,6 +207,7 @@ Deno.serve(async (req) => {
       dealUuid: clientDealUuid,
       isDaily: clientIsDaily = false,
       timezoneOffset = 0,
+      dealDDS: clientDealDDS = 0,
     } = body;
 
     // Input validation
@@ -308,31 +309,43 @@ Deno.serve(async (req) => {
       deal = data;
     }
 
-    // === Step 3: Robust DDS — never proceed with 0 ===
-    let dds = deal ? (deal.dds_blended as number) : 0;
-    const minMoves = deal ? (deal.min_moves as number) : 0;
+    // === Step 3: Robust DDS — resolution chain with logging ===
+    let dds = 0;
+    let ddsSource = 'fallback';
 
-    // If dds_blended is 0 but we have min_moves, recalculate
+    // 1. Try client-provided dealDDS
+    if (clientDealDDS > 0) {
+      dds = clientDealDDS;
+      ddsSource = 'client-parameter';
+    }
+    // 2. Try deal record dds_blended
+    if (dds === 0 && deal && (deal.dds_blended as number) > 0) {
+      dds = deal.dds_blended as number;
+      ddsSource = 'deal-lookup';
+    }
+    // 3. Try recalculating from min_moves with updated curves
+    const minMoves = deal ? (deal.min_moves as number) : 0;
     if (dds === 0 && minMoves > 0) {
       if (gameMode === 'freecell') {
-        if (minMoves < 40) dds = Math.round((minMoves / 40) * 25);
-        else if (minMoves < 65) dds = Math.round(26 + ((minMoves - 40) / 25) * 29);
-        else if (minMoves < 90) dds = Math.round(56 + ((minMoves - 65) / 25) * 24);
-        else dds = Math.round(Math.min(100, 81 + ((minMoves - 90) / 50) * 19));
+        if (minMoves < 125) dds = Math.round((minMoves / 125) * 25);
+        else if (minMoves < 175) dds = Math.round(26 + ((minMoves - 125) / 50) * 29);
+        else if (minMoves < 250) dds = Math.round(56 + ((minMoves - 175) / 75) * 24);
+        else dds = Math.round(Math.min(100, 81 + ((minMoves - 250) / 100) * 19));
       } else {
-        if (minMoves < 52) dds = Math.round((minMoves / 52) * 25);
-        else if (minMoves < 80) dds = Math.round(26 + ((minMoves - 52) / 28) * 29);
-        else if (minMoves < 110) dds = Math.round(56 + ((minMoves - 80) / 30) * 24);
-        else dds = Math.round(Math.min(100, 81 + ((minMoves - 110) / 60) * 19));
+        if (minMoves < 100) dds = Math.round((minMoves / 100) * 25);
+        else if (minMoves < 130) dds = Math.round(26 + ((minMoves - 100) / 30) * 29);
+        else if (minMoves < 160) dds = Math.round(56 + ((minMoves - 130) / 30) * 24);
+        else dds = Math.round(Math.min(100, 81 + ((minMoves - 160) / 60) * 19));
       }
-      console.log('[complete-game] recalculated DDS from min_moves:', { minMoves, dds, gameMode });
+      ddsSource = 'calculated-from-min-moves';
+    }
+    // 4. Neutral fallback — never block rating update
+    if (dds === 0) {
+      dds = 50;
+      ddsSource = 'neutral-fallback';
     }
 
-    // Final guard: if still 0, use a sensible default (50 = Medium)
-    if (dds === 0) {
-      console.warn('[complete-game] DDS is 0 even after fallback. Using default 50. Deal:', deal?.id, 'seed:', dealSeed);
-      dds = 50;
-    }
+    console.log('[complete-game] DDS resolution:', { dds, ddsSource, clientDealDDS, dealDdsBlended: deal?.dds_blended, minMoves });
 
     // 3. Performance modifier — with fallbacks that actually produce non-1.0 values
     let performanceModifier = 1.0;

@@ -7,7 +7,7 @@ import { getPerformancePercentile } from '@/game/rating';
 import { PuzzleIQBadge, RatingChange } from './PuzzleIQBadge';
 import { TierProgressBar } from './TierProgressBar';
 import { Button } from '@/components/ui/button';
-import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft, Swords } from 'lucide-react';
+import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, TrendingUp, ArrowLeft, Share2 } from 'lucide-react';
 import { ChallengeService } from '@/services/ChallengeService';
 import { formatTimeRaw } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,9 +53,7 @@ export function PostGameScreen({
     else haptic.heavy();
   }, []);
   const timeSeconds = elapsedSeconds;
-  const percentile = gameState.isWon
-    ? getPerformancePercentile(gameState.moves, timeSeconds, gameState.difficulty)
-    : 0;
+  // Performance percentile removed from post-game — use server-side percentile on Stats page instead
 
   const formatTime = formatTimeRaw;
 
@@ -198,7 +196,7 @@ export function PostGameScreen({
             transition={{ delay: 0.3 }}
           >
             <div className="flex items-center justify-center gap-2 mb-2">
-              <Swords className="w-4 h-4 text-primary" />
+              <Share2 className="w-4 h-4 text-primary" />
               <span className="text-sm font-semibold">Challenge Result</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
@@ -222,21 +220,6 @@ export function PostGameScreen({
           </motion.div>
         )}
 
-        {gameState.isWon && percentile > 0 && (
-          <motion.div
-            className="bg-primary/10 rounded-xl p-3 text-center"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.4 }}
-          >
-            <div className="flex items-center justify-center gap-1.5">
-              <TrendingUp className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">
-                Better than <span className="text-primary font-bold">{percentile}%</span> of players
-              </span>
-            </div>
-          </motion.div>
-        )}
 
         <div className="flex gap-3">
           <Button variant="outline" onClick={onGoHome} className="flex-1">
@@ -255,7 +238,7 @@ export function PostGameScreen({
             disabled={sharing}
             className="w-full"
           >
-            <Swords className="w-4 h-4 mr-2" />
+            <Share2 className="w-4 h-4 mr-2" />
             Challenge a Friend
           </Button>
         )}

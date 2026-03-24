@@ -5,25 +5,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Updated DDS curves matching engine code
+// Updated DDS curves matching actual solver output distributions
 function klondikeComplexity(minMoves: number): number {
-  if (minMoves < 52) return Math.round((minMoves / 52) * 25);
-  if (minMoves < 80) return Math.round(26 + ((minMoves - 52) / (80 - 52)) * 29);
-  if (minMoves < 110) return Math.round(56 + ((minMoves - 80) / (110 - 80)) * 24);
-  return Math.round(Math.min(100, 81 + ((minMoves - 110) / 60) * 19));
+  if (minMoves < 100) return Math.round((minMoves / 100) * 25);
+  if (minMoves < 130) return Math.round(26 + ((minMoves - 100) / (130 - 100)) * 29);
+  if (minMoves < 160) return Math.round(56 + ((minMoves - 130) / (160 - 130)) * 24);
+  return Math.round(Math.min(100, 81 + ((minMoves - 160) / 60) * 19));
 }
 
 function freecellComplexity(minMoves: number): number {
-  if (minMoves < 40) return Math.round((minMoves / 40) * 25);
-  if (minMoves < 65) return Math.round(26 + ((minMoves - 40) / (65 - 40)) * 29);
-  if (minMoves < 90) return Math.round(56 + ((minMoves - 65) / (90 - 65)) * 24);
-  return Math.round(Math.min(100, 81 + ((minMoves - 90) / 50) * 19));
+  if (minMoves < 125) return Math.round((minMoves / 125) * 25);
+  if (minMoves < 175) return Math.round(26 + ((minMoves - 125) / (175 - 125)) * 29);
+  if (minMoves < 250) return Math.round(56 + ((minMoves - 175) / (250 - 175)) * 24);
+  return Math.round(Math.min(100, 81 + ((minMoves - 250) / 100) * 19));
 }
 
 function ddsToLabel(dds: number): string {
-  if (dds <= 25) return 'Easy';
-  if (dds <= 55) return 'Medium';
-  if (dds <= 80) return 'Hard';
+  if (dds < 26) return 'Easy';
+  if (dds < 56) return 'Medium';
+  if (dds < 81) return 'Hard';
   return 'Expert';
 }
 
@@ -50,7 +50,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const distribution = { Easy: 0, Medium: 0, Hard: 0, Expert: 0 };
+    const beforeDistribution = { Easy: 0, Medium: 0, Hard: 0, Expert: 0 };
+    const afterDistribution = { Easy: 0, Medium: 0, Hard: 0, Expert: 0 };
     let updated = 0;
     let skipped = 0;
 
@@ -61,12 +62,16 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Track before distribution
+      const oldLabel = ddsToLabel(deal.dds_initial as number);
+      beforeDistribution[oldLabel as keyof typeof beforeDistribution]++;
+
       const newDDS = deal.game_mode === 'freecell'
         ? freecellComplexity(minMoves)
         : klondikeComplexity(minMoves);
 
       const label = ddsToLabel(newDDS);
-      distribution[label as keyof typeof distribution]++;
+      afterDistribution[label as keyof typeof afterDistribution]++;
 
       // Only update dds_blended if under 30 pool attempts (still solver-only)
       const poolAttempts = deal.pool_attempts as number;
@@ -85,7 +90,8 @@ Deno.serve(async (req) => {
       totalDeals: (deals || []).length,
       updated,
       skipped,
-      distribution,
+      beforeDistribution,
+      afterDistribution,
     };
 
     console.log('[recalibrate-dds] complete:', JSON.stringify(result));

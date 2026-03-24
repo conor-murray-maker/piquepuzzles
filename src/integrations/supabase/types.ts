@@ -252,6 +252,7 @@ export type Database = {
           pool_avg_moves: number
           pool_avg_time: number
           pool_wins: number
+          reserved_for: string | null
           seed: number
           simulation_count: number
           tier: string
@@ -272,6 +273,7 @@ export type Database = {
           pool_avg_moves?: number
           pool_avg_time?: number
           pool_wins?: number
+          reserved_for?: string | null
           seed: number
           simulation_count?: number
           tier?: string
@@ -292,6 +294,7 @@ export type Database = {
           pool_avg_moves?: number
           pool_avg_time?: number
           pool_wins?: number
+          reserved_for?: string | null
           seed?: number
           simulation_count?: number
           tier?: string

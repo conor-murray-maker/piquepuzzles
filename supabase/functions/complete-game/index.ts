@@ -16,9 +16,9 @@ function getNormConfig(gameMode: string) {
 }
 
 function ddsToLabel(dds: number): string {
-  if (dds <= 25) return 'Easy';
-  if (dds <= 55) return 'Medium';
-  if (dds <= 80) return 'Hard';
+  if (dds < 26) return 'Easy';
+  if (dds < 56) return 'Medium';
+  if (dds < 81) return 'Hard';
   return 'Expert';
 }
 

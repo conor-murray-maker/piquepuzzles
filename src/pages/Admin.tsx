@@ -88,6 +88,7 @@ export default function Admin() {
           <TabsContent value="games"><AdminGames /></TabsContent>
           <TabsContent value="streaks"><AdminStreaks /></TabsContent>
           <TabsContent value="system"><AdminSystem /></TabsContent>
+          <TabsContent value="releases"><AdminReleases /></TabsContent>
         </Tabs>
       </div>
     </div>

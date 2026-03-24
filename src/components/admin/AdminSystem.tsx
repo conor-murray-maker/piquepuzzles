@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAdminData, useAdminAction } from "@/hooks/useAdminQuery";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,7 +7,41 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, CheckCircle, Play, RefreshCw, Shield, Download, Copy, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, Play, RefreshCw, Shield, Download, Copy, Loader2, AlertCircle, Info } from "lucide-react";
+
+interface Alert {
+  severity: "critical" | "warning" | "info";
+  code: string;
+  message: string;
+  affectedCount: number;
+  detectedAt: string;
+}
+
+function AlertCard({ alert }: { alert: Alert }) {
+  const config = {
+    critical: { bg: "bg-destructive/10 border-destructive/30", icon: AlertCircle, iconColor: "text-destructive", label: "CRITICAL" },
+    warning: { bg: "bg-amber-500/10 border-amber-500/30", icon: AlertTriangle, iconColor: "text-amber-600", label: "WARNING" },
+    info: { bg: "bg-blue-500/10 border-blue-500/30", icon: Info, iconColor: "text-blue-600", label: "INFO" },
+  }[alert.severity];
+
+  const Icon = config.icon;
+
+  return (
+    <div className={`flex items-start gap-3 p-3 rounded-lg border ${config.bg}`}>
+      <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${config.iconColor}`} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className={`text-xs font-bold ${config.iconColor}`}>{config.label}</span>
+          <span className="text-xs text-muted-foreground font-mono">{alert.code}</span>
+        </div>
+        <p className="text-sm">{alert.message}</p>
+        {alert.affectedCount > 0 && (
+          <p className="text-xs text-muted-foreground mt-1">Affected: {alert.affectedCount}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function AdminSystem() {
   const { data: tables } = useAdminData("system_tables");
@@ -17,11 +51,28 @@ export function AdminSystem() {
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotData, setSnapshotData] = useState<string | null>(null);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(true);
+
+  // Fetch alerts on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const result = await action.mutateAsync({ action: "diagnostic_snapshot" });
+        if (result?.alerts) setAlerts(result.alerts);
+      } catch {
+        // silently fail — alerts are best-effort
+      } finally {
+        setAlertsLoading(false);
+      }
+    })();
+  }, []);
 
   const exportSnapshot = async () => {
     setSnapshotLoading(true);
     try {
       const result = await action.mutateAsync({ action: "diagnostic_snapshot" });
+      if (result?.alerts) setAlerts(result.alerts);
       const jsonStr = JSON.stringify(result, null, 2);
       setSnapshotData(jsonStr);
       setSnapshotOpen(true);
@@ -62,8 +113,44 @@ export function AdminSystem() {
   const challenge = daily?.challenge;
   const completions = daily?.completions || [];
 
+  const criticalAlerts = alerts.filter(a => a.severity === "critical");
+  const warningAlerts = alerts.filter(a => a.severity === "warning");
+  const infoAlerts = alerts.filter(a => a.severity === "info");
+
   return (
     <div className="space-y-6">
+      {/* System Health Alerts */}
+      {!alertsLoading && alerts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              System Health
+              {criticalAlerts.length > 0 && (
+                <Badge variant="destructive" className="ml-2">{criticalAlerts.length} Critical</Badge>
+              )}
+              {warningAlerts.length > 0 && (
+                <Badge className="ml-1 bg-amber-500/20 text-amber-700 hover:bg-amber-500/30">{warningAlerts.length} Warning</Badge>
+              )}
+              {alerts.length === 0 && <Badge className="ml-2 bg-emerald-500/20 text-emerald-700">All OK</Badge>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {criticalAlerts.map(a => <AlertCard key={a.code} alert={a} />)}
+            {warningAlerts.map(a => <AlertCard key={a.code} alert={a} />)}
+            {infoAlerts.map(a => <AlertCard key={a.code} alert={a} />)}
+          </CardContent>
+        </Card>
+      )}
+
+      {alertsLoading && (
+        <Card>
+          <CardContent className="pt-6 flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading system health...
+          </CardContent>
+        </Card>
+      )}
+
       {/* Diagnostic Export */}
       <Card>
         <CardContent className="pt-6">

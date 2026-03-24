@@ -480,17 +480,18 @@ Deno.serve(async (req) => {
       case "diagnostic_snapshot": {
         const today = new Date().toISOString().split("T")[0];
         const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+        const dayAgo = new Date(Date.now() - 86400000).toISOString();
 
         // Fetch all data in parallel
         const [
           profilesRes, allDealsRes, recentGamesRes, allGamesRes,
           streakHistRes, dailyChalRes, dailyCompRes, tableCountsRes,
-          dealQueueRes,
+          dealQueueRes, cronRes,
         ] = await Promise.all([
           adminClient.from("profiles").select("*"),
           adminClient.from("deals").select("*"),
           adminClient.from("game_history").select("*").order("played_at", { ascending: false }).limit(200),
-          adminClient.from("game_history").select("won, difficulty, performance_modifier, final_delta, base_delta, time_seconds, moves, game_mode, deal_uuid, played_at").limit(1000),
+          adminClient.from("game_history").select("id, user_id, won, difficulty, performance_modifier, final_delta, base_delta, time_seconds, moves, game_mode, deal_uuid, played_at, rating_before, rating_after, difficulty_score").limit(1000),
           adminClient.from("streak_history").select("*").gte("date", weekAgo),
           adminClient.from("daily_challenges").select("*, deals(*)").eq("date", today).maybeSingle(),
           adminClient.from("daily_challenge_completions").select("*, profiles(display_name)").eq("date", today).order("actual_time", { ascending: true }),
@@ -501,6 +502,7 @@ Deno.serve(async (req) => {
             })
           ),
           adminClient.from("deal_queue").select("user_id, game_mode, served_at"),
+          (async () => { try { const { data } = await adminClient.rpc("get_cron_jobs"); return data || []; } catch { return []; } })(),
         ]);
 
         const profiles = profilesRes.data || [];
@@ -512,18 +514,11 @@ Deno.serve(async (req) => {
 
         // Users
         const users = profiles.map((p: any) => ({
-          userId: p.id,
-          displayName: p.display_name,
-          puzzleIQ: p.rating,
-          tier: p.subscription_tier || "free",
-          gamesPlayed: p.games_played,
-          wins: p.games_won,
-          winRate: p.games_played > 0 ? +(p.games_won / p.games_played).toFixed(3) : 0,
-          currentStreak: p.current_streak,
-          bestStreak: p.best_streak,
-          subscriptionStatus: p.subscription_status,
-          joinedAt: p.created_at,
-          lastActiveAt: p.updated_at,
+          userId: p.id, displayName: p.display_name, puzzleIQ: p.rating,
+          tier: p.subscription_tier || "free", gamesPlayed: p.games_played,
+          wins: p.games_won, winRate: p.games_played > 0 ? +(p.games_won / p.games_played).toFixed(3) : 0,
+          currentStreak: p.current_streak, bestStreak: p.best_streak,
+          subscriptionStatus: p.subscription_status, joinedAt: p.created_at, lastActiveAt: p.updated_at,
         }));
 
         // Deal pool
@@ -532,6 +527,9 @@ Deno.serve(async (req) => {
         const byDiff: Record<string, number> = { easy: 0, medium: 0, hard: 0, expert: 0 };
         let totalConf = 0, totalInitial = 0, totalBlended = 0, totalDrift = 0;
         let solverOnly = 0, blending = 0, empiricalOnly = 0;
+        let dealsWithZeroMinMoves = 0, totalSimCount = 0;
+        const confByMode: Record<string, { sum: number; count: number }> = { klondike: { sum: 0, count: 0 }, freecell: { sum: 0, count: 0 } };
+
         for (const d of allDeals) {
           byTier[d.tier] = (byTier[d.tier] || 0) + 1;
           byMode[d.game_mode] = (byMode[d.game_mode] || 0) + 1;
@@ -539,38 +537,140 @@ Deno.serve(async (req) => {
           totalInitial += d.dds_initial;
           totalBlended += d.dds_blended;
           totalDrift += Math.abs(d.dds_blended - d.dds_initial);
+          totalSimCount += d.simulation_count || 0;
+          if (d.min_moves <= 0) dealsWithZeroMinMoves++;
           if (d.pool_attempts < 30) solverOnly++;
           else if (d.pool_attempts < 100) blending++;
           else empiricalOnly++;
+          const mode = d.game_mode as string;
+          if (confByMode[mode]) { confByMode[mode].sum += d.confidence; confByMode[mode].count++; }
           const dds = d.dds_blended;
-          if (dds < 35) byDiff.easy++;
-          else if (dds < 58) byDiff.medium++;
-          else if (dds < 78) byDiff.hard++;
+          if (dds <= 25) byDiff.easy++;
+          else if (dds <= 55) byDiff.medium++;
+          else if (dds <= 80) byDiff.hard++;
           else byDiff.expert++;
         }
         const n = allDeals.length || 1;
+        const totalDeals = allDeals.length;
+        const easyPct = totalDeals ? byDiff.easy / totalDeals : 0;
+        const avgConfOverall = totalConf / n;
 
         // Recent games mapped
         const dailyDealId = dailyChalRes.data?.deal_id;
         const mappedGames = recentGames.map((g: any) => ({
-          gameId: g.id,
-          userId: g.user_id,
-          gameMode: g.game_mode,
-          result: g.won ? "win" : "loss",
-          actualMoves: g.moves,
-          actualTimeSeconds: g.time_seconds,
-          hintsUsed: g.hints_used,
-          performanceModifier: g.performance_modifier,
-          baseDelta: g.base_delta,
-          finalDelta: g.final_delta,
-          ratingBefore: g.rating_before,
-          ratingAfter: g.rating_after,
-          dealDDS: 0,
-          isDailyChallenge: g.deal_uuid === dailyDealId,
-          completedAt: g.played_at,
+          gameId: g.id, userId: g.user_id, gameMode: g.game_mode,
+          result: g.won ? "win" : "loss", actualMoves: g.moves,
+          actualTimeSeconds: g.time_seconds, hintsUsed: g.hints_used,
+          performanceModifier: g.performance_modifier, baseDelta: g.base_delta,
+          finalDelta: g.final_delta, ratingBefore: g.rating_before,
+          ratingAfter: g.rating_after, dealDDS: g.difficulty_score || 0,
+          isDailyChallenge: g.deal_uuid === dailyDealId, completedAt: g.played_at,
         }));
 
-        // Scoring distribution
+        // === SCORING INTEGRITY ===
+        let gamesWithZeroDDS = 0, gamesWithDefaultModifier = 0, gamesWithZeroDeltaOnWin = 0;
+        let ratingMismatchCount = 0, duplicateGameCount = 0;
+        const brokenGameIds: string[] = [];
+        const totalWins = allGames.filter((g: any) => g.won).length;
+        const totalGamesCount = allGames.length;
+
+        // Dedup detection: group by user_id + deal_uuid + won
+        const dedupMap = new Map<string, any[]>();
+
+        for (const g of allGames) {
+          const dds = g.difficulty_score || 0;
+          if (dds === 0) { gamesWithZeroDDS++; brokenGameIds.push(g.id); }
+          if (g.won && g.performance_modifier === 1.0 && g.difficulty_score > 0) {
+            // Only flag if we'd expect a non-1.0 modifier (has deal data)
+            gamesWithDefaultModifier++;
+          }
+          if (g.won && g.final_delta === 0) { gamesWithZeroDeltaOnWin++; brokenGameIds.push(g.id); }
+          if (g.rating_after - g.rating_before !== g.final_delta && g.final_delta != null) {
+            ratingMismatchCount++;
+            brokenGameIds.push(g.id);
+          }
+
+          // Dedup check
+          if (g.deal_uuid) {
+            const key = `${g.user_id}|${g.deal_uuid}|${g.won}|${g.moves}`;
+            if (!dedupMap.has(key)) dedupMap.set(key, []);
+            dedupMap.get(key)!.push(g);
+          }
+        }
+
+        for (const [, games] of dedupMap) {
+          if (games.length > 1) duplicateGameCount += games.length - 1;
+        }
+
+        const gamesWithValidDDS = totalGamesCount - gamesWithZeroDDS;
+        const gamesWithNonDefaultMod = totalWins - gamesWithDefaultModifier;
+        const duplicateRate = totalGamesCount > 0 ? duplicateGameCount / totalGamesCount : 0;
+        const ratingValidityScore = totalGamesCount > 0
+          ? +((gamesWithValidDDS / totalGamesCount) * (totalWins > 0 ? gamesWithNonDefaultMod / totalWins : 1) * (1 - duplicateRate)).toFixed(3)
+          : 1.0;
+
+        // === DEAL GENERATION HEALTH ===
+        const diffDistActual = {
+          easy: totalDeals ? `${(byDiff.easy / totalDeals * 100).toFixed(1)}%` : "0%",
+          medium: totalDeals ? `${(byDiff.medium / totalDeals * 100).toFixed(1)}%` : "0%",
+          hard: totalDeals ? `${(byDiff.hard / totalDeals * 100).toFixed(1)}%` : "0%",
+          expert: totalDeals ? `${(byDiff.expert / totalDeals * 100).toFixed(1)}%` : "0%",
+        };
+        const distHealthy = byDiff.easy >= totalDeals * 0.1 && byDiff.medium >= totalDeals * 0.15;
+
+        // === PLAYER COHORTS ===
+        const now = new Date();
+        let day1Ret = 0, day7Ret = 0, day1Total = 0, day7Total = 0;
+        const dropOff: Record<string, number> = { stoppedAt1: 0, stoppedAt2: 0, stoppedAt3: 0, stoppedAt4to10: 0, stoppedAt10plus: 0 };
+
+        for (const p of profiles) {
+          const joinedDaysAgo = (now.getTime() - new Date(p.created_at).getTime()) / 86400000;
+          if (joinedDaysAgo >= 1) {
+            day1Total++;
+            if (p.games_played >= 2) day1Ret++;
+          }
+          if (joinedDaysAgo >= 7) {
+            day7Total++;
+            if (p.games_played >= 5) day7Ret++;
+          }
+          // Drop-off analysis
+          if (p.games_played === 1) dropOff.stoppedAt1++;
+          else if (p.games_played === 2) dropOff.stoppedAt2++;
+          else if (p.games_played === 3) dropOff.stoppedAt3++;
+          else if (p.games_played >= 4 && p.games_played <= 10) dropOff.stoppedAt4to10++;
+          else if (p.games_played > 10) dropOff.stoppedAt10plus++;
+        }
+
+        // Player trends (last 7 days) — for active players only
+        const activePlayers = profiles.filter((p: any) => p.games_played > 0).slice(0, 20);
+        const playerTrends = [];
+        for (const p of activePlayers) {
+          const userGames = allGames.filter((g: any) => g.user_id === p.id);
+          const last7: number[] = [0, 0, 0, 0, 0, 0, 0];
+          for (const g of userGames) {
+            const daysAgo = Math.floor((now.getTime() - new Date(g.played_at).getTime()) / 86400000);
+            if (daysAgo >= 0 && daysAgo < 7) last7[6 - daysAgo]++;
+          }
+          const firstHalf = last7.slice(0, 3).reduce((a, b) => a + b, 0);
+          const secondHalf = last7.slice(4).reduce((a, b) => a + b, 0);
+          const total = last7.reduce((a, b) => a + b, 0);
+          let trend: string;
+          if (total === 0) trend = "inactive";
+          else if (secondHalf > firstHalf * 1.5) trend = "increasing";
+          else if (firstHalf > secondHalf * 1.5) trend = "decreasing";
+          else trend = "stable";
+
+          playerTrends.push({
+            userId: p.id, displayName: p.display_name,
+            gamesPerDayLast7Days: last7, trend,
+          });
+        }
+
+        // Avg games per session / session length (approximate: games per day as proxy)
+        const totalGamesAll = profiles.reduce((s: number, p: any) => s + p.games_played, 0);
+        const avgGamesPerSession = profiles.length > 0 ? +(totalGamesAll / Math.max(profiles.length, 1)).toFixed(1) : 0;
+
+        // === SCORING DISTRIBUTION ===
         const pms = allGames.map((g: any) => g.performance_modifier).filter((v: any) => v != null) as number[];
         const deltas = allGames.map((g: any) => g.final_delta).filter((v: any) => v != null) as number[];
         pms.sort((a, b) => a - b);
@@ -608,12 +708,12 @@ Deno.serve(async (req) => {
           byDiffGames[d].time += g.time_seconds || 0;
         }
         const wrByDiff: Record<string, number> = {};
-        const avgMoves: Record<string, number> = {};
-        const avgTime: Record<string, number> = {};
+        const avgMovesByDiff: Record<string, number> = {};
+        const avgTimeByDiff: Record<string, number> = {};
         for (const [k, v] of Object.entries(byDiffGames)) {
           wrByDiff[k] = v.total > 0 ? +(v.wins / v.total).toFixed(3) : 0;
-          avgMoves[k] = v.total > 0 ? +(v.moves / v.total).toFixed(1) : 0;
-          avgTime[k] = v.total > 0 ? +(v.time / v.total).toFixed(1) : 0;
+          avgMovesByDiff[k] = v.total > 0 ? +(v.moves / v.total).toFixed(1) : 0;
+          avgTimeByDiff[k] = v.total > 0 ? +(v.time / v.total).toFixed(1) : 0;
         }
 
         // Streaks
@@ -646,39 +746,86 @@ Deno.serve(async (req) => {
           const [userId, gameMode] = key.split("|");
           return { userId, gameMode, queueDepth: val.count, flagged: val.count <= 1 };
         });
+        const anyQueueEmpty = dealQueueHealth.some(q => q.flagged);
 
         // Daily challenge today
         const dc = dailyChalRes.data;
         const dcCompletions = completions;
         const dcWins = dcCompletions.filter((c: any) => c.result === "won").length;
         const dailyChallengeToday = {
-          exists: !!dc,
-          dealId: dc?.deal_id || null,
-          gameMode: dc?.game_mode || null,
-          targetDDSMin: dc?.target_dds_min || 0,
-          targetDDSMax: dc?.target_dds_max || 0,
-          attemptsToday: dcCompletions.length,
-          completionsToday: dcCompletions.length,
+          exists: !!dc, dealId: dc?.deal_id || null, gameMode: dc?.game_mode || null,
+          targetDDSMin: dc?.target_dds_min || 0, targetDDSMax: dc?.target_dds_max || 0,
+          attemptsToday: dcCompletions.length, completionsToday: dcCompletions.length,
           winRateToday: dcCompletions.length > 0 ? +(dcWins / dcCompletions.length).toFixed(3) : 0,
           leaderboardTop5: dcCompletions.slice(0, 5).map((c: any) => ({
-            displayName: c.profiles?.display_name || "Unknown",
-            result: c.result,
-            moves: c.actual_moves,
-            time: c.actual_time,
-            delta: c.final_delta,
+            displayName: c.profiles?.display_name || "Unknown", result: c.result,
+            moves: c.actual_moves, time: c.actual_time, delta: c.final_delta,
           })),
         };
 
         const tableCounts: Record<string, number> = {};
         for (const [t, c] of tableCountsRes) tableCounts[t] = c;
 
+        // Games in last 24 hours with zero DDS
+        const recentZeroDDS = allGames.filter((g: any) => (g.difficulty_score || 0) === 0 && new Date(g.played_at).getTime() > Date.now() - 86400000).length;
+
+        // Inactive users (no game in 7+ days)
+        const inactiveUsers = profiles.filter((p: any) => {
+          if (p.games_played === 0) return false;
+          const lastActive = new Date(p.updated_at).getTime();
+          return (now.getTime() - lastActive) > 7 * 86400000;
+        }).length;
+
+        const starterPoolSize = allDeals.filter((d: any) => d.is_calibration || d.tier === "calibration" || d.tier === "starter").length;
+
+        // === ALERTS ===
+        const alerts: Array<{ severity: string; code: string; message: string; affectedCount: number; detectedAt: string }> = [];
+        const ts = now.toISOString();
+
+        if (recentZeroDDS > 0) alerts.push({ severity: "critical", code: "ZERO_DDS_GAMES", message: `${recentZeroDDS} games in last 24h have dealDDS = 0`, affectedCount: recentZeroDDS, detectedAt: ts });
+        if ((cronRes as any[]).length === 0) alerts.push({ severity: "critical", code: "NO_CRON_JOBS", message: "No cron jobs registered in pg_cron", affectedCount: 0, detectedAt: ts });
+        if (ratingValidityScore < 0.8) alerts.push({ severity: "critical", code: "LOW_VALIDITY_SCORE", message: `Rating validity score is ${ratingValidityScore} (threshold: 0.8)`, affectedCount: totalGamesCount, detectedAt: ts });
+        if (!dc) alerts.push({ severity: "critical", code: "NO_DAILY_CHALLENGE", message: "No daily challenge seeded for today", affectedCount: 0, detectedAt: ts });
+
+        if (easyPct < 0.15) alerts.push({ severity: "warning", code: "LOW_EASY_DEALS", message: `Easy deals are ${(easyPct * 100).toFixed(1)}% of pool (target: 15%+)`, affectedCount: byDiff.easy, detectedAt: ts });
+        if (anyQueueEmpty) alerts.push({ severity: "warning", code: "EMPTY_QUEUES", message: "Some user queues have 0-1 deals remaining", affectedCount: dealQueueHealth.filter(q => q.flagged).length, detectedAt: ts });
+        if (duplicateGameCount > 0) alerts.push({ severity: "warning", code: "DUPLICATE_GAMES", message: `${duplicateGameCount} duplicate game records detected`, affectedCount: duplicateGameCount, detectedAt: ts });
+        if (avgConfOverall < 0.7) alerts.push({ severity: "warning", code: "LOW_AVG_CONFIDENCE", message: `Average deal confidence is ${avgConfOverall.toFixed(2)} (threshold: 0.7)`, affectedCount: totalDeals, detectedAt: ts });
+
+        if (inactiveUsers > 0) alerts.push({ severity: "info", code: "INACTIVE_USERS", message: `${inactiveUsers} users inactive for 7+ days`, affectedCount: inactiveUsers, detectedAt: ts });
+        if (starterPoolSize < 100) alerts.push({ severity: "info", code: "SMALL_STARTER_POOL", message: `Starter pool has ${starterPoolSize} deals (target: 100+)`, affectedCount: starterPoolSize, detectedAt: ts });
+
         const snapshot = {
-          generatedAt: new Date().toISOString(),
+          generatedAt: now.toISOString(),
+          alerts,
           userCount: profiles.length,
           users,
+          scoringIntegrity: {
+            ratingValidityScore, gamesWithZeroDDS, gamesWithDefaultModifier,
+            gamesWithZeroDeltaOnWin, ratingMismatchCount, duplicateGameCount,
+            brokenGameIds: brokenGameIds.slice(0, 50),
+          },
+          dealGenerationHealth: {
+            dealsWithZeroMinSolutionLength: dealsWithZeroMinMoves,
+            avgSimulationCount: +(totalSimCount / n).toFixed(1),
+            avgConfidenceByMode: {
+              klondike: confByMode.klondike.count > 0 ? +(confByMode.klondike.sum / confByMode.klondike.count).toFixed(3) : 0,
+              freecell: confByMode.freecell.count > 0 ? +(confByMode.freecell.sum / confByMode.freecell.count).toFixed(3) : 0,
+            },
+            difficultyDistributionTarget: { easy: "25%", medium: "30%", hard: "30%", expert: "15%" },
+            difficultyDistributionActual: diffDistActual,
+            distributionHealthy: distHealthy,
+          },
+          playerCohorts: {
+            day1Retention: day1Total > 0 ? +(day1Ret / day1Total).toFixed(3) : 0,
+            day7Retention: day7Total > 0 ? +(day7Ret / day7Total).toFixed(3) : 0,
+            avgGamesPerSession: avgGamesPerSession,
+            avgSessionLengthSeconds: 0,
+            dropOffByGameNumber: dropOff,
+            playerTrends,
+          },
           dealPool: {
-            total: allDeals.length,
-            byTier, byMode, byDifficulty: byDiff,
+            total: totalDeals, byTier, byMode, byDifficulty: byDiff,
             avgConfidence: +(totalConf / n).toFixed(3),
             ddsBlendStage: { solverOnly, blending, empiricalOnly },
             avgDDSInitial: +(totalInitial / n).toFixed(1),
@@ -688,35 +835,26 @@ Deno.serve(async (req) => {
           recentGames: mappedGames,
           scoringDistribution: {
             performanceModifiers: {
-              min: pms.length ? pms[0] : 0,
-              max: pms.length ? pms[pms.length - 1] : 0,
-              mean: +mean(pms).toFixed(3),
-              median: +median(pms).toFixed(3),
-              distribution: pmDist,
+              min: pms.length ? pms[0] : 0, max: pms.length ? pms[pms.length - 1] : 0,
+              mean: +mean(pms).toFixed(3), median: +median(pms).toFixed(3), distribution: pmDist,
             },
             eloDeltas: {
-              min: deltas.length ? deltas[0] : 0,
-              max: deltas.length ? deltas[deltas.length - 1] : 0,
-              mean: +mean(deltas).toFixed(1),
-              median: +median(deltas),
-              distribution: eloDist,
+              min: deltas.length ? deltas[0] : 0, max: deltas.length ? deltas[deltas.length - 1] : 0,
+              mean: +mean(deltas).toFixed(1), median: +median(deltas), distribution: eloDist,
             },
-            winRateByDifficulty: wrByDiff,
-            avgMovesPerDifficulty: avgMoves,
-            avgTimePerDifficulty: avgTime,
-            nullOrZeroDeltaCount: nullOrZero,
-            winFloorTriggeredCount: winFloor,
-            lossCeilingTriggeredCount: lossCeiling,
+            winRateByDifficulty: wrByDiff, avgMovesPerDifficulty: avgMovesByDiff,
+            avgTimePerDifficulty: avgTimeByDiff, nullOrZeroDeltaCount: nullOrZero,
+            winFloorTriggeredCount: winFloor, lossCeilingTriggeredCount: lossCeiling,
           },
           streakData: {
-            usersWithActiveStreak: activeStreaks.length,
-            streakDistribution: streakDist,
-            milestonesReached,
-            freezesUsedThisWeek: freezesThisWeek,
-            atRiskToday: atRisk,
+            usersWithActiveStreak: activeStreaks.length, streakDistribution: streakDist,
+            milestonesReached, freezesUsedThisWeek: freezesThisWeek, atRiskToday: atRisk,
           },
           systemHealth: {
-            cronJobs: [],
+            cronJobs: (cronRes as any[]).map((j: any) => ({
+              name: j.jobname || j.name, schedule: j.schedule, lastRun: j.last_run || null,
+              lastRunStatus: j.last_run_status || (j.active ? "active" : "unknown"),
+            })),
             edgeFunctions: {
               "complete-game": { lastRun: null, status: "unknown" },
               "refill-deal-queue": { lastRun: null, status: "unknown" },
@@ -724,9 +862,7 @@ Deno.serve(async (req) => {
               "award-streak-freezes": { lastRun: null, status: "unknown" },
               "streak-risk-notifications": { lastRun: null, status: "unknown" },
             },
-            dealQueueHealth,
-            dailyChallengeToday,
-            tableRowCounts: tableCounts,
+            dealQueueHealth, dailyChallengeToday, tableRowCounts: tableCounts,
           },
         };
 

@@ -174,6 +174,20 @@ export default function Daily() {
       </header>
 
       <main className="px-4 sm:px-6 py-6 max-w-md mx-auto space-y-6">
+        {/* Streak status */}
+        {currentStreak >= 2 ? (
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <Flame className="w-4 h-4 text-destructive" />
+            <span className="font-medium">Day {currentStreak} of your streak</span>
+          </div>
+        ) : (
+          <div className="text-center text-sm text-muted-foreground">Start a streak today</div>
+        )}
+
+        {/* Day label */}
+        {DAY_LABELS[dayOfWeek] && (
+          <p className="text-center text-xs text-muted-foreground font-medium">{DAY_LABELS[dayOfWeek]}</p>
+        )}
         {/* Countdown */}
         <motion.div
           className="stat-card text-center py-4"

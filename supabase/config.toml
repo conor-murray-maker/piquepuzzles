@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.customer-portal]
 verify_jwt = false
+
+[functions.seed-today-challenge]
+verify_jwt = false

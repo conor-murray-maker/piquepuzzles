@@ -457,6 +457,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   const handleGiveUp = useCallback(() => {
     setShowGiveUpDialog(false);
+    haptic.heavy();
     clearStorage();
     const lostState: KlondikeState = { ...state, isWon: false };
     if (onGiveUp) {

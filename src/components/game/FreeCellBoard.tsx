@@ -435,6 +435,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const handleGiveUp = useCallback(() => {
     setShowGiveUpDialog(false);
+    haptic.heavy();
     clearFreeCellStorage();
     const lostState: FreeCellState = { ...state, isWon: false };
     if (onGiveUp) onGiveUp(lostState, elapsedRef.current);

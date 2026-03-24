@@ -145,6 +145,23 @@ function StatsContent({ games, stats }: {
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1">
+            <Flame className="w-4 h-4 text-destructive" />
+            <p className="text-xs text-muted-foreground font-medium">Current Streak</p>
+          </div>
+          <p className="text-2xl font-bold font-mono">{stats.currentStreak}</p>
+        </div>
+      </motion.div>
+
+      {/* Streak Calendar */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <StreakCalendar />
+          </CardContent>
+        </Card>
+      </motion.div>
+        <div className="stat-card">
+          <div className="flex items-center gap-2 mb-1">
             <Hash className="w-4 h-4 text-muted-foreground" />
             <p className="text-xs text-muted-foreground font-medium">Avg Moves</p>
           </div>

@@ -35,7 +35,7 @@ export default function Admin() {
   ];
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="bg-muted/30 overflow-y-auto overscroll-contain" style={{ position: 'fixed', inset: 0 }}>
       <div className="border-b bg-background">
         <div className="max-w-[1400px] mx-auto px-4 py-3 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">

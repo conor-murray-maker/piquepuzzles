@@ -535,6 +535,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      count_daily_attempts: { Args: { p_date: string }; Returns: number }
       create_challenge: {
         Args: {
           p_deal_seed: number
@@ -555,6 +556,16 @@ export type Database = {
           active: boolean
           jobname: string
           schedule: string
+        }[]
+      }
+      get_daily_leaderboard: {
+        Args: { p_date: string }
+        Returns: {
+          actual_moves: number
+          actual_time: number
+          display_name: string
+          result: string
+          user_id: string
         }[]
       }
       get_rating_percentile: { Args: { user_rating: number }; Returns: number }

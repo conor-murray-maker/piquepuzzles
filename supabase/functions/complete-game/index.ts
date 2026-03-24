@@ -360,11 +360,17 @@ Deno.serve(async (req) => {
     const dealAvgMoves = hasPoolData ? (deal.pool_avg_moves as number) : null;
 
     if (isWin) {
-      const poolAvgTime = dealAvgTime ?? (minMoves > 0 ? minMoves * 4 : 300);
+      // DDS-based fallbacks when no pool data
+      const klondikeExpTime = 60 + (dds / 100) * 480;
+      const klondikeExpMoves = 80 + (dds / 100) * 120;
+      const freecellExpTime = 90 + (dds / 100) * 300;
+      const freecellExpMoves = 60 + (dds / 100) * 100;
+
+      const poolAvgTime = dealAvgTime ?? (gameMode === 'freecell' ? freecellExpTime : klondikeExpTime);
       const expectedTime = Math.max(poolAvgTime, 30);
       timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 10)));
 
-      const poolAvgMoves = dealAvgMoves ?? (minMoves > 0 ? minMoves * 1.8 : 150);
+      const poolAvgMoves = dealAvgMoves ?? (gameMode === 'freecell' ? freecellExpMoves : klondikeExpMoves);
       const expectedMoves = Math.max(poolAvgMoves, 20);
       moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 10)));
 

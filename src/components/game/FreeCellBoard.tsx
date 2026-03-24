@@ -272,8 +272,16 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     if (!gameStarted) setGameStarted(true);
     pushHistory(state);
     setState(newState);
-    if (triggersAutoSend) setAutoSendChain(true);
-    if (newState.isWon) fireGameEnd(newState);
+    if (triggersAutoSend) {
+      setAutoSendChain(true);
+      haptic.medium();
+    } else {
+      haptic.light();
+    }
+    if (newState.isWon) {
+      haptic.success();
+      fireGameEnd(newState);
+    }
     return true;
   }, [state, pushHistory, fireGameEnd, gameStarted]);
 

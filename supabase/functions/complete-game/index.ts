@@ -453,10 +453,13 @@ Deno.serve(async (req) => {
       profileUpdate.last_win_date = new Date().toISOString().split('T')[0];
     }
 
-    await supabaseAdmin.from('profiles').update(profileUpdate).eq('id', userId);
+    const { error: profileUpdateErr } = await supabaseAdmin.from('profiles').update(profileUpdate).eq('id', userId);
+    if (profileUpdateErr) {
+      console.error('[complete-game] profiles update failed:', profileUpdateErr);
+    }
 
     // 7. Insert game history
-    await supabaseAdmin.from('game_history').insert({
+    const { error: historyErr } = await supabaseAdmin.from('game_history').insert({
       user_id: userId,
       deal_id: clientDealId || `deal-${dealSeed}`,
       won: isWin,
@@ -475,6 +478,9 @@ Deno.serve(async (req) => {
       final_delta: finalDelta,
       deal_uuid: deal?.id || null,
     } as Record<string, unknown>);
+    if (historyErr) {
+      console.error('[complete-game] game_history insert failed:', historyErr);
+    }
 
     // 8. Streak update
     const { data: freshProfile } = await supabaseAdmin

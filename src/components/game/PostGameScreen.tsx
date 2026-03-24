@@ -198,7 +198,7 @@ export function PostGameScreen({
             transition={{ delay: 0.3 }}
           >
             <div className="flex items-center justify-center gap-2 mb-2">
-              <Swords className="w-4 h-4 text-primary" />
+              <Share2 className="w-4 h-4 text-primary" />
               <span className="text-sm font-semibold">Challenge Result</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs">

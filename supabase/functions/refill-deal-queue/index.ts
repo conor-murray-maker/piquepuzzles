@@ -85,15 +85,22 @@ Deno.serve(async (req) => {
 
     // 2. Insert fresh deals into deals table and queue them
     for (const fd of freshDeals) {
+      // Validate minMoves
+      const minMoves = typeof fd.minMoves === 'number' && fd.minMoves > 0 ? fd.minMoves : 0;
+      // Compute DDS server-side — ignore client-supplied ddsInitial
+      const dds = minMoves > 0
+        ? (gameMode === 'freecell' ? freecellComplexity(minMoves) : klondikeComplexity(minMoves))
+        : 50;
+
       const { data: dealData } = await supabaseAdmin
         .from('deals')
         .upsert({
           seed: fd.seed,
           game_mode: gameMode,
           draw_mode: drawMode,
-          min_moves: fd.minMoves,
-          dds_initial: fd.ddsInitial,
-          dds_blended: fd.ddsInitial,
+          min_moves: minMoves,
+          dds_initial: dds,
+          dds_blended: dds,
           tier: 'fresh',
           is_calibration: false,
         }, { onConflict: 'seed,game_mode,draw_mode' })

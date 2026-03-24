@@ -607,15 +607,19 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   return (
     <div
       ref={gameBoardRef}
-      className="min-h-screen flex flex-col"
+      className="flex flex-col"
       style={{
+        height: '100dvh',
         background: '#f1f5f9',
         overscrollBehavior: 'none',
         touchAction: 'none',
       }}
     >
       {/* Top bar — simplified: timer left, moves+difficulty center, give up right */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
+      <div
+        className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm"
+        style={{ paddingTop: 'calc(12px + var(--safe-area-top, 0px))' }}
+      >
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
           <Timer className="w-3.5 h-3.5" />
           <span>{formatTime(elapsed)}</span>

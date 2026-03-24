@@ -549,6 +549,14 @@ export type Database = {
         }
         Returns: string
       }
+      get_cron_jobs: {
+        Args: never
+        Returns: {
+          active: boolean
+          jobname: string
+          schedule: string
+        }[]
+      }
       get_rating_percentile: { Args: { user_rating: number }; Returns: number }
     }
     Enums: {

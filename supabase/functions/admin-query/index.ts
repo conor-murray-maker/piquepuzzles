@@ -500,7 +500,7 @@ Deno.serve(async (req) => {
             })
           ),
           adminClient.from("deal_queue").select("user_id, game_mode, served_at"),
-          (async () => { try { const { data } = await adminClient.rpc("get_cron_jobs"); return data || []; } catch { return []; } })(),
+          (async () => { try { const { data, error } = await adminClient.rpc("get_cron_jobs"); if (error) { console.warn("get_cron_jobs RPC error:", error.message); return null; } return data || []; } catch (e) { console.warn("get_cron_jobs exception:", e); return null; } })(),
         ]);
 
         const profiles = profilesRes.data || [];

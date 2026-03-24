@@ -132,8 +132,44 @@ export default function Profile() {
           </Button>
         </motion.div>
 
-        {/* Games summary */}
+        {/* Streak info */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <Card>
+            <CardContent className="pt-4 pb-3 space-y-3">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Streak</p>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-destructive" />
+                  <span className="text-sm font-medium">Current Streak</span>
+                </div>
+                <span className="text-lg font-mono font-bold">{stats.currentStreak}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-gold" />
+                  <span className="text-sm font-medium">Best Streak</span>
+                </div>
+                <span className="text-lg font-mono font-bold">{stats.bestStreak}</span>
+              </div>
+              {profile?.subscription_status === 'premium' && (
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium">Streak Freeze</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {(profile as any)?.streak_freezes_remaining > 0
+                      ? '1 freeze available'
+                      : `Used ${(profile as any)?.streak_freeze_used_on || 'N/A'}`}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Games summary */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <Card>
             <CardContent className="pt-4 pb-3 space-y-3">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Games Played</p>

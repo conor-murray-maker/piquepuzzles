@@ -156,6 +156,15 @@ export function PostGameScreen({
             previousRating={previousRating}
             ratingChange={ratingChange}
           />
+          <ScoreBreakdown
+            won={gameState.isWon}
+            ratingChange={ratingChange}
+            difficulty={gameState.difficulty}
+            moves={gameState.moves}
+            timeSeconds={timeSeconds}
+            hintsUsed={gameState.hintsUsed}
+            undosUsed={gameState.undosUsed}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">

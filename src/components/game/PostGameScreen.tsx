@@ -255,7 +255,7 @@ export function PostGameScreen({
             disabled={sharing}
             className="w-full"
           >
-            <Swords className="w-4 h-4 mr-2" />
+            <Share2 className="w-4 h-4 mr-2" />
             Challenge a Friend
           </Button>
         )}

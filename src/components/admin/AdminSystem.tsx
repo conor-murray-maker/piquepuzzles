@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, CheckCircle, Play, RefreshCw, Shield, Download, Copy, Loader2, AlertCircle, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle, Play, RefreshCw, Shield, Download, Copy, Loader2, AlertCircle, Info, Database } from "lucide-react";
 
 interface Alert {
   severity: "critical" | "warning" | "info";
@@ -273,6 +273,9 @@ export function AdminSystem() {
             </Button>
             <Button variant="outline" onClick={() => triggerAction("trigger_refill", "Refill queues")} disabled={action.isPending}>
               <RefreshCw className="h-4 w-4 mr-2" /> Refill All Deal Queues
+            </Button>
+            <Button variant="outline" onClick={() => triggerAction("seed_starter_pool", "Seed starter pool")} disabled={action.isPending}>
+              <Database className="h-4 w-4 mr-2" /> Seed Starter Pool
             </Button>
           </div>
         </CardContent>

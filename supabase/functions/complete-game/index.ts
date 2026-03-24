@@ -64,7 +64,11 @@ async function updateStreak(
   let dailyWinsToday = profile.daily_wins_today as number;
   let dailyChallengeCompletedToday = profile.daily_challenge_completed_today as boolean;
 
-  if (!lastStreakDate || lastStreakDate < today) {
+  // Reset daily counters if last_win_date is not today
+  // Use last_win_date (set by step 6 on every win) rather than last_streak_date
+  // to avoid resetting counters when streak hasn't been earned yet
+  const lastWinDate = profile.last_win_date as string | null;
+  if (!lastWinDate || lastWinDate < today) {
     dailyWinsToday = 0;
     dailyChallengeCompletedToday = false;
   }
@@ -78,7 +82,23 @@ async function updateStreak(
   }
 
   const conditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
-  const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : 'two_wins';
+  const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : (dailyWinsToday >= 2 ? 'two_wins' : 'none');
+
+  // Check if streak was already earned today
+  const { data: existingStreakToday } = await supabaseAdmin
+    .from('streak_history')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('date', today)
+    .limit(1);
+  const streakAlreadyEarnedToday = (existingStreakToday?.length ?? 0) > 0;
+
+  console.log('[complete-game] streak debug:', {
+    conditionMet, lastStreakDate, lastWinDate, today, dailyWinsToday,
+    dailyChallengeCompletedToday, isWin: result === 'win',
+    streakAlreadyEarnedToday,
+    willWrite: conditionMet && !streakAlreadyEarnedToday,
+  });
 
   let currentStreak = profile.current_streak as number;
   let bestStreak = profile.best_streak as number;
@@ -87,7 +107,7 @@ async function updateStreak(
   let freezeUsed = false;
   let milestoneReached: number | null = null;
 
-  if (conditionMet && lastStreakDate !== today) {
+  if (conditionMet && !streakAlreadyEarnedToday) {
     const yesterday = addDays(today, -1);
     const dayBeforeYesterday = addDays(today, -2);
 
@@ -134,7 +154,7 @@ async function updateStreak(
     }
   }
 
-  // Update profile with streak data
+  // Update profile with streak data — always write daily counters even if condition not met
   const streakUpdate: Record<string, unknown> = {
     daily_wins_today: dailyWinsToday,
     daily_challenge_completed_today: dailyChallengeCompletedToday,
@@ -143,9 +163,11 @@ async function updateStreak(
     streak_freezes_remaining: freezesRemaining,
   };
 
-  if (conditionMet && lastStreakDate !== today) {
+  // Only set last_streak_date when condition is actually met and streak earned
+  if (conditionMet && !streakAlreadyEarnedToday) {
     streakUpdate.last_streak_date = today;
   }
+
   if (freezeUsed) {
     streakUpdate.streak_freeze_used_on = freezeUsedOn;
   }
@@ -356,11 +378,17 @@ Deno.serve(async (req) => {
     const dealAvgMoves = hasPoolData ? (deal.pool_avg_moves as number) : null;
 
     if (isWin) {
-      const poolAvgTime = dealAvgTime ?? (minMoves > 0 ? minMoves * 4 : 300);
+      // DDS-based fallbacks when no pool data
+      const klondikeExpTime = 60 + (dds / 100) * 480;
+      const klondikeExpMoves = 80 + (dds / 100) * 120;
+      const freecellExpTime = 90 + (dds / 100) * 300;
+      const freecellExpMoves = 60 + (dds / 100) * 100;
+
+      const poolAvgTime = dealAvgTime ?? (gameMode === 'freecell' ? freecellExpTime : klondikeExpTime);
       const expectedTime = Math.max(poolAvgTime, 30);
       timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 10)));
 
-      const poolAvgMoves = dealAvgMoves ?? (minMoves > 0 ? minMoves * 1.8 : 150);
+      const poolAvgMoves = dealAvgMoves ?? (gameMode === 'freecell' ? freecellExpMoves : klondikeExpMoves);
       const expectedMoves = Math.max(poolAvgMoves, 20);
       moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 10)));
 

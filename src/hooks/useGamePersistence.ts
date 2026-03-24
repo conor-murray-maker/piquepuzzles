@@ -68,7 +68,7 @@ export function useGamePersistence() {
 
       if (error) throw error;
 
-      console.log('[useGamePersistence raw response]', JSON.stringify(data));
+      
 
       const r = data as any;
       await refreshProfile();
@@ -91,7 +91,7 @@ export function useGamePersistence() {
         streakUpdate: r.streakUpdate,
       };
 
-      console.log('[useGamePersistence GameResult]', JSON.stringify(gameResult));
+      
 
       return gameResult;
     } catch (err) {

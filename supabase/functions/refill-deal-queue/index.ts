@@ -92,6 +92,10 @@ Deno.serve(async (req) => {
         ? (gameMode === 'freecell' ? freecellComplexity(minMoves) : klondikeComplexity(minMoves))
         : 50;
 
+      // Compute confidence as simulation_count / 50 clamped to [0, 1]
+      const simCount = typeof (fd as any).simulationCount === 'number' ? (fd as any).simulationCount : 50;
+      const confidence = Math.max(0, Math.min(1, simCount / 50));
+
       const { data: dealData } = await supabaseAdmin
         .from('deals')
         .upsert({
@@ -103,6 +107,8 @@ Deno.serve(async (req) => {
           dds_blended: dds,
           tier: 'fresh',
           is_calibration: false,
+          confidence,
+          simulation_count: simCount,
         }, { onConflict: 'seed,game_mode,draw_mode' })
         .select('id')
         .single();

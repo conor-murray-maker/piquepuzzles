@@ -8,7 +8,7 @@ import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Trophy, Flame, BarChart3, LogOut, Share2, Check, Edit3, User, Layers, Grid3X3 } from 'lucide-react';
+import { Trophy, Flame, BarChart3, LogOut, Share2, Check, Edit3, User, Layers, Grid3X3, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Profile() {

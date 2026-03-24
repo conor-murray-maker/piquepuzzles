@@ -152,6 +152,7 @@ export default function Daily() {
 
   const handlePlay = () => {
     if (!challenge?.deals) return;
+    haptic.medium();
     navigate(
       `/play?mode=${challenge.game_mode}&seed=${challenge.deals.seed}&drawMode=${challenge.deals.draw_mode}&daily=${todayStr}&dailyDealId=${challenge.deal_id}`
     );

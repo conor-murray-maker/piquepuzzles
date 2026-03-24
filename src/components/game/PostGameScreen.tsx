@@ -231,11 +231,11 @@ export function PostGameScreen({
 
 
         <div className="flex gap-3">
-          <Button variant="outline" onClick={onGoHome} className="flex-1">
+          <Button variant="outline" onClick={() => { haptic.light(); onGoHome(); }} className="flex-1">
             <ArrowLeft className="w-4 h-4 mr-1" />
             Home
           </Button>
-          <Button onClick={onPlayAgain} className="flex-1">
+          <Button onClick={() => { haptic.medium(); onPlayAgain(); }} className="flex-1">
             Play Again
           </Button>
         </div>

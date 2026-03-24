@@ -68,10 +68,12 @@ export function useGamePersistence() {
 
       if (error) throw error;
 
+      console.log('[useGamePersistence raw response]', JSON.stringify(data));
+
       const r = data as any;
       await refreshProfile();
 
-      return {
+      const gameResult: GameResult = {
         newRating: r.newRating,
         ratingChange: r.finalDelta,
         previousRating: r.previousRating,
@@ -88,6 +90,10 @@ export function useGamePersistence() {
         },
         streakUpdate: r.streakUpdate,
       };
+
+      console.log('[useGamePersistence GameResult]', JSON.stringify(gameResult));
+
+      return gameResult;
     } catch (err) {
       console.error('Failed to save game result via edge function:', err);
       return null;

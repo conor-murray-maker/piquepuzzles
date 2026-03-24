@@ -220,21 +220,6 @@ export function PostGameScreen({
           </motion.div>
         )}
 
-        {gameState.isWon && percentile > 0 && (
-          <motion.div
-            className="bg-primary/10 rounded-xl p-3 text-center"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.4 }}
-          >
-            <div className="flex items-center justify-center gap-1.5">
-              <TrendingUp className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">
-                Better than <span className="text-primary font-bold">{percentile}%</span> of players
-              </span>
-            </div>
-          </motion.div>
-        )}
 
         <div className="flex gap-3">
           <Button variant="outline" onClick={onGoHome} className="flex-1">

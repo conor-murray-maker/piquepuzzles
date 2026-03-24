@@ -45,7 +45,7 @@ export function PostGameScreen({
   gameState, currentRating, previousRating, ratingChange, onPlayAgain, onGoHome, elapsedSeconds,
   gameMode = 'klondike', dealSeed, drawMode = 3, challengeData, streakUpdate, breakdown,
 }: PostGameScreenProps) {
-  console.log('[PostGameScreen props]', { ratingChange, breakdown, previousRating, currentRating, isWon: gameState.isWon });
+  
   const { user, profile } = useAuth();
   const [sharing, setSharing] = useState(false);
   const [showMilestone, setShowMilestone] = useState(!!streakUpdate?.milestoneReached);

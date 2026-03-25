@@ -909,46 +909,26 @@ Deno.serve(async (req) => {
       }
 
       case "seed_starter_pool": {
-        // Generate synthetic Easy and Medium deals for both game modes
-        // These use known seed ranges that produce low-complexity deals
-        const modes = ["klondike", "freecell"];
-        const rows: any[] = [];
-        
-        for (const mode of modes) {
-          // Generate Easy deals (DDS 5-25) with low min_moves
-          for (let i = 0; i < 30; i++) {
-            const seed = 100000 + (mode === "freecell" ? 50000 : 0) + i;
-            const minMoves = 60 + Math.floor(Math.random() * 35); // 60-94 for klondike → DDS 0-23
-            let dds: number;
-            if (mode === "freecell") {
-              dds = Math.round((minMoves / 125) * 25); // < 125 → 0-25
-            } else {
-              dds = Math.round((minMoves / 100) * 25); // < 100 → 0-25
-            }
-            dds = Math.max(5, Math.min(25, dds));
-            rows.push({
-              seed, game_mode: mode, draw_mode: 3, min_moves: minMoves,
-              dds_initial: dds, dds_blended: dds, tier: "fresh",
-              is_calibration: true, confidence: 0.8, reserved_for: "onboarding",
-            });
-          }
-          // Generate Medium deals (DDS 26-55)
-          for (let i = 0; i < 20; i++) {
-            const seed = 200000 + (mode === "freecell" ? 50000 : 0) + i;
-            const dds = 26 + Math.floor(Math.random() * 30); // 26-55
-            let minMoves: number;
-            if (mode === "freecell") {
-              minMoves = 125 + Math.floor(((dds - 26) / 29) * 50);
-            } else {
-              minMoves = 100 + Math.floor(((dds - 26) / 29) * 30);
-            }
-            rows.push({
-              seed, game_mode: mode, draw_mode: 3, min_moves: minMoves,
-              dds_initial: dds, dds_blended: dds, tier: "fresh",
-              is_calibration: true, confidence: 0.8,
-            });
-          }
+        // Accept pre-verified deals from the client-side solver
+        const { deals } = params || {};
+        if (!deals || !Array.isArray(deals) || deals.length === 0) {
+          return json({ error: "No verified deals provided. Run the solver client-side first." }, 400);
         }
+
+        // Validate each deal has required fields
+        const rows = deals.map((d: any) => ({
+          seed: d.seed,
+          game_mode: d.game_mode,
+          draw_mode: d.draw_mode || 3,
+          min_moves: d.min_moves,
+          dds_initial: d.dds_initial,
+          dds_blended: d.dds_blended,
+          simulation_count: d.simulation_count,
+          confidence: d.confidence,
+          tier: d.tier || "fresh",
+          is_calibration: d.is_calibration ?? true,
+          reserved_for: d.reserved_for || null,
+        }));
 
         const { data, error } = await adminClient
           .from("deals")

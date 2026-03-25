@@ -239,7 +239,7 @@ export function StarterPoolGenerator() {
         <p className="text-sm text-muted-foreground">
           Generates solver-verified solvable deals with Wilson score confidence intervals and path diversity scoring.
           Target: 75 Easy + 50 Medium per game mode (300 starter).
-          Confidence = 50% Wilson interval + 30% tier stability + 20% path diversity.
+          Confidence = 70% Wilson interval width + 30% DDS tier stability. Path diversity applies as a DDS modifier only.
           Up to {MAX_CANDIDATES.toLocaleString()} candidates.
         </p>
 

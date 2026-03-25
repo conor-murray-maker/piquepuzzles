@@ -260,11 +260,15 @@ Deno.serve(async (req) => {
         const byBand: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0, Expert: 0 };
         let totalConf = 0;
         let solverOnly = 0, blending = 0, empirical = 0;
+        // Histogram buckets: 0-0.1, 0.1-0.2, ..., 0.9-1.0
+        const confHistogram = Array(10).fill(0);
 
         for (const d of deals) {
           byTier[d.tier] = (byTier[d.tier] || 0) + 1;
           byMode[d.game_mode] = (byMode[d.game_mode] || 0) + 1;
           totalConf += d.confidence;
+          const bucket = Math.min(9, Math.floor(d.confidence * 10));
+          confHistogram[bucket]++;
           if (d.pool_attempts < 30) solverOnly++;
           else if (d.pool_attempts < 100) blending++;
           else empirical++;
@@ -284,6 +288,10 @@ Deno.serve(async (req) => {
           solverOnly,
           blending,
           empirical,
+          confHistogram: confHistogram.map((count, i) => ({
+            range: `${(i / 10).toFixed(1)}–${((i + 1) / 10).toFixed(1)}`,
+            count,
+          })),
         });
       }
 

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { wilsonInterval } from "@/lib/wilsonConfidence";
 
@@ -63,7 +63,38 @@ export function AdminDeals() {
         </Card>
       </div>
 
-      {/* DDS Drift Scatter */}
+      {/* Confidence Distribution Histogram */}
+      {h.confHistogram && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Confidence Distribution</CardTitle></CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={h.confHistogram}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="range" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} />
+                  <RechartsTooltip content={({ payload }) => {
+                    if (!payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-background border rounded-lg p-2 text-xs shadow-lg">
+                        <p className="font-medium">Confidence {d.range}</p>
+                        <p>{d.count} deals</p>
+                      </div>
+                    );
+                  }} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {(h.confHistogram as any[]).map((_: any, i: number) => (
+                      <Cell key={i} fill={i < 4 ? 'hsl(0, 72%, 51%)' : i < 7 ? 'hsl(45, 93%, 47%)' : 'hsl(142, 71%, 45%)'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader><CardTitle className="text-base">DDS Drift: Initial vs Blended</CardTitle></CardHeader>
         <CardContent>

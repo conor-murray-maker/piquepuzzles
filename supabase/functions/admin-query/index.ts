@@ -982,6 +982,24 @@ Deno.serve(async (req) => {
         return json({ inserted: data?.length ?? 0, total: rows.length });
       }
 
+      case "deals_all": {
+        // Return all deal rows with fields needed for client-side filtering/histograms
+        let allDeals: any[] = [];
+        const batchSize = 1000;
+        let pg = 0;
+        while (true) {
+          const { data: batch } = await adminClient
+            .from("deals")
+            .select("id, seed, game_mode, tier, dds_initial, dds_blended, confidence, path_diversity_score, pool_attempts, pool_wins, pool_avg_moves, pool_avg_time, simulation_count, simulation_wins, is_calibration")
+            .range(pg * batchSize, (pg + 1) * batchSize - 1);
+          if (!batch || batch.length === 0) break;
+          allDeals = allDeals.concat(batch);
+          if (batch.length < batchSize) break;
+          pg++;
+        }
+        return json(allDeals);
+      }
+
       default:
         return json({ error: "Unknown action" }, 400);
     }

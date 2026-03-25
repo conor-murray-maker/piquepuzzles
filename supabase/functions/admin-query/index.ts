@@ -909,7 +909,7 @@ Deno.serve(async (req) => {
       }
 
       case "update_deal_confidence": {
-        const { deal_id, confidence, simulation_count, min_moves, dds_initial, dds_blended } = params || {};
+        const { deal_id, confidence, simulation_count, min_moves, dds_initial, dds_blended, unique_winning_paths, path_diversity_score } = params || {};
         if (!deal_id) return json({ error: "deal_id required" }, 400);
         const updateFields: any = {};
         if (confidence !== undefined) updateFields.confidence = confidence;
@@ -917,6 +917,8 @@ Deno.serve(async (req) => {
         if (min_moves !== undefined) updateFields.min_moves = min_moves;
         if (dds_initial !== undefined) updateFields.dds_initial = dds_initial;
         if (dds_blended !== undefined) updateFields.dds_blended = dds_blended;
+        if (unique_winning_paths !== undefined) updateFields.unique_winning_paths = unique_winning_paths;
+        if (path_diversity_score !== undefined) updateFields.path_diversity_score = path_diversity_score;
         const { error } = await adminClient.from("deals").update(updateFields).eq("id", deal_id);
         if (error) throw error;
         return json({ ok: true });
@@ -942,6 +944,8 @@ Deno.serve(async (req) => {
           tier: d.tier || "fresh",
           is_calibration: d.is_calibration ?? true,
           reserved_for: d.reserved_for || null,
+          unique_winning_paths: d.unique_winning_paths || 0,
+          path_diversity_score: d.path_diversity_score || 0,
         }));
 
         const { data, error } = await adminClient

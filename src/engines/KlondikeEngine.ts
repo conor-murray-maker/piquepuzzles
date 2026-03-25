@@ -2,6 +2,12 @@ import { PuzzleEngine, Deal, VerificationResult, GameMode } from './PuzzleEngine
 import { createKlondikeGame, drawFromStock, moveWasteToTableau, moveWasteToFoundation, moveTableauToFoundation, moveTableauToTableau, canMoveToFoundation, canMoveToTableau } from '@/game/klondike';
 import { KlondikeState } from '@/game/types';
 
+// Hash first N moves of a winning sequence for path diversity
+function hashMoveSequence(moves: string[]): string {
+  // Use first 20 moves as fingerprint — enough to distinguish paths
+  return moves.slice(0, 20).join('|');
+}
+
 class KlondikeEngineImpl implements PuzzleEngine {
   gameMode: GameMode = 'klondike';
 
@@ -13,14 +19,16 @@ class KlondikeEngineImpl implements PuzzleEngine {
   verifySolvable(deal: Deal, simulations: number): VerificationResult {
     let bestMoves = Infinity;
     let completing = 0;
-    let partial = 0; // 90%+ of cards to foundation
+    let partial = 0;
+    const winPathHashes = new Set<string>();
 
     for (let sim = 0; sim < simulations; sim++) {
       const result = this.runSim(deal.seed);
       if (result.won) {
         completing++;
         bestMoves = Math.min(bestMoves, result.moves);
-      } else if (result.foundationCards >= 47) { // 90% of 52
+        winPathHashes.add(hashMoveSequence(result.moveLog));
+      } else if (result.foundationCards >= 47) {
         partial++;
       }
     }
@@ -28,6 +36,8 @@ class KlondikeEngineImpl implements PuzzleEngine {
     const solvable = completing > 0;
     const confidence = (completing / simulations) * 0.7 + (partial / simulations) * 0.3;
     const minSolutionLength = solvable ? bestMoves : 0;
+    const uniqueWinningPaths = winPathHashes.size;
+    const pathDiversityScore = completing > 0 ? Math.min(1, uniqueWinningPaths / completing) : 0;
 
     return {
       solvable,
@@ -35,6 +45,8 @@ class KlondikeEngineImpl implements PuzzleEngine {
       minSolutionLength,
       confidence,
       simulations,
+      uniqueWinningPaths,
+      pathDiversityScore,
     };
   }
 
@@ -45,13 +57,14 @@ class KlondikeEngineImpl implements PuzzleEngine {
     return Math.round(Math.min(100, 81 + ((minSolutionLength - 160) / 60) * 19));
   }
 
-  private runSim(seed: number): { won: boolean; moves: number; foundationCards: number } {
+  private runSim(seed: number): { won: boolean; moves: number; foundationCards: number; moveLog: string[] } {
     let state = createKlondikeGame(3, seed);
     let moves = 0;
     const MAX = 500;
     let stockResets = 0;
     let lastFT = 0;
     let stale = 0;
+    const moveLog: string[] = [];
 
     while (moves < MAX && !state.isWon) {
       const ft = state.foundation.reduce((s, p) => s + p.length, 0);
@@ -67,7 +80,7 @@ class KlondikeEngineImpl implements PuzzleEngine {
         if (!card.faceUp) continue;
         if (canMoveToFoundation(card, state.foundation) !== -1) {
           const r = moveTableauToFoundation(state, i);
-          if (r) { state = r; moves++; acted = true; }
+          if (r) { moveLog.push(`tf${i}`); state = r; moves++; acted = true; }
         }
       }
       if (acted) continue;
@@ -77,7 +90,7 @@ class KlondikeEngineImpl implements PuzzleEngine {
         const card = state.waste[state.waste.length - 1];
         if (canMoveToFoundation(card, state.foundation) !== -1) {
           const r = moveWasteToFoundation(state);
-          if (r) { state = r; moves++; continue; }
+          if (r) { moveLog.push('wf'); state = r; moves++; continue; }
         }
       }
 
@@ -101,7 +114,7 @@ class KlondikeEngineImpl implements PuzzleEngine {
       if (exposeMoves.length > 0) {
         const [fi, fj, fk] = exposeMoves[Math.floor(Math.random() * exposeMoves.length)];
         const r = moveTableauToTableau(state, fi, fj, fk);
-        if (r) { state = r; moves++; continue; }
+        if (r) { moveLog.push(`t${fi}${fj}${fk}`); state = r; moves++; continue; }
       }
 
       // 4. Waste to tableau
@@ -114,7 +127,7 @@ class KlondikeEngineImpl implements PuzzleEngine {
         if (targets.length > 0) {
           const k = targets[Math.floor(Math.random() * targets.length)];
           const r = moveWasteToTableau(state, k);
-          if (r) { state = r; moves++; continue; }
+          if (r) { moveLog.push(`wt${k}`); state = r; moves++; continue; }
         }
       }
 
@@ -137,12 +150,13 @@ class KlondikeEngineImpl implements PuzzleEngine {
         if (otherMoves.length > 0) {
           const [fi, fj, fk] = otherMoves[Math.floor(Math.random() * otherMoves.length)];
           const r = moveTableauToTableau(state, fi, fj, fk);
-          if (r) { state = r; moves++; continue; }
+          if (r) { moveLog.push(`t${fi}${fj}${fk}`); state = r; moves++; continue; }
         }
       }
 
       // 6. Draw from stock / reset
       if (state.stock.length > 0) {
+        moveLog.push('d');
         state = drawFromStock(state);
         moves++;
         continue;
@@ -150,6 +164,7 @@ class KlondikeEngineImpl implements PuzzleEngine {
       if (state.waste.length > 0) {
         stockResets++;
         if (stockResets > 4) break;
+        moveLog.push('r');
         state = drawFromStock(state);
         moves++;
         continue;
@@ -159,7 +174,7 @@ class KlondikeEngineImpl implements PuzzleEngine {
     }
 
     const foundationCards = state.foundation.reduce((s, p) => s + p.length, 0);
-    return { won: state.isWon, moves, foundationCards };
+    return { won: state.isWon, moves, foundationCards, moveLog };
   }
 }
 

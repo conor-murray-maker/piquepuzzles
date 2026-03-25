@@ -6,6 +6,7 @@ import { useAdminAction } from "@/hooks/useAdminQuery";
 import { useToast } from "@/hooks/use-toast";
 import { KlondikeEngine } from "@/engines/KlondikeEngine";
 import { FreeCellEngine } from "@/engines/FreeCellEngine";
+import { RealmEngine } from "@/engines/RealmEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";

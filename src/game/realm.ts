@@ -5,7 +5,7 @@
 
 import { generateSeed } from './deck';
 
-export type CellState = 'empty' | 'marked' | 'crown';
+export type CellState = 'empty' | 'marked' | 'auto-marked' | 'crown';
 
 export interface RealmCell {
   row: number;
@@ -34,6 +34,10 @@ export interface RealmState {
   seed?: number;
   minMoves?: number;
   puzzleName?: string;
+  /** Maps crown "r,c" → list of auto-marked "r,c" cell keys */
+  autoMarkMap: Record<string, string[]>;
+  /** Unique game ID to prevent duplicate complete-game calls */
+  gameId: string;
 }
 
 // Curated palette
@@ -59,116 +63,171 @@ function seededRandom(seed: number) {
   };
 }
 
-// ==================== Region Generation ====================
+const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]] as const;
+
+// ==================== Region Generation (Flood-Fill Growth) ====================
 
 interface RegionGenResult {
-  regionMap: number[][]; // grid[row][col] = region index
-  regions: number[][]; // region index → cell indices
+  regionMap: number[][];
+  regions: number[][];
 }
 
 function generateRegions(n: number, rand: () => number): RegionGenResult | null {
   const regionMap: number[][] = Array.from({ length: n }, () => Array(n).fill(-1));
   const regions: number[][] = Array.from({ length: n }, () => []);
 
-  // Seed each region with a random unassigned cell
+  // Place N seed cells with minimum distance of 2 between seeds
+  const seeds: [number, number][] = [];
   const allCells: [number, number][] = [];
   for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++)
       allCells.push([r, c]);
 
-  // Shuffle and pick seeds
+  // Shuffle cells
   for (let i = allCells.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [allCells[i], allCells[j]] = [allCells[j], allCells[i]];
   }
 
-  const seeds: [number, number][] = [];
   for (const [r, c] of allCells) {
     if (seeds.length >= n) break;
-    // Ensure seeds aren't too close
     const tooClose = seeds.some(([sr, sc]) => Math.abs(sr - r) + Math.abs(sc - c) < 2);
     if (!tooClose) {
       seeds.push([r, c]);
-      regionMap[r][c] = seeds.length - 1;
-      regions[seeds.length - 1].push(r * n + c);
+      const ri = seeds.length - 1;
+      regionMap[r][c] = ri;
+      regions[ri].push(r * n + c);
     }
   }
 
-  // If we couldn't place enough seeds, fill remaining
+  // If we couldn't place enough seeds with distance constraint, relax
   if (seeds.length < n) {
     for (const [r, c] of allCells) {
       if (seeds.length >= n) break;
       if (regionMap[r][c] === -1) {
         seeds.push([r, c]);
-        regionMap[r][c] = seeds.length - 1;
-        regions[seeds.length - 1].push(r * n + c);
+        const ri = seeds.length - 1;
+        regionMap[r][c] = ri;
+        regions[ri].push(r * n + c);
       }
     }
   }
 
   if (seeds.length < n) return null;
 
-  // Grow regions using BFS-like expansion
-  const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  const seedSet = new Set(seeds.map(([r, c]) => `${r},${c}`));
   const maxSize = n + 4;
   let unassigned = n * n - n;
 
-  for (let round = 0; round < n * n && unassigned > 0; round++) {
-    const order = Array.from({ length: n }, (_, i) => i);
-    // Prioritize smaller regions
-    order.sort((a, b) => regions[a].length - regions[b].length);
-
-    for (const ri of order) {
-      if (regions[ri].length >= maxSize) continue;
-
-      // Find frontier cells
-      const frontier: [number, number][] = [];
-      for (const idx of regions[ri]) {
-        const cr = Math.floor(idx / n);
-        const cc = idx % n;
-        for (const [dr, dc] of dirs) {
-          const nr = cr + dr;
-          const nc = cc + dc;
-          if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === -1) {
-            frontier.push([nr, nc]);
-          }
-        }
+  // Build frontier for each region
+  const frontiers: Set<string>[] = Array.from({ length: n }, () => new Set());
+  for (let ri = 0; ri < n; ri++) {
+    const [r, c] = seeds[ri];
+    for (const [dr, dc] of DIRS) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === -1) {
+        frontiers[ri].add(`${nr},${nc}`);
       }
-
-      if (frontier.length === 0) continue;
-
-      // Pick random frontier cell
-      const [fr, fc] = frontier[Math.floor(rand() * frontier.length)];
-      if (regionMap[fr][fc] !== -1) continue;
-
-      regionMap[fr][fc] = ri;
-      regions[ri].push(fr * n + fc);
-      unassigned--;
     }
   }
 
-  // Assign any remaining
+  // Grow regions with weighted compact selection
+  let iterations = 0;
+  const maxIterations = n * n * 10;
+  while (unassigned > 0 && iterations < maxIterations) {
+    iterations++;
+
+    // Pick region to grow — prioritize smaller regions
+    const order = Array.from({ length: n }, (_, i) => i)
+      .filter(i => regions[i].length < maxSize && frontiers[i].size > 0);
+
+    if (order.length === 0) break;
+
+    // Weighted by deficit from average size
+    const targetSize = Math.ceil((n * n) / n);
+    const weights = order.map(i => Math.max(1, targetSize - regions[i].length + 1));
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    let pick = rand() * totalWeight;
+    let ri = order[0];
+    for (let k = 0; k < order.length; k++) {
+      pick -= weights[k];
+      if (pick <= 0) { ri = order[k]; break; }
+    }
+
+    // Pick frontier cell weighted by compactness (neighbors already in region)
+    const frontierArr = Array.from(frontiers[ri]);
+    if (frontierArr.length === 0) continue;
+
+    const cellWeights = frontierArr.map(key => {
+      const [cr, cc] = key.split(',').map(Number);
+      let neighborCount = 0;
+      for (const [dr, dc] of DIRS) {
+        const nr = cr + dr;
+        const nc = cc + dc;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri) {
+          neighborCount++;
+        }
+      }
+      return neighborCount + 1; // +1 so isolated cells still have a chance
+    });
+
+    const totalCW = cellWeights.reduce((a, b) => a + b, 0);
+    let cellPick = rand() * totalCW;
+    let chosenIdx = 0;
+    for (let k = 0; k < cellWeights.length; k++) {
+      cellPick -= cellWeights[k];
+      if (cellPick <= 0) { chosenIdx = k; break; }
+    }
+
+    const chosenKey = frontierArr[chosenIdx];
+    const [fr, fc] = chosenKey.split(',').map(Number);
+
+    if (regionMap[fr][fc] !== -1) {
+      frontiers[ri].delete(chosenKey);
+      continue;
+    }
+
+    regionMap[fr][fc] = ri;
+    regions[ri].push(fr * n + fc);
+    unassigned--;
+    frontiers[ri].delete(chosenKey);
+
+    // Remove this cell from other regions' frontiers
+    for (let other = 0; other < n; other++) {
+      if (other !== ri) frontiers[other].delete(chosenKey);
+    }
+
+    // Add new frontier cells
+    for (const [dr, dc] of DIRS) {
+      const nr = fr + dr;
+      const nc = fc + dc;
+      if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === -1) {
+        frontiers[ri].add(`${nr},${nc}`);
+      }
+    }
+  }
+
+  // Assign remaining unassigned cells to nearest region
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      if (regionMap[r][c] === -1) {
-        // Assign to smallest adjacent region
-        let best = -1;
-        let bestSize = Infinity;
-        for (const [dr, dc] of dirs) {
-          const nr = r + dr;
-          const nc = c + dc;
-          if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] !== -1) {
-            const ri = regionMap[nr][nc];
-            if (regions[ri].length < bestSize) {
-              best = ri;
-              bestSize = regions[ri].length;
-            }
+      if (regionMap[r][c] !== -1) continue;
+      let best = -1;
+      let bestSize = Infinity;
+      for (const [dr, dc] of DIRS) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] !== -1) {
+          const ri2 = regionMap[nr][nc];
+          if (regions[ri2].length < bestSize) {
+            best = ri2;
+            bestSize = regions[ri2].length;
           }
         }
-        if (best === -1) best = 0;
-        regionMap[r][c] = best;
-        regions[best].push(r * n + c);
       }
+      if (best === -1) best = 0;
+      regionMap[r][c] = best;
+      regions[best].push(r * n + c);
     }
   }
 
@@ -176,7 +235,6 @@ function generateRegions(n: number, rand: () => number): RegionGenResult | null 
 }
 
 function validateRegions(regions: number[][], n: number, regionMap: number[][]): boolean {
-  // Size constraints
   const minSize = 3;
   const maxSize = n + 4;
   const sizes = regions.map(r => r.length);
@@ -190,7 +248,7 @@ function validateRegions(regions: number[][], n: number, regionMap: number[][]):
   const minS = Math.min(...sizes);
   if (maxS > minS * 2.5) return false;
 
-  // 2D presence: no single-row or single-column strips
+  // 2D presence: region spans at least 2 rows and 2 cols
   for (const region of regions) {
     const rows = new Set<number>();
     const cols = new Set<number>();
@@ -198,27 +256,65 @@ function validateRegions(regions: number[][], n: number, regionMap: number[][]):
       rows.add(Math.floor(idx / n));
       cols.add(idx % n);
     }
-    if (rows.size === 1 || cols.size === 1) return false;
+    if (rows.size < 2 || cols.size < 2) return false;
   }
 
-  // Orthogonal neighbour check (no thin peninsulas)
-  const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  // No thin peninsulas: every cell needs at least 1 orthogonal neighbor in same region
   for (let ri = 0; ri < regions.length; ri++) {
     for (const idx of regions[ri]) {
       const r = Math.floor(idx / n);
       const c = idx % n;
-      let hasNeighbor = false;
-      for (const [dr, dc] of dirs) {
+      let neighborCount = 0;
+      for (const [dr, dc] of DIRS) {
         const nr = r + dr;
         const nc = c + dc;
         if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri) {
-          hasNeighbor = true;
-          break;
+          neighborCount++;
         }
       }
-      if (!hasNeighbor) return false;
+      if (neighborCount === 0) return false;
     }
   }
+
+  // Adjacent region shape similarity check
+  const adj: Set<number>[] = Array.from({ length: n }, () => new Set());
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      for (const [dr, dc] of [[0, 1], [1, 0]] as const) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr < n && nc < n) {
+          const a = regionMap[r][c];
+          const b = regionMap[nr][nc];
+          if (a !== b) { adj[a].add(b); adj[b].add(a); }
+        }
+      }
+    }
+  }
+
+  // Calculate bounding box aspect ratios
+  const aspectRatios = regions.map(region => {
+    let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+    for (const idx of region) {
+      const r = Math.floor(idx / n);
+      const c = idx % n;
+      minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+      minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+    }
+    const h = maxR - minR + 1;
+    const w = maxC - minC + 1;
+    return w / h;
+  });
+
+  let similarPairs = 0;
+  for (let i = 0; i < n; i++) {
+    for (const j of adj[i]) {
+      if (j > i && Math.abs(aspectRatios[i] - aspectRatios[j]) < 0.2) {
+        similarPairs++;
+      }
+    }
+  }
+  if (similarPairs > 2) return false;
 
   return true;
 }
@@ -241,7 +337,7 @@ function findAllSolutions(regionMap: number[][], n: number, maxSolutions: number
   function solve(row: number): void {
     if (solutions.length >= maxSolutions) return;
     if (row === n) {
-      solutions.push([...placement]);
+      solutions.push([...placement.map(([r, c]) => [r, c] as [number, number])]);
       return;
     }
 
@@ -269,7 +365,6 @@ function findAllSolutions(regionMap: number[][], n: number, maxSolutions: number
 
 function spatialSurpriseScore(solution: [number, number][], n: number): number {
   const cols = solution.map(([, c]) => c);
-  // Variance of column positions
   const mean = cols.reduce((a, b) => a + b, 0) / cols.length;
   const variance = cols.reduce((s, c) => s + (c - mean) ** 2, 0) / cols.length;
   return variance;
@@ -280,11 +375,10 @@ function spatialSurpriseScore(solution: [number, number][], n: number): number {
 export interface DeductionResult {
   solvable: boolean;
   forcedSteps: number;
-  cascadeChain: number; // longest cascade
+  cascadeChain: number;
 }
 
 function solveByDeduction(regionMap: number[][], n: number): DeductionResult {
-  // Track possible placements per row, col, and region
   const possible: boolean[][] = Array.from({ length: n }, () =>
     Array.from({ length: n }, () => true)
   );
@@ -296,35 +390,24 @@ function solveByDeduction(regionMap: number[][], n: number): DeductionResult {
   let forcedSteps = 0;
   let longestCascade = 0;
 
-  function eliminate(r: number, c: number): void {
-    possible[r][c] = false;
-  }
-
   function placeCrown(r: number, c: number): void {
     placed.push([r, c]);
     usedRows.add(r);
     usedCols.add(c);
     usedRegions.add(regionMap[r][c]);
 
-    // Eliminate entire row, col, and region
     for (let i = 0; i < n; i++) {
       possible[r][i] = false;
       possible[i][c] = false;
     }
-
-    // Eliminate region
     for (let rr = 0; rr < n; rr++)
       for (let cc = 0; cc < n; cc++)
         if (regionMap[rr][cc] === regionMap[r][c]) possible[rr][cc] = false;
-
-    // Eliminate diagonal adjacents
     for (let dr = -1; dr <= 1; dr++)
       for (let dc = -1; dc <= 1; dc++) {
         const nr = r + dr;
         const nc = c + dc;
-        if (nr >= 0 && nr < n && nc >= 0 && nc < n) {
-          possible[nr][nc] = false;
-        }
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n) possible[nr][nc] = false;
       }
   }
 
@@ -341,9 +424,7 @@ function solveByDeduction(regionMap: number[][], n: number): DeductionResult {
         if (usedRows.has(r)) continue;
         for (let c = 0; c < n; c++) {
           if (usedCols.has(c)) continue;
-          if (regionMap[r][c] === ri && possible[r][c]) {
-            candidates.push([r, c]);
-          }
+          if (regionMap[r][c] === ri && possible[r][c]) candidates.push([r, c]);
         }
       }
       if (candidates.length === 1) {
@@ -389,51 +470,35 @@ function solveByDeduction(regionMap: number[][], n: number): DeductionResult {
     if (cascade > longestCascade) longestCascade = cascade;
   }
 
-  return {
-    solvable: placed.length === n,
-    forcedSteps,
-    cascadeChain: longestCascade,
-  };
+  return { solvable: placed.length === n, forcedSteps, cascadeChain: longestCascade };
 }
 
 // ==================== Graph Coloring ====================
 
 function assignColors(regionMap: number[][], n: number): string[] {
-  // Build adjacency graph
   const adj: Set<number>[] = Array.from({ length: n }, () => new Set());
-  const dirs = [[0, 1], [1, 0]];
-
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      for (const [dr, dc] of dirs) {
+      for (const [dr, dc] of [[0, 1], [1, 0]] as const) {
         const nr = r + dr;
         const nc = c + dc;
         if (nr < n && nc < n) {
           const a = regionMap[r][c];
           const b = regionMap[nr][nc];
-          if (a !== b) {
-            adj[a].add(b);
-            adj[b].add(a);
-          }
+          if (a !== b) { adj[a].add(b); adj[b].add(a); }
         }
       }
     }
   }
 
-  // Greedy graph coloring
   const colorAssignment: number[] = Array(n).fill(-1);
   for (let ri = 0; ri < n; ri++) {
     const usedColors = new Set<number>();
     for (const neighbor of adj[ri]) {
-      if (colorAssignment[neighbor] !== -1) {
-        usedColors.add(colorAssignment[neighbor]);
-      }
+      if (colorAssignment[neighbor] !== -1) usedColors.add(colorAssignment[neighbor]);
     }
     for (let ci = 0; ci < REALM_COLORS.length; ci++) {
-      if (!usedColors.has(ci)) {
-        colorAssignment[ri] = ci;
-        break;
-      }
+      if (!usedColors.has(ci)) { colorAssignment[ri] = ci; break; }
     }
     if (colorAssignment[ri] === -1) colorAssignment[ri] = ri % REALM_COLORS.length;
   }
@@ -443,30 +508,16 @@ function assignColors(regionMap: number[][], n: number): string[] {
 
 // ==================== DDS Calculation ====================
 
-function calculateRealmDDS(
-  n: number,
-  deduction: DeductionResult,
-  regionSizeVariance: number
-): number {
-  // Base DDS from grid size
+function calculateRealmDDS(n: number, deduction: DeductionResult, regionSizeVariance: number): number {
   const sizeRanges: Record<number, [number, number]> = {
-    6: [15, 30],
-    7: [30, 50],
-    8: [45, 65],
-    9: [60, 80],
-    10: [75, 100],
+    6: [15, 30], 7: [30, 50], 8: [45, 65], 9: [60, 80], 10: [75, 100],
   };
   const [baseMin, baseMax] = sizeRanges[n] || [50, 70];
   let dds = (baseMin + baseMax) / 2;
-
-  // Modify by deduction chain: more forced steps = easier
   const chainMod = Math.max(-15, Math.min(15, (n - deduction.forcedSteps) * 3));
   dds += chainMod;
-
-  // Modify by region size variance: more uniform = easier
   const varianceMod = Math.min(10, regionSizeVariance * 2);
   dds += varianceMod;
-
   return Math.max(0, Math.min(100, Math.round(dds)));
 }
 
@@ -480,23 +531,22 @@ export interface RealmDeal {
   dds: number;
   deduction: DeductionResult;
   regionColors: string[];
+  spatialSurprise: number;
 }
 
 export function generateRealmPuzzle(seed: number): RealmDeal | null {
   const rand = seededRandom(seed);
-
-  // Determine grid size from seed
   const sizeWeights = [6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10];
   const n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
 
-  for (let attempt = 0; attempt < 20; attempt++) {
+  for (let attempt = 0; attempt < 50; attempt++) {
     const regResult = generateRegions(n, rand);
     if (!regResult) continue;
 
     const { regionMap, regions } = regResult;
     if (!validateRegions(regions, n, regionMap)) continue;
 
-    // Find solutions
+    // Find ALL solutions (up to 3 to check uniqueness)
     const solutions = findAllSolutions(regionMap, n, 3);
     if (solutions.length !== 1) continue;
 
@@ -518,15 +568,7 @@ export function generateRealmPuzzle(seed: number): RealmDeal | null {
     const dds = calculateRealmDDS(n, deduction, sizeVariance);
     const regionColors = assignColors(regionMap, n);
 
-    return {
-      regionMap,
-      regions,
-      solution,
-      size: n,
-      dds,
-      deduction,
-      regionColors,
-    };
+    return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
   }
 
   return null;
@@ -534,25 +576,24 @@ export function generateRealmPuzzle(seed: number): RealmDeal | null {
 
 // ==================== Game State Creation ====================
 
+let gameIdCounter = 0;
+function generateGameId(): string {
+  return `realm-${Date.now()}-${++gameIdCounter}`;
+}
+
 export function createRealmGame(seed?: number): RealmState {
   const actualSeed = seed ?? generateSeed();
   const deal = generateRealmPuzzle(actualSeed);
 
   if (!deal) {
-    // Fallback: generate a simple 6x6 puzzle
     return createFallbackRealmGame(actualSeed);
   }
 
   const grid: RealmCell[][] = Array.from({ length: deal.size }, (_, r) =>
     Array.from({ length: deal.size }, (_, c) => ({
-      row: r,
-      col: c,
-      region: deal.regionMap[r][c],
-      state: 'empty' as CellState,
+      row: r, col: c, region: deal.regionMap[r][c], state: 'empty' as CellState,
     }))
   );
-
-  const difficulty = ddsToRealmDifficulty(deal.dds);
 
   return {
     grid,
@@ -568,68 +609,44 @@ export function createRealmGame(seed?: number): RealmState {
     errors: 0,
     maxErrors: 3,
     dealId: `realm-${actualSeed}`,
-    difficulty,
+    difficulty: ddsToRealmDifficulty(deal.dds),
     difficultyScore: deal.dds,
     seed: actualSeed,
-    minMoves: deal.size, // minimum is N placements
+    minMoves: deal.size,
+    autoMarkMap: {},
+    gameId: generateGameId(),
   };
 }
 
 function createFallbackRealmGame(seed: number): RealmState {
-  // Simple 6x6 with diagonal solution
   const n = 6;
   const regionMap: number[][] = [];
+  const regions: number[][] = Array.from({ length: n }, () => []);
+
+  // Create a 2x3 block layout
   for (let r = 0; r < n; r++) {
     regionMap.push([]);
     for (let c = 0; c < n; c++) {
-      regionMap[r].push(Math.floor((r * n + c) * n / (n * n)));
-    }
-  }
-
-  // Manually create valid regions for a 6x6
-  const regions: number[][] = Array.from({ length: n }, () => []);
-  // Assign cells to regions in blocks
-  const blockRows = 2;
-  const blockCols = 3;
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      const ri = Math.floor(r / blockRows) * (n / blockCols) + Math.floor(c / blockCols);
+      const ri = Math.floor(r / 2) * 2 + Math.floor(c / 3);
       const regionIdx = Math.min(ri, n - 1);
-      regionMap[r][c] = regionIdx;
+      regionMap[r].push(regionIdx);
       regions[regionIdx].push(r * n + c);
     }
   }
 
-  // Simple non-adjacent solution
   const solution: [number, number][] = [[0, 1], [1, 4], [2, 0], [3, 3], [4, 5], [5, 2]];
 
   const grid: RealmCell[][] = Array.from({ length: n }, (_, r) =>
     Array.from({ length: n }, (_, c) => ({
-      row: r,
-      col: c,
-      region: regionMap[r][c],
-      state: 'empty' as CellState,
+      row: r, col: c, region: regionMap[r][c], state: 'empty' as CellState,
     }))
   );
 
   return {
-    grid,
-    size: n,
-    regions,
-    regionColors: REALM_COLORS.slice(0, n),
-    solution,
-    moves: 0,
-    startTime: Date.now(),
-    hintsUsed: 0,
-    undosUsed: 0,
-    isWon: false,
-    errors: 0,
-    maxErrors: 3,
-    dealId: `realm-${seed}`,
-    difficulty: 'Easy',
-    difficultyScore: 20,
-    seed,
-    minMoves: n,
+    grid, size: n, regions, regionColors: REALM_COLORS.slice(0, n), solution,
+    moves: 0, startTime: Date.now(), hintsUsed: 0, undosUsed: 0, isWon: false,
+    errors: 0, maxErrors: 3, dealId: `realm-${seed}`, difficulty: 'Easy',
+    difficultyScore: 20, seed, minMoves: n, autoMarkMap: {}, gameId: generateGameId(),
   };
 }
 
@@ -640,39 +657,117 @@ function ddsToRealmDifficulty(dds: number): 'Easy' | 'Medium' | 'Hard' | 'Expert
   return 'Expert';
 }
 
+// ==================== Constraint-Based Win Check ====================
+
+/** Check if crowns satisfy ALL constraints — does NOT compare to stored solution */
+function checkConstraintWin(grid: RealmCell[][], n: number): boolean {
+  const crowns: [number, number][] = [];
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++)
+      if (grid[r][c].state === 'crown') crowns.push([r, c]);
+
+  if (crowns.length !== n) return false;
+
+  const rows = new Set(crowns.map(([r]) => r));
+  const cols = new Set(crowns.map(([, c]) => c));
+  const regions = new Set(crowns.map(([r, c]) => grid[r][c].region));
+
+  // One per row, one per col, one per region
+  if (rows.size !== n || cols.size !== n || regions.size !== n) return false;
+
+  // No adjacency (including diagonal)
+  for (let i = 0; i < crowns.length; i++) {
+    for (let j = i + 1; j < crowns.length; j++) {
+      if (Math.abs(crowns[i][0] - crowns[j][0]) <= 1 && Math.abs(crowns[i][1] - crowns[j][1]) <= 1) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+// ==================== Auto-Mark Calculation ====================
+
+function getAutoMarkCells(grid: RealmCell[][], row: number, col: number, n: number): string[] {
+  const region = grid[row][col].region;
+  const marks: string[] = [];
+
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (r === row && c === col) continue;
+      const cell = grid[r][c];
+      if (cell.state === 'crown' || cell.state === 'marked') continue;
+
+      const sameRow = r === row;
+      const sameCol = c === col;
+      const sameRegion = cell.region === region;
+      const adjacent = Math.abs(r - row) <= 1 && Math.abs(c - col) <= 1;
+
+      if (sameRow || sameCol || sameRegion || adjacent) {
+        marks.push(`${r},${c}`);
+      }
+    }
+  }
+
+  return marks;
+}
+
 // ==================== Game Actions ====================
 
 export function cycleCell(state: RealmState, row: number, col: number): RealmState {
   const cell = state.grid[row][col];
   const currentState = cell.state;
 
-  // empty → marked → crown → empty
+  // Don't cycle auto-marked cells — treat them like empty for cycling
   let nextState: CellState;
-  if (currentState === 'empty') nextState = 'marked';
+  if (currentState === 'empty' || currentState === 'auto-marked') nextState = 'marked';
   else if (currentState === 'marked') nextState = 'crown';
   else nextState = 'empty';
 
   const newGrid = state.grid.map(r => r.map(c => ({ ...c })));
-  newGrid[row][col].state = nextState;
-
+  let newAutoMarkMap = { ...state.autoMarkMap };
   let newErrors = state.errors;
-  let newIsWon = false;
 
-  // Check if crown placement is valid
   if (nextState === 'crown') {
+    // Check for errors
     const error = checkCrownError(newGrid, row, col, state.size);
     if (error) {
       newErrors++;
-      // Auto-clear error after animation
-      setTimeout(() => {}, 1000);
+      newGrid[row][col].state = 'crown'; // Temporarily place for animation
+    } else {
+      newGrid[row][col].state = 'crown';
+      // Apply auto-marks
+      const autoMarks = getAutoMarkCells(newGrid, row, col, state.size);
+      const crownKey = `${row},${col}`;
+      const appliedMarks: string[] = [];
+      for (const key of autoMarks) {
+        const [r, c] = key.split(',').map(Number);
+        if (newGrid[r][c].state === 'empty') {
+          newGrid[r][c].state = 'auto-marked';
+          appliedMarks.push(key);
+        }
+      }
+      newAutoMarkMap[crownKey] = appliedMarks;
     }
+  } else if (nextState === 'empty' && currentState === 'crown') {
+    // Removing a crown — remove its auto-marks
+    newGrid[row][col].state = 'empty';
+    const crownKey = `${row},${col}`;
+    const autoMarks = newAutoMarkMap[crownKey] || [];
+    for (const key of autoMarks) {
+      const [r, c] = key.split(',').map(Number);
+      if (newGrid[r][c].state === 'auto-marked') {
+        newGrid[r][c].state = 'empty';
+      }
+    }
+    delete newAutoMarkMap[crownKey];
+  } else {
+    newGrid[row][col].state = nextState;
   }
 
-  // Check win condition
-  const crowns = getCrowns(newGrid, state.size);
-  if (crowns.length === state.size) {
-    newIsWon = checkWin(crowns, state.solution);
-  }
+  // Check win using constraint-based check
+  const newIsWon = checkConstraintWin(newGrid, state.size);
 
   return {
     ...state,
@@ -680,32 +775,39 @@ export function cycleCell(state: RealmState, row: number, col: number): RealmSta
     moves: state.moves + 1,
     errors: newErrors,
     isWon: newIsWon,
+    autoMarkMap: newAutoMarkMap,
   };
 }
 
-function getCrowns(grid: RealmCell[][], n: number): [number, number][] {
-  const crowns: [number, number][] = [];
-  for (let r = 0; r < n; r++)
-    for (let c = 0; c < n; c++)
-      if (grid[r][c].state === 'crown') crowns.push([r, c]);
-  return crowns;
+/** Apply drag-to-mark: toggle X mark on a cell */
+export function toggleMark(state: RealmState, row: number, col: number): RealmState {
+  const cell = state.grid[row][col];
+  if (cell.state === 'crown') return state; // Skip crowns
+
+  const newGrid = state.grid.map(r => r.map(c => ({ ...c })));
+
+  if (cell.state === 'marked') {
+    newGrid[row][col].state = 'empty';
+  } else if (cell.state === 'empty' || cell.state === 'auto-marked') {
+    newGrid[row][col].state = 'marked';
+  }
+
+  return { ...state, grid: newGrid, moves: state.moves + 1 };
 }
 
 function checkCrownError(grid: RealmCell[][], row: number, col: number, n: number): boolean {
   // Check row
-  for (let c = 0; c < n; c++) {
+  for (let c = 0; c < n; c++)
     if (c !== col && grid[row][c].state === 'crown') return true;
-  }
   // Check col
-  for (let r = 0; r < n; r++) {
+  for (let r = 0; r < n; r++)
     if (r !== row && grid[r][col].state === 'crown') return true;
-  }
   // Check region
   const region = grid[row][col].region;
   for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++)
       if ((r !== row || c !== col) && grid[r][c].region === region && grid[r][c].state === 'crown') return true;
-  // Check adjacency (including diagonal)
+  // Check adjacency
   for (let dr = -1; dr <= 1; dr++)
     for (let dc = -1; dc <= 1; dc++) {
       if (dr === 0 && dc === 0) continue;
@@ -716,40 +818,28 @@ function checkCrownError(grid: RealmCell[][], row: number, col: number, n: numbe
   return false;
 }
 
-function checkWin(crowns: [number, number][], solution: [number, number][]): boolean {
-  if (crowns.length !== solution.length) return false;
-  const solSet = new Set(solution.map(([r, c]) => `${r},${c}`));
-  return crowns.every(([r, c]) => solSet.has(`${r},${c}`));
-}
-
 // ==================== Hint System ====================
 
 export function getRealmHint(state: RealmState): { row: number; col: number; action: 'crown' | 'eliminate' } | null {
-  // Find a cell where a crown must go or cannot go based on current deductions
   const n = state.size;
   const grid = state.grid;
 
-  // First: find cells that can be eliminated
+  // Find cells that can be eliminated
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       if (grid[r][c].state !== 'empty') continue;
 
-      // If there's already a crown in this row, col, or region, eliminate
       const region = grid[r][c].region;
       let canEliminate = false;
 
-      // Check row
       for (let cc = 0; cc < n; cc++)
         if (cc !== c && grid[r][cc].state === 'crown') canEliminate = true;
-      // Check col
       for (let rr = 0; rr < n; rr++)
         if (rr !== r && grid[rr][c].state === 'crown') canEliminate = true;
-      // Check region
       for (let rr = 0; rr < n; rr++)
         for (let cc = 0; cc < n; cc++)
           if ((rr !== r || cc !== c) && grid[rr][cc].region === region && grid[rr][cc].state === 'crown')
             canEliminate = true;
-      // Check adjacency
       for (let dr = -1; dr <= 1; dr++)
         for (let dc = -1; dc <= 1; dc++) {
           if (dr === 0 && dc === 0) continue;
@@ -763,9 +853,9 @@ export function getRealmHint(state: RealmState): { row: number; col: number; act
     }
   }
 
-  // Then: find forced crown placements from solution
+  // Find forced crown placements from solution
   for (const [sr, sc] of state.solution) {
-    if (grid[sr][sc].state === 'empty') {
+    if (grid[sr][sc].state === 'empty' || grid[sr][sc].state === 'auto-marked') {
       return { row: sr, col: sc, action: 'crown' };
     }
   }

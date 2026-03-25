@@ -1,14 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { RealmState, createRealmGame, cycleCell, getRealmHint } from '@/game/realm';
+import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint } from '@/game/realm';
 import { supabase } from '@/integrations/supabase/client';
 import { CrownIcon } from './CrownIcon';
 import { GameActionBar } from './GameActionBar';
 import { registerDeal } from '@/services/DealRegistrationService';
 import { PuzzleIQBadge } from './PuzzleIQBadge';
-import { X, ArrowLeft, Flag } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { X, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { haptic } from '@/lib/haptics';
 import {
@@ -32,7 +31,7 @@ function loadFromStorage(): { state: RealmState; history: RealmState[] } | null 
     const s = localStorage.getItem(STORAGE_KEY);
     if (!s) return null;
     const parsed = JSON.parse(s);
-    if (!parsed || parsed.isWon) {
+    if (!parsed || parsed.isWon || (parsed.errors >= parsed.maxErrors)) {
       clearRealmStorage();
       return null;
     }
@@ -58,14 +57,18 @@ interface RealmBoardProps {
   dealUuid?: string;
 }
 
+const DRAG_HOLD_MS = 150;
+
 export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: RealmBoardProps) {
   const [state, setState] = useState<RealmState>(() => {
     if (initialSeed !== undefined) {
-      return { ...createRealmGame(initialSeed), dealUuid };
+      const fresh = createRealmGame(initialSeed);
+      return { ...fresh, dealUuid };
     }
     const saved = loadFromStorage();
     if (saved) return saved.state;
-    return { ...createRealmGame(), dealUuid };
+    const fresh = createRealmGame();
+    return { ...fresh, dealUuid };
   });
   const [history, setHistory] = useState<RealmState[]>(() => {
     if (initialSeed !== undefined) return [];
@@ -90,7 +93,28 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);
+  const completedGameIdRef = useRef<string | null>(null);
   const { profile } = useAuth();
+
+  // Drag-to-mark state
+  const dragStateRef = useRef<{
+    active: boolean;
+    holdTimer: ReturnType<typeof setTimeout> | null;
+    startCell: { row: number; col: number } | null;
+    markedCells: Set<string>;
+    pointerId: number;
+    mode: 'mark' | 'unmark' | null;
+    preState: RealmState | null;
+  }>({
+    active: false, holdTimer: null, startCell: null, markedCells: new Set(),
+    pointerId: -1, mode: null, preState: null,
+  });
+
+  // Reset gameEndedRef when game changes
+  useEffect(() => {
+    gameEndedRef.current = false;
+    completedGameIdRef.current = null;
+  }, [state.gameId]);
 
   // Register deal
   useEffect(() => {
@@ -108,7 +132,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     }
   }, [state.dealId, state.dealUuid]);
 
-  // Fetch puzzle name via AI
+  // Fetch puzzle name
   useEffect(() => {
     if (state.puzzleName || !state.regions) return;
     supabase.functions.invoke('name-realm-puzzle', {
@@ -116,16 +140,14 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     }).then(({ data }) => {
       if (data?.name) setState(s => ({ ...s, puzzleName: data.name }));
     }).catch(() => {
-      // Fallback
       setState(s => ({ ...s, puzzleName: `${s.size}×${s.size} ${s.difficulty}` }));
     });
   }, [state.puzzleName, state.regions, state.size]);
 
-
   // Save state
   useEffect(() => {
     if (initialSeed !== undefined) return;
-    if (state.isWon) clearRealmStorage();
+    if (state.isWon || state.errors >= state.maxErrors) clearRealmStorage();
     else saveToStorage(state, history);
   }, [state, history, initialSeed]);
 
@@ -136,7 +158,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
 
   // Timer
   useEffect(() => {
-    if (state.isWon || !gameStarted) return;
+    if (state.isWon || state.errors >= state.maxErrors || !gameStarted) return;
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const start = () => { if (!intervalId) intervalId = setInterval(() => setElapsed(e => e + 1), 1000); };
     const stop = () => { if (intervalId) { clearInterval(intervalId); intervalId = null; } };
@@ -144,16 +166,19 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     if (!document.hidden) start();
     document.addEventListener('visibilitychange', handleVis);
     return () => { stop(); document.removeEventListener('visibilitychange', handleVis); };
-  }, [state.isWon, gameStarted]);
+  }, [state.isWon, state.errors, state.maxErrors, gameStarted]);
 
   // Check loss on 3 errors
   useEffect(() => {
     if (state.errors >= state.maxErrors && !state.isWon && !gameEndedRef.current) {
+      if (completedGameIdRef.current === state.gameId) return;
       gameEndedRef.current = true;
+      completedGameIdRef.current = state.gameId;
+      clearRealmStorage();
       const lostState = { ...state, isWon: false };
       onGameEnd(lostState, elapsedRef.current);
     }
-  }, [state.errors, state.maxErrors, state.isWon, onGameEnd]);
+  }, [state.errors, state.maxErrors, state.isWon, state.gameId, onGameEnd]);
 
   const handleCellTap = useCallback((row: number, col: number) => {
     if (state.isWon || state.errors >= state.maxErrors) return;
@@ -162,7 +187,6 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     setHistory(h => [...h, state]);
     const newState = cycleCell(state, row, col);
 
-    // Check for errors on crown placement
     if (newState.errors > state.errors) {
       haptic.heavy();
       setErrorCells(prev => new Set(prev).add(`${row},${col}`));
@@ -172,7 +196,6 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
           next.delete(`${row},${col}`);
           return next;
         });
-        // Remove the invalid crown
         setState(s => {
           const grid = s.grid.map(r => r.map(c => ({ ...c })));
           grid[row][col].state = 'empty';
@@ -186,7 +209,9 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     setState(newState);
 
     if (newState.isWon && !gameEndedRef.current) {
+      if (completedGameIdRef.current === state.gameId) return;
       gameEndedRef.current = true;
+      completedGameIdRef.current = state.gameId;
       haptic.success();
       onGameEnd(newState, elapsedRef.current);
     }
@@ -197,7 +222,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     haptic.medium();
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
-    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
+    setState(prev);
   }, [history]);
 
   const handleHint = useCallback(() => {
@@ -228,10 +253,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     if (onGiveUp) onGiveUp(lostState, elapsedRef.current);
   }, [state, onGiveUp]);
 
-  // Compute cell size
-  const gridRef = useRef<HTMLDivElement>(null);
+  // Cell sizing
   const [cellSize, setCellSize] = useState(48);
-
   useEffect(() => {
     const updateSize = () => {
       const maxW = Math.min(window.innerWidth - 32, 480);
@@ -244,6 +267,83 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
   }, [state.size]);
+
+  // Drag-to-mark handlers
+  const handlePointerDown = useCallback((e: React.PointerEvent, row: number, col: number) => {
+    if (state.isWon || state.errors >= state.maxErrors) return;
+
+    const ds = dragStateRef.current;
+    ds.pointerId = e.pointerId;
+    ds.startCell = { row, col };
+    ds.markedCells = new Set();
+    ds.mode = null;
+    ds.preState = state;
+
+    ds.holdTimer = setTimeout(() => {
+      ds.active = true;
+      if (!gameStarted) setGameStarted(true);
+      haptic.light();
+
+      // Determine mode from first cell
+      const cell = state.grid[row][col];
+      if (cell.state === 'crown') return;
+      ds.mode = (cell.state === 'marked') ? 'unmark' : 'mark';
+
+      // Apply to first cell
+      const key = `${row},${col}`;
+      ds.markedCells.add(key);
+      setHistory(h => [...h, state]);
+      setState(s => toggleMark(s, row, col));
+    }, DRAG_HOLD_MS);
+  }, [state, gameStarted]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    const ds = dragStateRef.current;
+    if (!ds.active || e.pointerId !== ds.pointerId) return;
+
+    // Find which cell the pointer is over
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const cellEl = el?.closest('[data-realm-cell]') as HTMLElement | null;
+    if (!cellEl) return;
+
+    const cellRow = parseInt(cellEl.dataset.realmRow || '-1');
+    const cellCol = parseInt(cellEl.dataset.realmCol || '-1');
+    if (cellRow < 0 || cellCol < 0) return;
+
+    const key = `${cellRow},${cellCol}`;
+    if (ds.markedCells.has(key)) return;
+
+    ds.markedCells.add(key);
+    setState(s => {
+      const cell = s.grid[cellRow][cellCol];
+      if (cell.state === 'crown') return s;
+      if (ds.mode === 'mark' && (cell.state === 'empty' || cell.state === 'auto-marked')) {
+        return toggleMark(s, cellRow, cellCol);
+      }
+      if (ds.mode === 'unmark' && cell.state === 'marked') {
+        return toggleMark(s, cellRow, cellCol);
+      }
+      return s;
+    });
+  }, []);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    const ds = dragStateRef.current;
+    if (ds.holdTimer) {
+      clearTimeout(ds.holdTimer);
+      ds.holdTimer = null;
+    }
+
+    if (!ds.active && ds.startCell) {
+      // Was a tap, not a drag — handle as cell tap
+      handleCellTap(ds.startCell.row, ds.startCell.col);
+    }
+
+    ds.active = false;
+    ds.startCell = null;
+    ds.mode = null;
+    ds.preState = null;
+  }, [handleCellTap]);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
@@ -302,9 +402,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
                 : 'border-muted-foreground/30'
             }`}
           >
-            {i < crownsPlaced && (
-              <CrownIcon size={12} />
-            )}
+            {i < crownsPlaced && <CrownIcon size={12} />}
           </div>
         ))}
         {state.errors > 0 && (
@@ -316,31 +414,35 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
 
       {/* Grid */}
       <div
-        ref={gridRef}
-        className="relative"
+        className="relative touch-none"
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${state.size}, ${cellSize}px)`,
           gridTemplateRows: `repeat(${state.size}, ${cellSize}px)`,
           gap: '0px',
         }}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         {state.grid.flat().map((cell) => {
           const isError = errorCells.has(`${cell.row},${cell.col}`);
           const isHint = hintCell?.row === cell.row && hintCell?.col === cell.col;
           const color = state.regionColors[cell.region];
 
-          // Determine border thickness for region boundaries
           const borderTop = cell.row === 0 || state.grid[cell.row - 1]?.[cell.col]?.region !== cell.region;
           const borderLeft = cell.col === 0 || state.grid[cell.row][cell.col - 1]?.region !== cell.region;
           const borderBottom = cell.row === state.size - 1 || state.grid[cell.row + 1]?.[cell.col]?.region !== cell.region;
           const borderRight = cell.col === state.size - 1 || state.grid[cell.row]?.[cell.col + 1]?.region !== cell.region;
 
           return (
-            <motion.button
+            <motion.div
               key={`${cell.row}-${cell.col}`}
-              onClick={() => handleCellTap(cell.row, cell.col)}
-              className="relative flex items-center justify-center transition-all select-none"
+              data-realm-cell
+              data-realm-row={cell.row}
+              data-realm-col={cell.col}
+              onPointerDown={(e) => handlePointerDown(e, cell.row, cell.col)}
+              className="relative flex items-center justify-center select-none"
               style={{
                 width: cellSize,
                 height: cellSize,
@@ -364,9 +466,12 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
                 </motion.div>
               )}
               {cell.state === 'marked' && (
-                <X className="text-muted-foreground/60" size={Math.round(cellSize * 0.35)} strokeWidth={2.5} />
+                <X className="text-muted-foreground" size={Math.round(cellSize * 0.35)} strokeWidth={2.5} />
               )}
-            </motion.button>
+              {cell.state === 'auto-marked' && (
+                <X className="text-muted-foreground/30" size={Math.round(cellSize * 0.3)} strokeWidth={2} />
+              )}
+            </motion.div>
           );
         })}
       </div>

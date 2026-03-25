@@ -1,0 +1,1 @@
+UPDATE deals SET confidence = 0;

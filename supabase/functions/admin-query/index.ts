@@ -333,7 +333,11 @@ Deno.serve(async (req) => {
         if (params?.minAttempts) query = query.gte("pool_attempts", params.minAttempts);
 
         const { data } = await query;
-        const { count } = await adminClient.from("deals").select("id", { count: "exact", head: true });
+        let countQuery = adminClient.from("deals").select("id", { count: "exact", head: true });
+        if (params?.gameMode) countQuery = countQuery.eq("game_mode", params.gameMode);
+        if (params?.tier) countQuery = countQuery.eq("tier", params.tier);
+        if (params?.minAttempts) countQuery = countQuery.gte("pool_attempts", params.minAttempts);
+        const { count } = await countQuery;
         return json({ deals: data || [], total: count || 0 });
       }
 

@@ -9,11 +9,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { wilsonInterval } from "@/lib/wilsonConfidence";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { ScatterChart as _SC, Scatter as _S, XAxis as _X, YAxis as _Y, CartesianGrid as _CG, Tooltip as _T, ResponsiveContainer as _RC, ReferenceLine as _RL } from "recharts";
 
 export function AdminDeals() {
   const [page, setPage] = useState(0);
@@ -79,7 +74,7 @@ export function AdminDeals() {
                 <XAxis dataKey="dds_initial" name="Initial DDS" type="number" domain={[0, 100]} />
                 <YAxis dataKey="dds_blended" name="Blended DDS" type="number" domain={[0, 100]} />
                 <ReferenceLine segment={[{ x: 0, y: 0 }, { x: 100, y: 100 }]} stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" />
-                <Tooltip content={({ payload }) => {
+                <RechartsTooltip content={({ payload }) => {
                   if (!payload?.length) return null;
                   const d = payload[0].payload;
                   return (
@@ -123,50 +118,76 @@ export function AdminDeals() {
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Seed</TableHead>
-                <TableHead>Mode</TableHead>
-                <TableHead>Tier</TableHead>
-                <TableHead>DDS Init</TableHead>
-                <TableHead>DDS Blend</TableHead>
-                <TableHead>Conf</TableHead>
-                <TableHead>Path Div</TableHead>
-                <TableHead>Attempts</TableHead>
-                <TableHead>Win%</TableHead>
-                <TableHead>Avg Moves</TableHead>
-                <TableHead>Avg Time</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deals.map((d: any) => {
-                const dds = d.dds_initial ?? 50;
-                const pd = d.path_diversity_score ?? 0;
-                const isEasy = dds <= 25;
-                const isMedium = dds > 25 && dds <= 55;
-                const lowPD = (isEasy && pd < 0.3) || (isMedium && pd < 0.15);
-                return (
-                  <TableRow key={d.id}>
-                    <TableCell className="font-mono text-xs">{String(d.seed).slice(0, 8)}</TableCell>
-                    <TableCell><Badge variant="secondary">{d.game_mode}</Badge></TableCell>
-                    <TableCell>{d.tier}</TableCell>
-                    <TableCell className="font-mono">{d.dds_initial?.toFixed(1)}</TableCell>
-                    <TableCell className="font-mono">{d.dds_blended?.toFixed(1)}</TableCell>
-                    <TableCell className="font-mono">{d.confidence?.toFixed(2)}</TableCell>
-                    <TableCell className={`font-mono ${lowPD ? 'text-yellow-600 font-semibold' : ''}`}>
-                      {pd.toFixed(2)}
-                      {lowPD && ' ⚠'}
-                    </TableCell>
-                    <TableCell>{d.pool_attempts}</TableCell>
-                    <TableCell>{d.pool_attempts > 0 ? Math.round((d.pool_wins / d.pool_attempts) * 100) : 0}%</TableCell>
-                    <TableCell>{d.pool_avg_moves?.toFixed(0)}</TableCell>
-                    <TableCell>{d.pool_avg_time?.toFixed(0)}s</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <TooltipProvider>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Seed</TableHead>
+                  <TableHead>Mode</TableHead>
+                  <TableHead>Tier</TableHead>
+                  <TableHead>DDS Init</TableHead>
+                  <TableHead>DDS Blend</TableHead>
+                  <TableHead>Confidence</TableHead>
+                  <TableHead>Path Div</TableHead>
+                  <TableHead>Attempts</TableHead>
+                  <TableHead>Win%</TableHead>
+                  <TableHead>Avg Moves</TableHead>
+                  <TableHead>Avg Time</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deals.map((d: any) => {
+                  const dds = d.dds_initial ?? 50;
+                  const pd = d.path_diversity_score ?? 0;
+                  const isEasy = dds <= 25;
+                  const isMedium = dds > 25 && dds <= 55;
+                  const lowPD = (isEasy && pd < 0.3) || (isMedium && pd < 0.15);
+                  
+                  // Calculate Wilson interval for display
+                  const simCount = d.simulation_count || 0;
+                  const poolWinRate = d.pool_attempts > 0 ? d.pool_wins / d.pool_attempts : 0;
+                  const estimatedWins = Math.round(poolWinRate * simCount) || 0;
+                  const wi = wilsonInterval(estimatedWins, simCount);
+                  
+                  return (
+                    <TableRow key={d.id}>
+                      <TableCell className="font-mono text-xs">{String(d.seed).slice(0, 8)}</TableCell>
+                      <TableCell><Badge variant="secondary">{d.game_mode}</Badge></TableCell>
+                      <TableCell>{d.tier}</TableCell>
+                      <TableCell className="font-mono">{d.dds_initial?.toFixed(1)}</TableCell>
+                      <TableCell className="font-mono">{d.dds_blended?.toFixed(1)}</TableCell>
+                      <TableCell className="font-mono">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help">
+                              {d.confidence?.toFixed(2)}
+                              {simCount > 0 && (
+                                <span className="text-muted-foreground text-[10px] ml-1">
+                                  [{(wi.lower * 100).toFixed(0)}–{(wi.upper * 100).toFixed(0)}%]
+                                </span>
+                              )}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Wilson 95% CI: [{(wi.lower * 100).toFixed(1)}% – {(wi.upper * 100).toFixed(1)}%] win rate</p>
+                            <p className="text-xs">{simCount} simulations</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell className={`font-mono ${lowPD ? 'text-yellow-600 font-semibold' : ''}`}>
+                        {pd.toFixed(2)}
+                        {lowPD && ' ⚠'}
+                      </TableCell>
+                      <TableCell>{d.pool_attempts}</TableCell>
+                      <TableCell>{d.pool_attempts > 0 ? Math.round((d.pool_wins / d.pool_attempts) * 100) : 0}%</TableCell>
+                      <TableCell>{d.pool_avg_moves?.toFixed(0)}</TableCell>
+                      <TableCell>{d.pool_avg_time?.toFixed(0)}s</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TooltipProvider>
         </CardContent>
       </Card>
 

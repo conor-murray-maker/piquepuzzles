@@ -917,11 +917,12 @@ Deno.serve(async (req) => {
       }
 
       case "update_deal_confidence": {
-        const { deal_id, confidence, simulation_count, min_moves, dds_initial, dds_blended, unique_winning_paths, path_diversity_score } = params || {};
+        const { deal_id, confidence, simulation_count, simulation_wins, min_moves, dds_initial, dds_blended, unique_winning_paths, path_diversity_score } = params || {};
         if (!deal_id) return json({ error: "deal_id required" }, 400);
         const updateFields: any = {};
         if (confidence !== undefined) updateFields.confidence = confidence;
         if (simulation_count !== undefined) updateFields.simulation_count = simulation_count;
+        if (simulation_wins !== undefined) updateFields.simulation_wins = simulation_wins;
         if (min_moves !== undefined) updateFields.min_moves = min_moves;
         if (dds_initial !== undefined) updateFields.dds_initial = dds_initial;
         if (dds_blended !== undefined) updateFields.dds_blended = dds_blended;
@@ -948,6 +949,7 @@ Deno.serve(async (req) => {
           dds_initial: d.dds_initial,
           dds_blended: d.dds_blended,
           simulation_count: d.simulation_count,
+          simulation_wins: d.simulation_wins || 0,
           confidence: d.confidence,
           tier: d.tier || "fresh",
           is_calibration: d.is_calibration ?? true,

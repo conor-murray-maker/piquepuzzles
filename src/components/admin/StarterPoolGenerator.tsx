@@ -137,7 +137,6 @@ export function StarterPoolGenerator() {
             const confResult = calculateDealConfidence({
               wins: verifyResult.wins,
               totalSimulations: verifyResult.simulations,
-              pathDiversityScore: pathDiv,
               dds,
             });
 

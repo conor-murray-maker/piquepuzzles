@@ -32,9 +32,8 @@ function getTierName(rating: number): string {
 
 const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
 
-function getUserLocalDate(timezoneOffset: number): string {
-  const now = new Date();
-  const localMs = now.getTime() + timezoneOffset * 60000;
+function getUserLocalDate(timezoneOffset: number, baseDate = new Date()): string {
+  const localMs = baseDate.getTime() - timezoneOffset * 60000;
   const local = new Date(localMs);
   return local.toISOString().split('T')[0];
 }
@@ -56,21 +55,36 @@ async function updateStreak(
   bestStreak: number;
   freezeUsed: boolean;
   milestoneReached: number | null;
+  profileUpdate: Record<string, unknown>;
 }> {
   const tzOffset = (profile.timezone_offset as number) ?? 0;
   const today = getUserLocalDate(tzOffset);
   const lastStreakDate = profile.last_streak_date as string | null;
+  const lastWinDate = profile.last_win_date as string | null;
 
   let dailyWinsToday = profile.daily_wins_today as number;
   let dailyChallengeCompletedToday = profile.daily_challenge_completed_today as boolean;
+  const initialConditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
+
+  console.log('[complete-game] streak start:', {
+    userId,
+    today,
+    lastStreakDate,
+    lastWinDate,
+    dailyWinsToday,
+    dailyChallengeCompletedToday,
+    conditionMet: initialConditionMet,
+  });
 
   // Reset daily counters if last_win_date is not today
-  // Use last_win_date (set by step 6 on every win) rather than last_streak_date
-  // to avoid resetting counters when streak hasn't been earned yet
-  const lastWinDate = profile.last_win_date as string | null;
   if (!lastWinDate || lastWinDate < today) {
     dailyWinsToday = 0;
     dailyChallengeCompletedToday = false;
+    console.log('[complete-game] streak counters reset:', {
+      userId,
+      today,
+      lastWinDate,
+    });
   }
 
   const isWin = result === 'win';
@@ -83,6 +97,17 @@ async function updateStreak(
 
   const conditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
   const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : (dailyWinsToday >= 2 ? 'two_wins' : 'none');
+
+  console.log('[complete-game] streak evaluation:', {
+    userId,
+    result,
+    isDailyChallenge,
+    today,
+    dailyWinsToday,
+    dailyChallengeCompletedToday,
+    conditionMet,
+    conditionType,
+  });
 
   // Check if streak was already earned today
   const { data: existingStreakToday } = await supabaseAdmin
@@ -174,10 +199,16 @@ async function updateStreak(
   if (milestoneReached !== null) {
     streakUpdate.pending_milestone = milestoneReached;
   }
+  if (isWin) {
+    streakUpdate.last_win_date = today;
+  }
 
-  await supabaseAdmin.from('profiles').update(streakUpdate).eq('id', userId);
+  console.log('[complete-game] streak profile update prepared:', {
+    userId,
+    streakUpdate,
+  });
 
-  return { currentStreak, bestStreak, freezeUsed, milestoneReached };
+  return { currentStreak, bestStreak, freezeUsed, milestoneReached, profileUpdate: streakUpdate };
 }
 
 Deno.serve(async (req) => {
@@ -303,9 +334,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update timezone offset on profile
+    // Update timezone offset in-memory; it will be persisted with the profile update below
     if (Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840) {
-      await supabaseAdmin.from('profiles').update({ timezone_offset: timezoneOffset }).eq('id', userId);
       profile.timezone_offset = timezoneOffset;
     }
 
@@ -468,24 +498,39 @@ Deno.serve(async (req) => {
       }).eq('id', deal.id);
     }
 
-    // 6. Update profile rating and game counts
+    // 6. Evaluate streak progression before persisting the final profile state
+    const streakResult = await updateStreak(
+      supabaseAdmin,
+      userId,
+      result,
+      isDaily,
+      profile,
+    );
+
+    // 7. Update profile rating, timezone, game counts, and streak state in one write
     const profileUpdate: Record<string, unknown> = {
       rating: newRating,
       games_played: gamesPlayed + 1,
       games_won: (profile.games_won as number) + (isWin ? 1 : 0),
       updated_at: new Date().toISOString(),
+      ...streakResult.profileUpdate,
     };
 
-    if (isWin) {
-      profileUpdate.last_win_date = new Date().toISOString().split('T')[0];
+    if (Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840) {
+      profileUpdate.timezone_offset = timezoneOffset;
     }
 
     const { error: profileUpdateErr } = await supabaseAdmin.from('profiles').update(profileUpdate).eq('id', userId);
     if (profileUpdateErr) {
       console.error('[complete-game] profiles update failed:', profileUpdateErr);
+    } else {
+      console.log('[complete-game] profiles updated with streak state:', {
+        userId,
+        profileUpdate,
+      });
     }
 
-    // 7. Insert game history
+    // 8. Insert game history
     const { error: historyErr } = await supabaseAdmin.from('game_history').insert({
       user_id: userId,
       deal_id: clientDealId || `deal-${dealSeed}`,
@@ -508,21 +553,6 @@ Deno.serve(async (req) => {
     if (historyErr) {
       console.error('[complete-game] game_history insert failed:', historyErr);
     }
-
-    // 8. Streak update
-    const { data: freshProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    const streakResult = await updateStreak(
-      supabaseAdmin,
-      userId,
-      result,
-      isDaily,
-      freshProfile || profile,
-    );
 
     // 9. Compute breakdown points that sum exactly to finalDelta
     let timeBonusPoints = 0;

@@ -63,6 +63,7 @@ export function useGamePersistence() {
           dealUuid: effectiveDealUuid,
           isDaily: isDaily || false,
           dealDDS: gameState.difficultyScore || 0,
+          timezoneOffset: new Date().getTimezoneOffset(),
         },
       });
 

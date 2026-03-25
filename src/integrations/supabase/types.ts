@@ -235,6 +235,38 @@ export type Database = {
           },
         ]
       }
+      deal_working_set: {
+        Row: {
+          attempts_at_entry: number
+          deal_id: string
+          entered_at: string
+          game_mode: string
+          id: string
+        }
+        Insert: {
+          attempts_at_entry?: number
+          deal_id: string
+          entered_at?: string
+          game_mode?: string
+          id?: string
+        }
+        Update: {
+          attempts_at_entry?: number
+          deal_id?: string
+          entered_at?: string
+          game_mode?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_working_set_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deals: {
         Row: {
           confidence: number

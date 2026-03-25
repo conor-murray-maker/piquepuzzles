@@ -27,6 +27,7 @@ interface VerifiedDeal {
 interface Target {
   gameMode: string;
   engine: PuzzleEngine;
+  simCount: number;
   band: "easy" | "medium";
   ddsMin: number;
   ddsMax: number;
@@ -34,154 +35,165 @@ interface Target {
 }
 
 const TARGETS: Target[] = [
-  { gameMode: "klondike", engine: KlondikeEngine, band: "easy", ddsMin: 0, ddsMax: 25, target: 30 },
-  { gameMode: "klondike", engine: KlondikeEngine, band: "medium", ddsMin: 26, ddsMax: 55, target: 20 },
-  { gameMode: "freecell", engine: FreeCellEngine, band: "easy", ddsMin: 0, ddsMax: 25, target: 30 },
-  { gameMode: "freecell", engine: FreeCellEngine, band: "medium", ddsMin: 26, ddsMax: 55, target: 20 },
+  { gameMode: "klondike", engine: KlondikeEngine, simCount: 200, band: "easy", ddsMin: 0, ddsMax: 25, target: 75 },
+  { gameMode: "klondike", engine: KlondikeEngine, simCount: 200, band: "medium", ddsMin: 26, ddsMax: 55, target: 50 },
+  { gameMode: "freecell", engine: FreeCellEngine, simCount: 50, band: "easy", ddsMin: 0, ddsMax: 25, target: 75 },
+  { gameMode: "freecell", engine: FreeCellEngine, simCount: 50, band: "medium", ddsMin: 26, ddsMax: 55, target: 50 },
 ];
 
-const MAX_CANDIDATES = 2000;
-const SIMS_PER_DEAL = 50;
+const MAX_CANDIDATES = 8000;
 
 export function StarterPoolGenerator() {
   const action = useAdminAction();
   const { toast } = useToast();
   const [running, setRunning] = useState(false);
   const [candidatesTried, setCandidatesTried] = useState(0);
-  const [found, setFound] = useState(0);
+  const [starterFound, setStarterFound] = useState(0);
+  const [totalBanked, setTotalBanked] = useState(0);
   const [statusLines, setStatusLines] = useState<string[]>([]);
   const [result, setResult] = useState<{ inserted: number; total: number } | null>(null);
   const abortRef = useRef(false);
 
   const addStatus = useCallback((line: string) => {
-    setStatusLines(prev => [...prev.slice(-9), line]);
+    setStatusLines(prev => [...prev.slice(-14), line]);
   }, []);
 
   const run = useCallback(async () => {
     setRunning(true);
     setCandidatesTried(0);
-    setFound(0);
+    setStarterFound(0);
+    setTotalBanked(0);
     setStatusLines([]);
     setResult(null);
     abortRef.current = false;
 
-    const collected: Record<string, VerifiedDeal[]> = {};
+    const collected: VerifiedDeal[] = [];
     const counts: Record<string, number> = {};
     for (const t of TARGETS) {
-      const key = `${t.gameMode}-${t.band}`;
-      collected[key] = [];
-      counts[key] = 0;
+      counts[`${t.gameMode}-${t.band}`] = 0;
     }
 
     let totalTried = 0;
-    let totalFound = 0;
+    let starterCount = 0;
+    let bankedCount = 0;
 
-    addStatus("Starting solver-verified deal generation...");
+    addStatus("Starting solver-verified deal generation (no time limit)...");
+    addStatus(`Targets: 75 Easy + 50 Medium per mode (300 starter), bank all solvable`);
 
-    const processBatch = async (batchSize: number): Promise<boolean> => {
-      for (let i = 0; i < batchSize; i++) {
-        if (abortRef.current) return false;
-
-        const allMet = TARGETS.every(t => counts[`${t.gameMode}-${t.band}`] >= t.target);
-        if (allMet) return false;
-
-        totalTried++;
-        const seed = generateSeed();
-
-        for (const t of TARGETS) {
-          const key = `${t.gameMode}-${t.band}`;
-          if (counts[key] >= t.target) continue;
-
-          const deal = t.engine.generateDeal(seed);
-          const result: VerificationResult = t.engine.verifySolvable(deal, SIMS_PER_DEAL);
-
-          if (!result.solvable) continue;
-
-          const dds = result.complexityScore;
-          if (dds < t.ddsMin || dds > t.ddsMax) continue;
-
-          const confidence = Math.min(1, result.simulations / 50);
-
-          collected[key].push({
-            seed,
-            game_mode: t.gameMode,
-            draw_mode: 3,
-            min_moves: result.minSolutionLength,
-            dds_initial: dds,
-            dds_blended: dds,
-            simulation_count: result.simulations,
-            confidence,
-            tier: "fresh",
-            is_calibration: true,
-            reserved_for: t.band === "easy" ? "onboarding" : null,
-          });
-
-          counts[key]++;
-          totalFound++;
-          break;
-        }
-      }
-      return true;
+    const engines: Record<string, { engine: PuzzleEngine; simCount: number }> = {
+      klondike: { engine: KlondikeEngine, simCount: 200 },
+      freecell: { engine: FreeCellEngine, simCount: 50 },
     };
 
     const startTime = Date.now();
+
     while (totalTried < MAX_CANDIDATES && !abortRef.current) {
-      const allMet = TARGETS.every(t => counts[`${t.gameMode}-${t.band}`] >= t.target);
-      if (allMet) break;
-
-      await new Promise<void>(resolve => {
-        setTimeout(async () => {
-          await processBatch(10);
-          resolve();
-        }, 0);
-      });
-
-      setCandidatesTried(totalTried);
-      setFound(totalFound);
-
-      if (totalTried % 100 === 0) {
-        const parts = TARGETS.map(t => {
-          const key = `${t.gameMode}-${t.band}`;
-          return `${t.gameMode} ${t.band}: ${counts[key]}/${t.target}`;
-        });
-        addStatus(`Tried ${totalTried} seeds — ${parts.join(", ")}`);
-      }
-
-      if (Date.now() - startTime > 120000) {
-        addStatus("⚠ Timeout reached (120s), saving what we have...");
+      const allStarterMet = TARGETS.every(t => counts[`${t.gameMode}-${t.band}`] >= t.target);
+      if (allStarterMet) {
+        addStatus("✓ All starter targets met!");
         break;
       }
+
+      // Process a batch of 5 seeds before yielding
+      for (let b = 0; b < 5 && totalTried < MAX_CANDIDATES && !abortRef.current; b++) {
+        totalTried++;
+        const seed = generateSeed();
+
+        for (const [gameMode, { engine, simCount }] of Object.entries(engines)) {
+          try {
+            const deal = engine.generateDeal(seed);
+            const verifyResult: VerificationResult = engine.verifySolvable(deal, simCount);
+
+            if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
+
+            const dds = verifyResult.complexityScore;
+            const confidence = Math.min(1, verifyResult.simulations / simCount);
+
+            // Determine if this is a starter deal (Easy or Medium)
+            let isStarter = false;
+            let reservedFor: string | null = null;
+
+            for (const t of TARGETS) {
+              if (t.gameMode !== gameMode) continue;
+              if (dds >= t.ddsMin && dds <= t.ddsMax && counts[`${t.gameMode}-${t.band}`] < t.target) {
+                isStarter = true;
+                counts[`${t.gameMode}-${t.band}`]++;
+                if (t.band === "easy") reservedFor = "onboarding";
+                break;
+              }
+            }
+
+            collected.push({
+              seed,
+              game_mode: gameMode,
+              draw_mode: 3,
+              min_moves: verifyResult.minSolutionLength,
+              dds_initial: dds,
+              dds_blended: dds,
+              simulation_count: verifyResult.simulations,
+              confidence,
+              tier: isStarter ? "starter" : "fresh",
+              is_calibration: isStarter,
+              reserved_for: reservedFor,
+            });
+
+            bankedCount++;
+            if (isStarter) starterCount++;
+          } catch {
+            // Skip failed attempt
+          }
+        }
+      }
+
+      setCandidatesTried(totalTried);
+      setStarterFound(starterCount);
+      setTotalBanked(bankedCount);
+
+      if (bankedCount % 10 < 5 && totalTried % 5 === 0) {
+        const rate = totalTried > 0 ? ((bankedCount / (totalTried * 2)) * 100).toFixed(1) : "0";
+        const parts = TARGETS.map(t => `${t.gameMode} ${t.band}: ${counts[`${t.gameMode}-${t.band}`]}/${t.target}`);
+        addStatus(`[${totalTried}] Starter: ${starterCount}/300, Banked: ${bankedCount}, Rate: ${rate}% — ${parts.join(", ")}`);
+      }
+
+      // Yield to UI
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
     }
 
-    const allDeals = Object.values(collected).flat();
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-    if (allDeals.length === 0) {
+    if (collected.length === 0) {
       addStatus(`✗ No verified deals found after ${totalTried} candidates (${elapsed}s)`);
       setRunning(false);
       return;
     }
 
-    addStatus(`Found ${allDeals.length} verified deals in ${elapsed}s. Inserting...`);
+    addStatus(`Found ${starterCount} starter + ${bankedCount - starterCount} bonus deals in ${elapsed}s. Inserting in batches...`);
 
-    try {
-      const res = await action.mutateAsync({
-        action: "seed_starter_pool",
-        params: { deals: allDeals },
-      });
-      setResult({ inserted: res.inserted, total: allDeals.length });
-      addStatus(`✓ Inserted ${res.inserted} deals into the pool`);
-      toast({ title: "Starter pool seeded", description: `${res.inserted} verified deals inserted` });
-    } catch (e: any) {
-      addStatus(`✗ Insert failed: ${e.message}`);
-      toast({ title: "Insert failed", description: e.message, variant: "destructive" });
+    // Insert in batches of 50
+    let totalInserted = 0;
+    for (let i = 0; i < collected.length; i += 50) {
+      const batch = collected.slice(i, i + 50);
+      try {
+        const res = await action.mutateAsync({
+          action: "seed_starter_pool",
+          params: { deals: batch },
+        });
+        totalInserted += res.inserted || 0;
+        addStatus(`Batch ${Math.floor(i / 50) + 1}: inserted ${res.inserted} deals`);
+      } catch (e: any) {
+        addStatus(`✗ Batch ${Math.floor(i / 50) + 1} failed: ${e.message}`);
+      }
     }
+
+    setResult({ inserted: totalInserted, total: collected.length });
+    addStatus(`✓ Total inserted: ${totalInserted} deals (${starterCount} starter, ${totalInserted - starterCount} bonus)`);
+    toast({ title: "Starter pool seeded", description: `${totalInserted} verified deals inserted (${starterCount} starter)` });
 
     setRunning(false);
   }, [action, addStatus, toast]);
 
   const totalTarget = TARGETS.reduce((s, t) => s + t.target, 0);
-  const progress = Math.min(100, (found / totalTarget) * 100);
+  const progress = Math.min(100, (starterFound / totalTarget) * 100);
 
   return (
     <Card>
@@ -193,9 +205,9 @@ export function StarterPoolGenerator() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Generates solver-verified solvable deals for new player onboarding.
-          Target: 30 Easy + 20 Medium per game mode (100 total). Each deal is
-          verified with {SIMS_PER_DEAL} MCTS simulations.
+          Generates solver-verified solvable deals. Target: 75 Easy + 50 Medium per game mode (300 starter).
+          All other solvable deals are banked as fresh. Klondike: 200 sims, FreeCell: 50 sims.
+          Up to {MAX_CANDIDATES.toLocaleString()} candidates, no time limit.
         </p>
 
         <Button onClick={run} disabled={running} className="gap-2">
@@ -216,15 +228,15 @@ export function StarterPoolGenerator() {
         {(running || result) && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span>Found {found} / {totalTarget} verified deals</span>
-              <span className="text-muted-foreground">{candidatesTried} candidates tried</span>
+              <span>Starter: {starterFound} / {totalTarget}</span>
+              <span className="text-muted-foreground">Total banked: {totalBanked} | {candidatesTried} candidates</span>
             </div>
             <Progress value={progress} className="h-2" />
           </div>
         )}
 
         {statusLines.length > 0 && (
-          <div className="bg-muted/50 rounded border p-3 max-h-48 overflow-y-auto">
+          <div className="bg-muted/50 rounded border p-3 max-h-64 overflow-y-auto">
             {statusLines.map((line, i) => (
               <p key={i} className="text-xs font-mono leading-relaxed">
                 {line.startsWith("✓") ? (
@@ -244,7 +256,7 @@ export function StarterPoolGenerator() {
             {result.inserted > 0 ? (
               <>
                 <CheckCircle className="h-4 w-4 text-emerald-600" />
-                <span>Successfully inserted {result.inserted} verified deals</span>
+                <span>Inserted {result.inserted} verified deals ({starterFound} starter, {result.inserted - starterFound} bonus)</span>
               </>
             ) : (
               <>

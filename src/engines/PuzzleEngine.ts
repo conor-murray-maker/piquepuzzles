@@ -10,6 +10,8 @@ export interface VerificationResult {
   minSolutionLength: number; // number of atomic moves in shortest solution
   confidence: number; // 0-1, based on simulation count and consistency
   simulations: number; // how many simulations were run
+  uniqueWinningPaths: number; // count of distinct winning move sequences
+  pathDiversityScore: number; // uniqueWinningPaths / totalWins, clamped 0-1
 }
 
 export interface PerformanceSignals {

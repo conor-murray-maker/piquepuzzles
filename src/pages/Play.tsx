@@ -187,7 +187,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }, [saveGameResult, setPhase, gameMode, profile, dailyDate, dailyDealId, user, drawMode, initialSeed, refillQueue]);
 
   const handlePlayAgain = useCallback(async () => {
-    setPhase('playing');
+    // Clear all game storage before requesting new deal
+    if (gameMode === 'realm') clearRealmStorage();
+    else if (gameMode === 'freecell') clearFreeCellStorage();
+    else clearStorage();
+
     setLastResult(null);
     setRatingResult(null);
     setChallengeData(null);

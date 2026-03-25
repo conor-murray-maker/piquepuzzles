@@ -108,6 +108,20 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     }
   }, [state.dealId, state.dealUuid]);
 
+  // Fetch puzzle name via AI
+  useEffect(() => {
+    if (state.puzzleName || !state.regions) return;
+    supabase.functions.invoke('name-realm-puzzle', {
+      body: { regions: state.regions, size: state.size },
+    }).then(({ data }) => {
+      if (data?.name) setState(s => ({ ...s, puzzleName: data.name }));
+    }).catch(() => {
+      // Fallback
+      setState(s => ({ ...s, puzzleName: `${s.size}×${s.size} ${s.difficulty}` }));
+    });
+  }, [state.puzzleName, state.regions, state.size]);
+
+
   // Save state
   useEffect(() => {
     if (initialSeed !== undefined) return;

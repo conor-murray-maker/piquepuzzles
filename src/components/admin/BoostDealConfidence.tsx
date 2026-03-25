@@ -123,11 +123,9 @@ export function BoostDealConfidence() {
           ? Math.min(deal.min_moves > 0 ? deal.min_moves : Infinity, verifyResult.minSolutionLength)
           : deal.min_moves;
 
-        // Recalculate DDS if changed by more than 5 points
-        const newDds = engineInfo.engine.getComplexityScore(finalMinMoves);
-        const ddsChanged = Math.abs(newDds - deal.dds_initial) > 5;
-        const finalDds = ddsChanged ? newDds : deal.dds_initial;
-        const finalBlended = ddsChanged ? newDds : deal.dds_blended;
+        // Recalculate DDS from updated data — no threshold, accuracy is the goal
+        const finalDds = engineInfo.engine.getComplexityScore(finalMinMoves);
+        const finalBlended = finalDds;
 
         const improvement = finalConfidence - deal.confidence;
 

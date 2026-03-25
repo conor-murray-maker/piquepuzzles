@@ -6,9 +6,11 @@ import "./index.css";
 import { EngineRegistry } from "./engines/EngineRegistry";
 import { KlondikeEngine } from "./engines/KlondikeEngine";
 import { FreeCellEngine } from "./engines/FreeCellEngine";
+import { RealmEngine } from "./engines/RealmEngine";
 
 EngineRegistry.register(KlondikeEngine);
 EngineRegistry.register(FreeCellEngine);
+EngineRegistry.register(RealmEngine);
 
 createRoot(document.getElementById("root")!).render(<App />);
 

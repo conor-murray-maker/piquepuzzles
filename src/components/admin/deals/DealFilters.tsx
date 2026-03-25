@@ -63,6 +63,7 @@ export function DealFilters({ filters, onChange }: Props) {
         { value: "all", label: "All Modes" },
         { value: "klondike", label: "Klondike" },
         { value: "freecell", label: "FreeCell" },
+        { value: "realm", label: "Realm" },
       ]} />
     </div>
   );

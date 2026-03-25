@@ -125,6 +125,7 @@ export function AdminDeals() {
                 <TableHead>DDS Init</TableHead>
                 <TableHead>DDS Blend</TableHead>
                 <TableHead>Conf</TableHead>
+                <TableHead>Path Div</TableHead>
                 <TableHead>Attempts</TableHead>
                 <TableHead>Win%</TableHead>
                 <TableHead>Avg Moves</TableHead>
@@ -132,20 +133,31 @@ export function AdminDeals() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deals.map((d: any) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-mono text-xs">{String(d.seed).slice(0, 8)}</TableCell>
-                  <TableCell><Badge variant="secondary">{d.game_mode}</Badge></TableCell>
-                  <TableCell>{d.tier}</TableCell>
-                  <TableCell className="font-mono">{d.dds_initial?.toFixed(1)}</TableCell>
-                  <TableCell className="font-mono">{d.dds_blended?.toFixed(1)}</TableCell>
-                  <TableCell className="font-mono">{d.confidence?.toFixed(2)}</TableCell>
-                  <TableCell>{d.pool_attempts}</TableCell>
-                  <TableCell>{d.pool_attempts > 0 ? Math.round((d.pool_wins / d.pool_attempts) * 100) : 0}%</TableCell>
-                  <TableCell>{d.pool_avg_moves?.toFixed(0)}</TableCell>
-                  <TableCell>{d.pool_avg_time?.toFixed(0)}s</TableCell>
-                </TableRow>
-              ))}
+              {deals.map((d: any) => {
+                const dds = d.dds_initial ?? 50;
+                const pd = d.path_diversity_score ?? 0;
+                const isEasy = dds <= 25;
+                const isMedium = dds > 25 && dds <= 55;
+                const lowPD = (isEasy && pd < 0.3) || (isMedium && pd < 0.15);
+                return (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-mono text-xs">{String(d.seed).slice(0, 8)}</TableCell>
+                    <TableCell><Badge variant="secondary">{d.game_mode}</Badge></TableCell>
+                    <TableCell>{d.tier}</TableCell>
+                    <TableCell className="font-mono">{d.dds_initial?.toFixed(1)}</TableCell>
+                    <TableCell className="font-mono">{d.dds_blended?.toFixed(1)}</TableCell>
+                    <TableCell className="font-mono">{d.confidence?.toFixed(2)}</TableCell>
+                    <TableCell className={`font-mono ${lowPD ? 'text-yellow-600 font-semibold' : ''}`}>
+                      {pd.toFixed(2)}
+                      {lowPD && ' ⚠'}
+                    </TableCell>
+                    <TableCell>{d.pool_attempts}</TableCell>
+                    <TableCell>{d.pool_attempts > 0 ? Math.round((d.pool_wins / d.pool_attempts) * 100) : 0}%</TableCell>
+                    <TableCell>{d.pool_avg_moves?.toFixed(0)}</TableCell>
+                    <TableCell>{d.pool_avg_time?.toFixed(0)}s</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

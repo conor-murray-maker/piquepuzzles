@@ -8,7 +8,7 @@ import { KlondikeEngine } from "@/engines/KlondikeEngine";
 import { FreeCellEngine } from "@/engines/FreeCellEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { supabase } from "@/integrations/supabase/client";
-import { Zap, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Zap, Loader2, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 
 interface DealRow {
   id: string;
@@ -21,6 +21,8 @@ interface DealRow {
   dds_blended: number;
   tier: string;
   is_calibration: boolean;
+  unique_winning_paths: number;
+  path_diversity_score: number;
 }
 
 // Priority: starter Easy, starter Medium, fresh Easy, fresh Medium, Hard, Expert
@@ -34,8 +36,31 @@ function sortPriority(deal: DealRow): number {
   if (isStarter && isMedium) return 1;
   if (!isStarter && isEasy) return 2;
   if (!isStarter && isMedium) return 3;
-  if (dds <= 75) return 4; // Hard
-  return 5; // Expert
+  if (dds <= 75) return 4;
+  return 5;
+}
+
+function applyPathDiversityModifier(baseDds: number, pathDiversityScore: number): number {
+  let modifier = 0;
+  if (pathDiversityScore < 0.1) modifier = 8;
+  else if (pathDiversityScore > 0.5) modifier = -5;
+  modifier = Math.max(-10, Math.min(10, modifier));
+  return Math.max(0, Math.min(100, baseDds + modifier));
+}
+
+function getDifficultyTier(dds: number): string {
+  if (dds <= 25) return "Easy";
+  if (dds <= 55) return "Medium";
+  if (dds <= 80) return "Hard";
+  return "Expert";
+}
+
+interface PathDiversityWarning {
+  dealId: string;
+  seed: number;
+  tier: string;
+  pathDiversityScore: number;
+  threshold: number;
 }
 
 export function BoostDealConfidence() {
@@ -47,6 +72,7 @@ export function BoostDealConfidence() {
   const [totalImprovement, setTotalImprovement] = useState(0);
   const [statusLines, setStatusLines] = useState<string[]>([]);
   const [result, setResult] = useState<{ boosted: number; avgImprovement: number } | null>(null);
+  const [warnings, setWarnings] = useState<PathDiversityWarning[]>([]);
   const abortRef = useRef(false);
 
   const addStatus = useCallback((line: string) => {
@@ -60,14 +86,14 @@ export function BoostDealConfidence() {
     setTotalImprovement(0);
     setStatusLines([]);
     setResult(null);
+    setWarnings([]);
     abortRef.current = false;
 
     addStatus("Fetching deals with confidence < 0.7...");
 
-    // Fetch all low-confidence deals
     const { data: deals, error } = await supabase
       .from("deals")
-      .select("id, seed, game_mode, confidence, simulation_count, min_moves, dds_initial, dds_blended, tier, is_calibration")
+      .select("id, seed, game_mode, confidence, simulation_count, min_moves, dds_initial, dds_blended, tier, is_calibration, unique_winning_paths, path_diversity_score")
       .lt("confidence", 0.7)
       .order("confidence", { ascending: true });
 
@@ -77,8 +103,7 @@ export function BoostDealConfidence() {
       return;
     }
 
-    // Sort by priority
-    const sorted = (deals as DealRow[]).sort((a, b) => sortPriority(a) - sortPriority(b));
+    const sorted = (deals as unknown as DealRow[]).sort((a, b) => sortPriority(a) - sortPriority(b));
     setRemaining(sorted.length);
     addStatus(`Found ${sorted.length} deals below threshold. Starting boost...`);
 
@@ -89,6 +114,7 @@ export function BoostDealConfidence() {
 
     let boostedCount = 0;
     let totalImp = 0;
+    const newWarnings: PathDiversityWarning[] = [];
 
     for (let i = 0; i < sorted.length; i++) {
       if (abortRef.current) {
@@ -104,32 +130,41 @@ export function BoostDealConfidence() {
         const generatedDeal = engineInfo.engine.generateDeal(deal.seed);
         const verifyResult = engineInfo.engine.verifySolvable(generatedDeal, engineInfo.simCount);
 
-        // Combine old and new simulation data
         const oldSims = deal.simulation_count || 0;
         const newSims = engineInfo.simCount;
         const totalSims = oldSims + newSims;
 
-        // Compute new confidence from combined data
-        // Old winning sims estimated from old confidence * old sims
         const oldWins = deal.confidence * oldSims;
         const newWins = verifyResult.confidence * newSims;
         const combinedConfidence = Math.min(1, Math.max(0, (oldWins + newWins) / totalSims));
-
-        // Only improve — never downgrade
         const finalConfidence = Math.max(deal.confidence, combinedConfidence);
 
-        // Update min_moves if new result is better
         const finalMinMoves = verifyResult.solvable && verifyResult.minSolutionLength > 0
           ? Math.min(deal.min_moves > 0 ? deal.min_moves : Infinity, verifyResult.minSolutionLength)
           : deal.min_moves;
 
-        // Recalculate DDS from updated data — no threshold, accuracy is the goal
-        const finalDds = engineInfo.engine.getComplexityScore(finalMinMoves);
+        // Recalculate DDS with path diversity modifier
+        let finalDds = engineInfo.engine.getComplexityScore(finalMinMoves);
+
+        // Combine path diversity data — take the max unique paths seen
+        const combinedUniquePaths = Math.max(deal.unique_winning_paths || 0, verifyResult.uniqueWinningPaths);
+        // Recalculate path diversity from new simulation run (more accurate)
+        const finalPathDiversity = verifyResult.pathDiversityScore;
+
+        // Apply path diversity modifier to DDS
+        finalDds = applyPathDiversityModifier(finalDds, finalPathDiversity);
         const finalBlended = finalDds;
 
         const improvement = finalConfidence - deal.confidence;
 
-        // Write back via admin action
+        // Check path diversity thresholds and flag warnings
+        const diffTier = getDifficultyTier(finalDds);
+        if (diffTier === "Easy" && (finalPathDiversity < 0.3 || finalConfidence < 0.5)) {
+          newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Easy", pathDiversityScore: finalPathDiversity, threshold: 0.3 });
+        } else if (diffTier === "Medium" && (finalPathDiversity < 0.15 || finalConfidence < 0.25)) {
+          newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Medium", pathDiversityScore: finalPathDiversity, threshold: 0.15 });
+        }
+
         await action.mutateAsync({
           action: "update_deal_confidence",
           params: {
@@ -139,6 +174,8 @@ export function BoostDealConfidence() {
             min_moves: finalMinMoves,
             dds_initial: Math.round(finalDds * 10) / 10,
             dds_blended: Math.round(finalBlended * 10) / 10,
+            unique_winning_paths: combinedUniquePaths,
+            path_diversity_score: Math.round(finalPathDiversity * 1000) / 1000,
           },
         });
 
@@ -150,19 +187,22 @@ export function BoostDealConfidence() {
 
         if (boostedCount % 5 === 0 || i === sorted.length - 1) {
           const avgImp = boostedCount > 0 ? (totalImp / boostedCount * 100).toFixed(1) : "0";
-          addStatus(`[${boostedCount}/${sorted.length}] ${deal.game_mode} seed ${deal.seed}: ${(deal.confidence * 100).toFixed(0)}% → ${(finalConfidence * 100).toFixed(0)}% | Avg improvement: +${avgImp}%`);
+          addStatus(`[${boostedCount}/${sorted.length}] ${deal.game_mode} seed ${deal.seed}: ${(deal.confidence * 100).toFixed(0)}% → ${(finalConfidence * 100).toFixed(0)}% | PD: ${(finalPathDiversity * 100).toFixed(0)}% | Avg: +${avgImp}%`);
         }
       } catch (e: any) {
         addStatus(`✗ Failed deal ${deal.seed}: ${e.message}`);
       }
 
-      // Yield to UI
       await new Promise<void>(resolve => setTimeout(resolve, 0));
     }
 
+    setWarnings(newWarnings);
     const avgImp = boostedCount > 0 ? (totalImp / boostedCount * 100).toFixed(1) : "0";
     setResult({ boosted: boostedCount, avgImprovement: parseFloat(avgImp) });
     addStatus(`✓ Boosted ${boostedCount} deals. Average confidence improvement: +${avgImp}%`);
+    if (newWarnings.length > 0) {
+      addStatus(`⚠ ${newWarnings.length} deals flagged with low path diversity for their tier`);
+    }
     toast({ title: "Confidence boost complete", description: `${boostedCount} deals boosted (+${avgImp}% avg)` });
     setRunning(false);
   }, [action, addStatus, toast]);
@@ -179,8 +219,8 @@ export function BoostDealConfidence() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Runs additional MCTS simulations on deals with confidence below 0.7. 
-          Klondike: 200 sims, FreeCell: 50 sims. Priority: starter Easy → Medium → fresh Easy → Medium → Hard → Expert.
+          Runs additional MCTS simulations on deals with confidence below 0.7.
+          Klondike: 200 sims, FreeCell: 50 sims. Recalculates path diversity and applies DDS modifier (narrow path +8, many paths −5).
           Never downgrades confidence. Client-side, no time limit.
         </p>
 
@@ -217,6 +257,8 @@ export function BoostDealConfidence() {
                   <span className="text-emerald-600">{line}</span>
                 ) : line.startsWith("✗") ? (
                   <span className="text-destructive">{line}</span>
+                ) : line.startsWith("⚠") ? (
+                  <span className="text-yellow-600">{line}</span>
                 ) : (
                   line
                 )}
@@ -238,6 +280,22 @@ export function BoostDealConfidence() {
                 <span>No deals needed boosting</span>
               </>
             )}
+          </div>
+        )}
+
+        {warnings.length > 0 && (
+          <div className="border border-yellow-500/30 bg-yellow-50/50 dark:bg-yellow-950/20 rounded p-3 space-y-1">
+            <div className="flex items-center gap-2 text-sm font-medium text-yellow-700 dark:text-yellow-400">
+              <AlertTriangle className="h-4 w-4" />
+              {warnings.length} deals flagged — low path diversity for tier
+            </div>
+            <div className="max-h-32 overflow-y-auto">
+              {warnings.map((w, i) => (
+                <p key={i} className="text-xs font-mono text-yellow-600 dark:text-yellow-500">
+                  Seed {w.seed} ({w.tier}): PD {(w.pathDiversityScore * 100).toFixed(0)}% &lt; {(w.threshold * 100).toFixed(0)}% threshold
+                </p>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>

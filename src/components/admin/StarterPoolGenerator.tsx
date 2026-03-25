@@ -22,6 +22,8 @@ interface VerifiedDeal {
   tier: string;
   is_calibration: boolean;
   reserved_for: string | null;
+  unique_winning_paths: number;
+  path_diversity_score: number;
 }
 
 interface Target {
@@ -32,6 +34,22 @@ interface Target {
   ddsMin: number;
   ddsMax: number;
   target: number;
+}
+
+/** Apply path diversity modifier to base DDS. Cap ±10 points. */
+function applyPathDiversityModifier(baseDds: number, pathDiversityScore: number): number {
+  let modifier = 0;
+  if (pathDiversityScore < 0.1) modifier = 8;
+  else if (pathDiversityScore > 0.5) modifier = -5;
+  modifier = Math.max(-10, Math.min(10, modifier));
+  return Math.max(0, Math.min(100, baseDds + modifier));
+}
+
+function getDifficultyTier(dds: number): string {
+  if (dds <= 25) return "Easy";
+  if (dds <= 55) return "Medium";
+  if (dds <= 80) return "Hard";
+  return "Expert";
 }
 
 const TARGETS: Target[] = [
@@ -94,7 +112,6 @@ export function StarterPoolGenerator() {
         break;
       }
 
-      // Process a batch of 5 seeds before yielding
       for (let b = 0; b < 5 && totalTried < MAX_CANDIDATES && !abortRef.current; b++) {
         totalTried++;
         const seed = generateSeed();
@@ -106,8 +123,15 @@ export function StarterPoolGenerator() {
 
             if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
 
-            const dds = verifyResult.complexityScore;
+            // Base DDS from calibration curve
+            let dds = verifyResult.complexityScore;
             const confidence = Math.min(1, verifyResult.simulations / simCount);
+            const pathDiv = verifyResult.pathDiversityScore;
+            const uniquePaths = verifyResult.uniqueWinningPaths;
+
+            // Apply path diversity modifier to DDS
+            dds = applyPathDiversityModifier(dds, pathDiv);
+            const diffTier = getDifficultyTier(dds);
 
             // Determine if this is a starter deal (Easy or Medium)
             let isStarter = false;
@@ -135,6 +159,8 @@ export function StarterPoolGenerator() {
               tier: isStarter ? "starter" : "fresh",
               is_calibration: isStarter,
               reserved_for: reservedFor,
+              unique_winning_paths: uniquePaths,
+              path_diversity_score: Math.round(pathDiv * 1000) / 1000,
             });
 
             bankedCount++;
@@ -155,7 +181,6 @@ export function StarterPoolGenerator() {
         addStatus(`[${totalTried}] Starter: ${starterCount}/300, Banked: ${bankedCount}, Rate: ${rate}% — ${parts.join(", ")}`);
       }
 
-      // Yield to UI
       await new Promise<void>(resolve => setTimeout(resolve, 0));
     }
 
@@ -169,7 +194,6 @@ export function StarterPoolGenerator() {
 
     addStatus(`Found ${starterCount} starter + ${bankedCount - starterCount} bonus deals in ${elapsed}s. Inserting in batches...`);
 
-    // Insert in batches of 50
     let totalInserted = 0;
     for (let i = 0; i < collected.length; i += 50) {
       const batch = collected.slice(i, i + 50);
@@ -205,8 +229,9 @@ export function StarterPoolGenerator() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Generates solver-verified solvable deals. Target: 75 Easy + 50 Medium per game mode (300 starter).
+          Generates solver-verified solvable deals with path diversity scoring. Target: 75 Easy + 50 Medium per game mode (300 starter).
           All other solvable deals are banked as fresh. Klondike: 200 sims, FreeCell: 50 sims.
+          DDS adjusted by path diversity (narrow path +8, many paths −5).
           Up to {MAX_CANDIDATES.toLocaleString()} candidates, no time limit.
         </p>
 
@@ -216,11 +241,7 @@ export function StarterPoolGenerator() {
         </Button>
 
         {running && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => { abortRef.current = true; }}
-          >
+          <Button variant="outline" size="sm" onClick={() => { abortRef.current = true; }}>
             Stop
           </Button>
         )}

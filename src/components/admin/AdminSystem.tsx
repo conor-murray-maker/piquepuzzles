@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, CheckCircle, Play, RefreshCw, Shield, Download, Copy, Loader2, AlertCircle, Info } from "lucide-react";
 import { StarterPoolGenerator } from "./StarterPoolGenerator";
+import { BoostDealConfidence } from "./BoostDealConfidence";
 
 interface Alert {
   severity: "critical" | "warning" | "info";
@@ -281,6 +282,9 @@ export function AdminSystem() {
 
       {/* Starter Pool Generator */}
       <StarterPoolGenerator />
+
+      {/* Boost Deal Confidence */}
+      <BoostDealConfidence />
     </div>
   );
 }

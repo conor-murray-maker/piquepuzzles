@@ -279,6 +279,7 @@ export type Database = {
           id: string
           is_calibration: boolean
           min_moves: number
+          path_diversity_score: number
           pool_abandons: number
           pool_attempts: number
           pool_avg_moves: number
@@ -288,6 +289,7 @@ export type Database = {
           seed: number
           simulation_count: number
           tier: string
+          unique_winning_paths: number
         }
         Insert: {
           confidence?: number
@@ -300,6 +302,7 @@ export type Database = {
           id?: string
           is_calibration?: boolean
           min_moves?: number
+          path_diversity_score?: number
           pool_abandons?: number
           pool_attempts?: number
           pool_avg_moves?: number
@@ -309,6 +312,7 @@ export type Database = {
           seed: number
           simulation_count?: number
           tier?: string
+          unique_winning_paths?: number
         }
         Update: {
           confidence?: number
@@ -321,6 +325,7 @@ export type Database = {
           id?: string
           is_calibration?: boolean
           min_moves?: number
+          path_diversity_score?: number
           pool_abandons?: number
           pool_attempts?: number
           pool_avg_moves?: number
@@ -330,6 +335,7 @@ export type Database = {
           seed?: number
           simulation_count?: number
           tier?: string
+          unique_winning_paths?: number
         }
         Relationships: []
       }

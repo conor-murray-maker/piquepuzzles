@@ -1,0 +1,1 @@
+UPDATE public.deals SET confidence = 0;

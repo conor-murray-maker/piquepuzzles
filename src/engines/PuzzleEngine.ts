@@ -35,4 +35,4 @@ export interface PuzzleEngine {
   getComplexityScore(minSolutionLength: number): number; // maps solution length to 0-100
 }
 
-export type GameMode = 'klondike' | 'freecell' | string; // extensible
+export type GameMode = 'klondike' | 'freecell' | 'realm' | string; // extensible

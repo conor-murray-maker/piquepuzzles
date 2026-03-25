@@ -4,6 +4,7 @@ import { GameMode } from '@/engines/PuzzleEngine';
 const NORMALISATION_CONFIG: Record<string, { movesMin: number; movesMax: number; timeMin: number; timeMax: number }> = {
   klondike: { movesMin: 50, movesMax: 200, timeMin: 60, timeMax: 600 },
   freecell: { movesMin: 40, movesMax: 180, timeMin: 60, timeMax: 540 },
+  realm: { movesMin: 6, movesMax: 30, timeMin: 30, timeMax: 600 },
 };
 
 function getConfig(gameMode: string) {

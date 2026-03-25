@@ -6,6 +6,7 @@ import { useAdminAction } from "@/hooks/useAdminQuery";
 import { useToast } from "@/hooks/use-toast";
 import { KlondikeEngine } from "@/engines/KlondikeEngine";
 import { FreeCellEngine } from "@/engines/FreeCellEngine";
+import { RealmEngine } from "@/engines/RealmEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
@@ -128,6 +129,7 @@ export function BoostDealConfidence() {
     const engines: Record<string, { engine: PuzzleEngine; simCount: number }> = {
       klondike: { engine: KlondikeEngine, simCount: 500 },
       freecell: { engine: FreeCellEngine, simCount: 100 },
+      realm: { engine: RealmEngine, simCount: 1 },
     };
 
     let boostedCount = 0;

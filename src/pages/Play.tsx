@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { KlondikeState, FreeCellState, GameMode, DrawMode } from '@/game/types';
 import { GameBoard, clearStorage } from '@/components/game/GameBoard';
 import { FreeCellBoard, clearFreeCellStorage } from '@/components/game/FreeCellBoard';
+import { RealmBoard, clearRealmStorage } from '@/components/game/RealmBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
@@ -173,7 +174,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       });
     }
 
-    if (gameMode === 'freecell') clearFreeCellStorage();
+    if (gameMode === 'realm') clearRealmStorage();
+    else if (gameMode === 'freecell') clearFreeCellStorage();
     else clearStorage();
 
     // Refill queue in background
@@ -238,6 +240,18 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   // Determine seed and dealUuid to pass to game board
   const effectiveSeed = initialSeed ?? queuedDeal?.seed;
   const effectiveDealUuid = queuedDeal?.dealUuid;
+
+  if (gameMode === 'realm') {
+    return (
+      <RealmBoard
+        key={gameKey}
+        onGameEnd={handleGameEnd as any}
+        onGiveUp={handleGiveUp as any}
+        initialSeed={effectiveSeed}
+        dealUuid={effectiveDealUuid}
+      />
+    );
+  }
 
   if (gameMode === 'freecell') {
     return (

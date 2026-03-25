@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, Grid3X3 } from 'lucide-react';
+import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, Grid3X3, Crown } from 'lucide-react';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
@@ -160,6 +160,20 @@ export default function Index() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">FreeCell</p>
                   <p className="text-xs text-muted-foreground">Strategic card puzzle</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
+
+              <button
+                onClick={() => navigate('/play?mode=realm')}
+                className="w-full stat-card flex items-center gap-4 text-left group hover:border-primary/30 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Crown className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">Realm</p>
+                  <p className="text-xs text-muted-foreground">Crown placement puzzle</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>

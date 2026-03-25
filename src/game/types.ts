@@ -8,7 +8,7 @@ export interface Card {
   faceUp: boolean;
 }
 
-export type GameMode = 'klondike' | 'freecell';
+export type GameMode = 'klondike' | 'freecell' | 'realm';
 export type DrawMode = 1 | 3;
 export type Difficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert';
 

@@ -129,6 +129,7 @@ export function BoostDealConfidence() {
     const engines: Record<string, { engine: PuzzleEngine; simCount: number }> = {
       klondike: { engine: KlondikeEngine, simCount: 500 },
       freecell: { engine: FreeCellEngine, simCount: 100 },
+      realm: { engine: RealmEngine, simCount: 1 },
     };
 
     let boostedCount = 0;

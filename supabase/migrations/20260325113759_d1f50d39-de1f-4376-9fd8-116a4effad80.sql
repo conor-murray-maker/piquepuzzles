@@ -1,0 +1,1 @@
+ALTER TABLE public.deals ADD COLUMN simulation_wins integer NOT NULL DEFAULT 0;

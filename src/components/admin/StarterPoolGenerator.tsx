@@ -19,6 +19,7 @@ interface VerifiedDeal {
   dds_initial: number;
   dds_blended: number;
   simulation_count: number;
+  simulation_wins: number;
   confidence: number;
   tier: string;
   is_calibration: boolean;
@@ -162,6 +163,7 @@ export function StarterPoolGenerator() {
               dds_initial: dds,
               dds_blended: dds,
               simulation_count: verifyResult.simulations,
+              simulation_wins: verifyResult.wins,
               confidence: confResult.confidence,
               tier: isStarter ? "starter" : "fresh",
               is_calibration: isStarter,

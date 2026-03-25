@@ -28,7 +28,7 @@ export class DealPoolService {
       if (onboarding) return onboarding;
     }
 
-    // 1. Pop from user's pre-buffered queue
+    // 1. Pop from user's pre-buffered queue (working set deals)
     const queued = await this.popFromQueue(userId, gameMode);
     if (queued) return queued;
 
@@ -38,6 +38,7 @@ export class DealPoolService {
 
   /**
    * Buffer deals in background. Fire and forget.
+   * The edge function manages working set membership.
    */
   static async bufferDeals(userId: string, gameMode: GameMode, drawMode: number = 3): Promise<void> {
     try {
@@ -51,11 +52,10 @@ export class DealPoolService {
 
   /**
    * Record a game completion — called by the edge function, but pool stats update is also there.
-   * This client method just triggers the refill.
+   * This client method is a no-op — actual recording is server-side.
    */
   static async recordCompletion(dealId: string, signals: PerformanceSignals, result: 'win' | 'loss' | 'abandon'): Promise<void> {
     // Pool stats are updated server-side in complete-game edge function
-    // This is a no-op on client — actual recording is server-side
   }
 
   private static async popFromQueue(userId: string, gameMode: string): Promise<VerifiedDeal | null> {
@@ -135,11 +135,9 @@ export class DealPoolService {
 
   /**
    * Serve Easy or low-Medium deals for new players (games_played < 3).
-   * Prioritizes onboarding-reserved Easy deals, then any deal with dds_blended <= 40.
    */
   private static async popOnboardingDeal(gameMode: string): Promise<VerifiedDeal | null> {
     try {
-      // First try reserved onboarding deals (Easy)
       const { data: easyDeals } = await (supabase as any)
         .from('deals')
         .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended')
@@ -149,7 +147,6 @@ export class DealPoolService {
 
       let deal = easyDeals?.[0];
 
-      // Fallback: any Easy or low-Medium deal (dds_blended <= 40)
       if (!deal) {
         const { data: lowDeals } = await (supabase as any)
           .from('deals')
@@ -194,7 +191,7 @@ export class DealPoolService {
         if (result.solvable && result.minSolutionLength > 0) {
           const dds = result.complexityScore;
           return {
-            dealUuid: '', // Will be set after DB insert
+            dealUuid: '',
             seed,
             gameMode,
             tier: 'fresh',
@@ -224,7 +221,6 @@ export class DealPoolService {
     const deals: Array<{ seed: number; minMoves: number; ddsInitial: number; simulationCount: number }> = [];
     const simCount = 50;
 
-    // Reserve ~25% of batch for Easy deals (DDS < 26)
     const easyTarget = Math.max(2, Math.floor(count * 0.25));
     let easyFound = 0;
 
@@ -238,7 +234,6 @@ export class DealPoolService {
             const dds = result.complexityScore;
             const isEasy = dds < 26;
 
-            // Prioritize Easy deals until we hit the target
             if (isEasy && easyFound < easyTarget) {
               deals.unshift({ seed, minMoves: result.minSolutionLength, ddsInitial: dds, simulationCount: simCount });
               easyFound++;

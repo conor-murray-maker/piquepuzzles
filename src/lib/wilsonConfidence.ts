@@ -16,7 +16,6 @@ export interface WilsonInterval {
 export interface DealConfidenceInput {
   wins: number;
   totalSimulations: number;
-  pathDiversityScore: number;
   /** DDS value after path diversity modifier is applied */
   dds: number;
 }
@@ -72,11 +71,11 @@ function tierSpan(dds: number, wilsonLower: number, wilsonUpper: number): number
  * stability, and path diversity.
  */
 export function calculateDealConfidence(input: DealConfidenceInput): DealConfidenceResult {
-  const { wins, totalSimulations, pathDiversityScore, dds } = input;
+  const { wins, totalSimulations, dds } = input;
   const n = totalSimulations;
   const winRate = n > 0 ? wins / n : 0;
 
-  // Wilson interval confidence component (50% weight)
+  // Wilson interval confidence component (70% weight)
   const wi = wilsonInterval(wins, n);
   let wilsonConf = 1 - Math.min(1, Math.max(0, wi.width / 0.4));
 
@@ -91,11 +90,8 @@ export function calculateDealConfidence(input: DealConfidenceInput): DealConfide
     stabilityScore = 0.0; // spans 3+ tiers — heavy penalty
   }
 
-  // Path diversity component (20% weight)
-  const pdScore = Math.min(1, Math.max(0, pathDiversityScore));
-
-  // Weighted blend
-  let confidence = wilsonConf * 0.5 + stabilityScore * 0.3 + pdScore * 0.2;
+  // Weighted blend: 70% Wilson + 30% stability
+  let confidence = wilsonConf * 0.7 + stabilityScore * 0.3;
 
   // Minimum simulation caps
   if (n < 10) {

@@ -209,6 +209,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     }
 
     setGameKey(k => k + 1);
+    setPhase('playing');
   }, [setPhase, challengeId, dailyDate, gameMode, navigate, popNextDeal, drawMode]);
 
   if (gamePhase === 'postgame' && lastResult) {

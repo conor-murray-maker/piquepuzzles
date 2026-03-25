@@ -172,7 +172,6 @@ export function BoostDealConfidence() {
         const confResult = calculateDealConfidence({
           wins: totalWins,
           totalSimulations: totalSims,
-          pathDiversityScore: finalPathDiversity,
           dds: finalDds,
         });
 
@@ -243,7 +242,7 @@ export function BoostDealConfidence() {
         <p className="text-sm text-muted-foreground">
           Runs additional MCTS simulations on deals with Wilson confidence below 0.9.
           Klondike: 500 sims/run, FreeCell: 100 sims/run. Accumulates cumulatively.
-          Confidence = 50% Wilson interval width + 30% DDS tier stability + 20% path diversity.
+          Confidence = 70% Wilson interval width + 30% DDS tier stability.
         </p>
 
         <div className="flex gap-2">

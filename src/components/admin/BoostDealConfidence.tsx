@@ -242,7 +242,7 @@ export function BoostDealConfidence() {
         <p className="text-sm text-muted-foreground">
           Runs additional MCTS simulations on deals with Wilson confidence below 0.9.
           Klondike: 500 sims/run, FreeCell: 100 sims/run. Accumulates cumulatively.
-          Confidence = 70% Wilson interval width + 30% DDS tier stability.
+          Confidence = 70% Wilson interval width + 30% DDS tier stability. Path diversity applies as a DDS modifier only.
         </p>
 
         <div className="flex gap-2">

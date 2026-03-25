@@ -17,6 +17,7 @@ interface DealRow {
   game_mode: string;
   confidence: number;
   simulation_count: number;
+  simulation_wins: number;
   min_moves: number;
   dds_initial: number;
   dds_blended: number;
@@ -94,7 +95,7 @@ export function BoostDealConfidence() {
 
     const { data: deals, error } = await supabase
       .from("deals")
-      .select("id, seed, game_mode, confidence, simulation_count, min_moves, dds_initial, dds_blended, tier, is_calibration, unique_winning_paths, path_diversity_score, pool_wins, pool_attempts")
+      .select("id, seed, game_mode, confidence, simulation_count, simulation_wins, min_moves, dds_initial, dds_blended, tier, is_calibration, unique_winning_paths, path_diversity_score, pool_wins, pool_attempts")
       .lt("confidence", 0.7)
       .order("confidence", { ascending: true });
 
@@ -132,16 +133,13 @@ export function BoostDealConfidence() {
         const verifyResult = engineInfo.engine.verifySolvable(generatedDeal, engineInfo.simCount);
 
         const oldSims = deal.simulation_count || 0;
+        const oldSimWins = deal.simulation_wins || 0;
         const newSims = engineInfo.simCount;
-        const totalSims = oldSims + newSims;
-
-        // Combine wins: estimate old wins from pool data + new simulation wins
-        const oldWins = deal.pool_wins || 0;
         const newWins = verifyResult.wins;
-        // For Wilson, we need total wins across all simulation runs
-        // Old confidence was win-rate based, so estimate old sim wins
-        const estimatedOldSimWins = Math.round(deal.confidence * oldSims); // rough estimate
-        const totalWins = estimatedOldSimWins + newWins;
+        
+        // Accumulate: add new simulation results to existing totals
+        const totalSims = oldSims + newSims;
+        const totalWins = oldSimWins + newWins;
 
         const finalMinMoves = verifyResult.solvable && verifyResult.minSolutionLength > 0
           ? Math.min(deal.min_moves > 0 ? deal.min_moves : Infinity, verifyResult.minSolutionLength)
@@ -178,6 +176,7 @@ export function BoostDealConfidence() {
             deal_id: deal.id,
             confidence: confResult.confidence,
             simulation_count: totalSims,
+            simulation_wins: totalWins,
             min_moves: finalMinMoves,
             dds_initial: Math.round(finalDds * 10) / 10,
             dds_blended: Math.round(finalBlended * 10) / 10,

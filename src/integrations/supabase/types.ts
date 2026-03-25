@@ -288,6 +288,7 @@ export type Database = {
           reserved_for: string | null
           seed: number
           simulation_count: number
+          simulation_wins: number
           tier: string
           unique_winning_paths: number
         }
@@ -311,6 +312,7 @@ export type Database = {
           reserved_for?: string | null
           seed: number
           simulation_count?: number
+          simulation_wins?: number
           tier?: string
           unique_winning_paths?: number
         }
@@ -334,6 +336,7 @@ export type Database = {
           reserved_for?: string | null
           seed?: number
           simulation_count?: number
+          simulation_wins?: number
           tier?: string
           unique_winning_paths?: number
         }

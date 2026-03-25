@@ -1,100 +1,75 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAdminData } from "@/hooks/useAdminQuery";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell } from "recharts";
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { wilsonInterval } from "@/lib/wilsonConfidence";
+import { DealFilters, DEFAULT_FILTERS, type DealFilterState } from "./deals/DealFilters";
+import { DealSummaryCards } from "./deals/DealSummaryCards";
+import { DealHistograms } from "./deals/DealHistograms";
+import {
+  applyFilters, computeSummaryStats, computeHealthStats,
+  buildDdsHistogram, buildConfidenceHistogram, buildPathDiversityHistogram,
+  buildWinRateHistogram, buildSimCountHistogram,
+  type DealRow,
+} from "./deals/dealFilterUtils";
 
 export function AdminDeals() {
+  const [filters, setFilters] = useState<DealFilterState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(0);
-  const [gameMode, setGameMode] = useState("");
-  const [tier, setTier] = useState("");
-  const { data: health } = useAdminData("deals_health");
-  const { data: scatter } = useAdminData("dds_scatter");
-  const { data: listData } = useAdminData("deals_list", { page, gameMode: gameMode || undefined, tier: tier || undefined });
+  const { data: allDeals, isLoading } = useAdminData("deals_all");
 
-  const h = health || {};
-  const deals = listData?.deals || [];
-  const total = listData?.total || 0;
-  const totalPages = Math.ceil(total / 20);
+  const filtered = useMemo(() => applyFilters((allDeals || []) as DealRow[], filters), [allDeals, filters]);
+  const healthStats = useMemo(() => computeHealthStats(filtered), [filtered]);
+  const summaryStats = useMemo(() => computeSummaryStats(filtered), [filtered]);
+  const ddsHist = useMemo(() => buildDdsHistogram(filtered), [filtered]);
+  const confHist = useMemo(() => buildConfidenceHistogram(filtered), [filtered]);
+  const pdHist = useMemo(() => buildPathDiversityHistogram(filtered), [filtered]);
+  const wrHist = useMemo(() => buildWinRateHistogram(filtered), [filtered]);
+  const simHist = useMemo(() => buildSimCountHistogram(filtered), [filtered]);
 
-  const scatterData = (scatter || []).map((d: any) => ({
-    ...d,
-    winRate: d.pool_attempts > 0 ? Math.round((d.pool_wins / d.pool_attempts) * 100) : 0,
-  }));
+  const scatterData = useMemo(() =>
+    filtered.filter(d => d.pool_attempts >= 1).map(d => ({
+      ...d,
+      winRate: d.pool_attempts > 0 ? Math.round((d.pool_wins / d.pool_attempts) * 100) : 0,
+    })), [filtered]);
+
+  const pageSize = 20;
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const pagedDeals = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  // Reset page when filters change
+  const handleFilterChange = (f: DealFilterState) => {
+    setFilters(f);
+    setPage(0);
+  };
+
+  if (isLoading) {
+    return <div className="text-center py-8 text-muted-foreground">Loading deal pool…</div>;
+  }
 
   return (
     <div className="space-y-6">
-      {/* Health Panel */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Deals</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{h.total?.toLocaleString()}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">By Tier</CardTitle></CardHeader>
-          <CardContent>
-            {h.byTier && Object.entries(h.byTier).map(([k, v]) => (
-              <div key={k} className="flex justify-between text-sm"><span>{k}</span><span className="font-mono">{(v as number).toLocaleString()}</span></div>
-            ))}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">By Difficulty</CardTitle></CardHeader>
-          <CardContent>
-            {h.byBand && Object.entries(h.byBand).map(([k, v]) => (
-              <div key={k} className="flex justify-between text-sm"><span>{k}</span><span className="font-mono">{(v as number).toLocaleString()}</span></div>
-            ))}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">DDS Source</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex justify-between text-sm"><span>Solver only (&lt;30)</span><span className="font-mono">{h.solverOnly}</span></div>
-            <div className="flex justify-between text-sm"><span>Blending (30-100)</span><span className="font-mono">{h.blending}</span></div>
-            <div className="flex justify-between text-sm"><span>Empirical (100+)</span><span className="font-mono">{h.empirical}</span></div>
-            <div className="flex justify-between text-sm mt-2 pt-2 border-t"><span>Avg Confidence</span><span className="font-mono">{h.avgConfidence}</span></div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Filter Bar */}
+      <DealFilters filters={filters} onChange={handleFilterChange} />
 
-      {/* Confidence Distribution Histogram */}
-      {h.confHistogram && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Confidence Distribution</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={h.confHistogram}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} />
-                  <RechartsTooltip content={({ payload }) => {
-                    if (!payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="bg-background border rounded-lg p-2 text-xs shadow-lg">
-                        <p className="font-medium">Confidence {d.range}</p>
-                        <p>{d.count} deals</p>
-                      </div>
-                    );
-                  }} />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                    {(h.confHistogram as any[]).map((_: any, i: number) => (
-                      <Cell key={i} fill={i < 4 ? 'hsl(0, 72%, 51%)' : i < 7 ? 'hsl(45, 93%, 47%)' : 'hsl(142, 71%, 45%)'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Summary Cards & Stats */}
+      <DealSummaryCards health={healthStats} summary={summaryStats} />
+
+      {/* Histograms */}
+      <DealHistograms
+        ddsHistogram={ddsHist}
+        confidenceHistogram={confHist}
+        pathDiversityHistogram={pdHist}
+        winRateHistogram={wrHist}
+        simCountHistogram={simHist}
+      />
+
+      {/* Scatter Chart */}
       <Card>
         <CardHeader><CardTitle className="text-base">DDS Drift: Initial vs Blended</CardTitle></CardHeader>
         <CardContent>
@@ -117,8 +92,8 @@ export function AdminDeals() {
                     </div>
                   );
                 }} />
-                <Scatter data={scatterData.filter((d: any) => d.game_mode === "klondike")} fill="hsl(var(--primary))" name="Klondike" />
-                <Scatter data={scatterData.filter((d: any) => d.game_mode === "freecell")} fill="hsl(142, 71%, 45%)" name="FreeCell" />
+                <Scatter data={scatterData.filter(d => d.game_mode === "klondike")} fill="hsl(var(--primary))" name="Klondike" />
+                <Scatter data={scatterData.filter(d => d.game_mode === "freecell")} fill="hsl(142, 71%, 45%)" name="FreeCell" />
               </ScatterChart>
             </ResponsiveContainer>
           </div>
@@ -128,25 +103,7 @@ export function AdminDeals() {
       {/* Deals Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3 flex-wrap">
-            <CardTitle className="text-base">Deal Pool</CardTitle>
-            <Select value={gameMode} onValueChange={v => { setGameMode(v === "all" ? "" : v); setPage(0); }}>
-              <SelectTrigger className="w-32"><SelectValue placeholder="All Modes" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Modes</SelectItem>
-                <SelectItem value="klondike">Klondike</SelectItem>
-                <SelectItem value="freecell">FreeCell</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={tier} onValueChange={v => { setTier(v === "all" ? "" : v); setPage(0); }}>
-              <SelectTrigger className="w-32"><SelectValue placeholder="All Tiers" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Tiers</SelectItem>
-                <SelectItem value="starter">Starter</SelectItem>
-                <SelectItem value="fresh">Fresh</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <CardTitle className="text-base">Deal Pool ({filtered.length} matching)</CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <TooltipProvider>
@@ -167,19 +124,17 @@ export function AdminDeals() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {deals.map((d: any) => {
+                {pagedDeals.map((d) => {
                   const dds = d.dds_initial ?? 50;
                   const pd = d.path_diversity_score ?? 0;
                   const isEasy = dds <= 25;
                   const isMedium = dds > 25 && dds <= 55;
                   const lowPD = (isEasy && pd < 0.3) || (isMedium && pd < 0.15);
-                  
-                  // Calculate Wilson interval for display
                   const simCount = d.simulation_count || 0;
                   const poolWinRate = d.pool_attempts > 0 ? d.pool_wins / d.pool_attempts : 0;
                   const estimatedWins = Math.round(poolWinRate * simCount) || 0;
                   const wi = wilsonInterval(estimatedWins, simCount);
-                  
+
                   return (
                     <TableRow key={d.id}>
                       <TableCell className="font-mono text-xs">{String(d.seed).slice(0, 8)}</TableCell>
@@ -223,7 +178,7 @@ export function AdminDeals() {
       </Card>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{total} deals total</p>
+        <p className="text-sm text-muted-foreground">{filtered.length} deals matching</p>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}><ChevronLeft className="h-4 w-4" /></Button>
           <span className="text-sm py-1 px-2">{page + 1} / {totalPages || 1}</span>

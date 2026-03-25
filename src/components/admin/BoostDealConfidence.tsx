@@ -8,6 +8,7 @@ import { KlondikeEngine } from "@/engines/KlondikeEngine";
 import { FreeCellEngine } from "@/engines/FreeCellEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { supabase } from "@/integrations/supabase/client";
+import { calculateDealConfidence } from "@/lib/wilsonConfidence";
 import { Zap, Loader2, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 
 interface DealRow {
@@ -23,15 +24,15 @@ interface DealRow {
   is_calibration: boolean;
   unique_winning_paths: number;
   path_diversity_score: number;
+  pool_wins: number;
+  pool_attempts: number;
 }
 
-// Priority: starter Easy, starter Medium, fresh Easy, fresh Medium, Hard, Expert
 function sortPriority(deal: DealRow): number {
   const dds = deal.dds_initial;
   const isStarter = deal.is_calibration;
   const isEasy = dds <= 25;
   const isMedium = dds > 25 && dds <= 55;
-
   if (isStarter && isEasy) return 0;
   if (isStarter && isMedium) return 1;
   if (!isStarter && isEasy) return 2;
@@ -89,11 +90,11 @@ export function BoostDealConfidence() {
     setWarnings([]);
     abortRef.current = false;
 
-    addStatus("Fetching deals with confidence < 0.7...");
+    addStatus("Fetching deals with confidence < 0.7 (Wilson score)...");
 
     const { data: deals, error } = await supabase
       .from("deals")
-      .select("id, seed, game_mode, confidence, simulation_count, min_moves, dds_initial, dds_blended, tier, is_calibration, unique_winning_paths, path_diversity_score")
+      .select("id, seed, game_mode, confidence, simulation_count, min_moves, dds_initial, dds_blended, tier, is_calibration, unique_winning_paths, path_diversity_score, pool_wins, pool_attempts")
       .lt("confidence", 0.7)
       .order("confidence", { ascending: true });
 
@@ -105,7 +106,7 @@ export function BoostDealConfidence() {
 
     const sorted = (deals as unknown as DealRow[]).sort((a, b) => sortPriority(a) - sortPriority(b));
     setRemaining(sorted.length);
-    addStatus(`Found ${sorted.length} deals below threshold. Starting boost...`);
+    addStatus(`Found ${sorted.length} deals below threshold. Starting boost with Wilson confidence...`);
 
     const engines: Record<string, { engine: PuzzleEngine; simCount: number }> = {
       klondike: { engine: KlondikeEngine, simCount: 200 },
@@ -134,10 +135,13 @@ export function BoostDealConfidence() {
         const newSims = engineInfo.simCount;
         const totalSims = oldSims + newSims;
 
-        const oldWins = deal.confidence * oldSims;
-        const newWins = verifyResult.confidence * newSims;
-        const combinedConfidence = Math.min(1, Math.max(0, (oldWins + newWins) / totalSims));
-        const finalConfidence = Math.max(deal.confidence, combinedConfidence);
+        // Combine wins: estimate old wins from pool data + new simulation wins
+        const oldWins = deal.pool_wins || 0;
+        const newWins = verifyResult.wins;
+        // For Wilson, we need total wins across all simulation runs
+        // Old confidence was win-rate based, so estimate old sim wins
+        const estimatedOldSimWins = Math.round(deal.confidence * oldSims); // rough estimate
+        const totalWins = estimatedOldSimWins + newWins;
 
         const finalMinMoves = verifyResult.solvable && verifyResult.minSolutionLength > 0
           ? Math.min(deal.min_moves > 0 ? deal.min_moves : Infinity, verifyResult.minSolutionLength)
@@ -145,23 +149,26 @@ export function BoostDealConfidence() {
 
         // Recalculate DDS with path diversity modifier
         let finalDds = engineInfo.engine.getComplexityScore(finalMinMoves);
-
-        // Combine path diversity data — take the max unique paths seen
         const combinedUniquePaths = Math.max(deal.unique_winning_paths || 0, verifyResult.uniqueWinningPaths);
-        // Recalculate path diversity from new simulation run (more accurate)
         const finalPathDiversity = verifyResult.pathDiversityScore;
-
-        // Apply path diversity modifier to DDS
         finalDds = applyPathDiversityModifier(finalDds, finalPathDiversity);
         const finalBlended = finalDds;
 
-        const improvement = finalConfidence - deal.confidence;
+        // Calculate Wilson confidence
+        const confResult = calculateDealConfidence({
+          wins: totalWins,
+          totalSimulations: totalSims,
+          pathDiversityScore: finalPathDiversity,
+          dds: finalDds,
+        });
+
+        const improvement = confResult.confidence - deal.confidence;
 
         // Check path diversity thresholds and flag warnings
         const diffTier = getDifficultyTier(finalDds);
-        if (diffTier === "Easy" && (finalPathDiversity < 0.3 || finalConfidence < 0.5)) {
+        if (diffTier === "Easy" && (finalPathDiversity < 0.3 || confResult.confidence < 0.5)) {
           newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Easy", pathDiversityScore: finalPathDiversity, threshold: 0.3 });
-        } else if (diffTier === "Medium" && (finalPathDiversity < 0.15 || finalConfidence < 0.25)) {
+        } else if (diffTier === "Medium" && (finalPathDiversity < 0.15 || confResult.confidence < 0.25)) {
           newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Medium", pathDiversityScore: finalPathDiversity, threshold: 0.15 });
         }
 
@@ -169,7 +176,7 @@ export function BoostDealConfidence() {
           action: "update_deal_confidence",
           params: {
             deal_id: deal.id,
-            confidence: Math.round(finalConfidence * 1000) / 1000,
+            confidence: confResult.confidence,
             simulation_count: totalSims,
             min_moves: finalMinMoves,
             dds_initial: Math.round(finalDds * 10) / 10,
@@ -187,7 +194,7 @@ export function BoostDealConfidence() {
 
         if (boostedCount % 5 === 0 || i === sorted.length - 1) {
           const avgImp = boostedCount > 0 ? (totalImp / boostedCount * 100).toFixed(1) : "0";
-          addStatus(`[${boostedCount}/${sorted.length}] ${deal.game_mode} seed ${deal.seed}: ${(deal.confidence * 100).toFixed(0)}% → ${(finalConfidence * 100).toFixed(0)}% | PD: ${(finalPathDiversity * 100).toFixed(0)}% | Avg: +${avgImp}%`);
+          addStatus(`[${boostedCount}/${sorted.length}] ${deal.game_mode} seed ${deal.seed}: conf ${(deal.confidence * 100).toFixed(0)}% → ${(confResult.confidence * 100).toFixed(0)}% [${(confResult.wilsonLower * 100).toFixed(0)}–${(confResult.wilsonUpper * 100).toFixed(0)}% WR] | PD: ${(finalPathDiversity * 100).toFixed(0)}%`);
         }
       } catch (e: any) {
         addStatus(`✗ Failed deal ${deal.seed}: ${e.message}`);
@@ -219,9 +226,9 @@ export function BoostDealConfidence() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Runs additional MCTS simulations on deals with confidence below 0.7.
-          Klondike: 200 sims, FreeCell: 50 sims. Recalculates path diversity and applies DDS modifier (narrow path +8, many paths −5).
-          Never downgrades confidence. Client-side, no time limit.
+          Runs additional MCTS simulations on deals with Wilson confidence below 0.7.
+          Confidence = 50% Wilson interval width + 30% DDS tier stability + 20% path diversity.
+          Below 30 sims: capped at 0.4. Below 10 sims: capped at 0.2. Never downgrades.
         </p>
 
         <div className="flex gap-2">

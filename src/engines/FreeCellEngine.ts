@@ -42,7 +42,6 @@ class FreeCellEngineImpl implements PuzzleEngine {
     }
 
     const solvable = completing > 0;
-    const confidence = (completing / simulations) * 0.7 + (partial / simulations) * 0.3;
     const minSolutionLength = solvable ? bestMoves : 0;
     const uniqueWinningPaths = winPathHashes.size;
     const pathDiversityScore = completing > 0 ? Math.min(1, uniqueWinningPaths / completing) : 0;
@@ -51,8 +50,9 @@ class FreeCellEngineImpl implements PuzzleEngine {
       solvable,
       complexityScore: solvable ? this.getComplexityScore(minSolutionLength) : 0,
       minSolutionLength,
-      confidence,
+      confidence: 0, // placeholder — caller computes Wilson confidence
       simulations,
+      wins: completing,
       uniqueWinningPaths,
       pathDiversityScore,
     };

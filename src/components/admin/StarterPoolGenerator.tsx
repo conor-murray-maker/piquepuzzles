@@ -6,8 +6,9 @@ import { useAdminAction } from "@/hooks/useAdminQuery";
 import { useToast } from "@/hooks/use-toast";
 import { KlondikeEngine } from "@/engines/KlondikeEngine";
 import { FreeCellEngine } from "@/engines/FreeCellEngine";
-import { PuzzleEngine, VerificationResult } from "@/engines/PuzzleEngine";
+import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
+import { calculateDealConfidence } from "@/lib/wilsonConfidence";
 import { Database, Loader2, CheckCircle, XCircle } from "lucide-react";
 
 interface VerifiedDeal {
@@ -95,7 +96,7 @@ export function StarterPoolGenerator() {
     let starterCount = 0;
     let bankedCount = 0;
 
-    addStatus("Starting solver-verified deal generation (no time limit)...");
+    addStatus("Starting solver-verified deal generation (Wilson confidence)...");
     addStatus(`Targets: 75 Easy + 50 Medium per mode (300 starter), bank all solvable`);
 
     const engines: Record<string, { engine: PuzzleEngine; simCount: number }> = {
@@ -119,19 +120,25 @@ export function StarterPoolGenerator() {
         for (const [gameMode, { engine, simCount }] of Object.entries(engines)) {
           try {
             const deal = engine.generateDeal(seed);
-            const verifyResult: VerificationResult = engine.verifySolvable(deal, simCount);
+            const verifyResult = engine.verifySolvable(deal, simCount);
 
             if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
 
             // Base DDS from calibration curve
             let dds = verifyResult.complexityScore;
-            const confidence = Math.min(1, verifyResult.simulations / simCount);
             const pathDiv = verifyResult.pathDiversityScore;
             const uniquePaths = verifyResult.uniqueWinningPaths;
 
             // Apply path diversity modifier to DDS
             dds = applyPathDiversityModifier(dds, pathDiv);
-            const diffTier = getDifficultyTier(dds);
+
+            // Calculate Wilson confidence
+            const confResult = calculateDealConfidence({
+              wins: verifyResult.wins,
+              totalSimulations: verifyResult.simulations,
+              pathDiversityScore: pathDiv,
+              dds,
+            });
 
             // Determine if this is a starter deal (Easy or Medium)
             let isStarter = false;
@@ -155,7 +162,7 @@ export function StarterPoolGenerator() {
               dds_initial: dds,
               dds_blended: dds,
               simulation_count: verifyResult.simulations,
-              confidence,
+              confidence: confResult.confidence,
               tier: isStarter ? "starter" : "fresh",
               is_calibration: isStarter,
               reserved_for: reservedFor,
@@ -229,10 +236,10 @@ export function StarterPoolGenerator() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Generates solver-verified solvable deals with path diversity scoring. Target: 75 Easy + 50 Medium per game mode (300 starter).
-          All other solvable deals are banked as fresh. Klondike: 200 sims, FreeCell: 50 sims.
-          DDS adjusted by path diversity (narrow path +8, many paths −5).
-          Up to {MAX_CANDIDATES.toLocaleString()} candidates, no time limit.
+          Generates solver-verified solvable deals with Wilson score confidence intervals and path diversity scoring.
+          Target: 75 Easy + 50 Medium per game mode (300 starter).
+          Confidence = 50% Wilson interval + 30% tier stability + 20% path diversity.
+          Up to {MAX_CANDIDATES.toLocaleString()} candidates.
         </p>
 
         <Button onClick={run} disabled={running} className="gap-2">

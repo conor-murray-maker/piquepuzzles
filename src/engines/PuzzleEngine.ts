@@ -8,8 +8,9 @@ export interface VerificationResult {
   solvable: boolean;
   complexityScore: number; // 0-100, game-agnostic difficulty proxy
   minSolutionLength: number; // number of atomic moves in shortest solution
-  confidence: number; // 0-1, based on simulation count and consistency
+  confidence: number; // placeholder — caller computes Wilson confidence
   simulations: number; // how many simulations were run
+  wins: number; // number of winning simulations
   uniqueWinningPaths: number; // count of distinct winning move sequences
   pathDiversityScore: number; // uniqueWinningPaths / totalWins, clamped 0-1
 }

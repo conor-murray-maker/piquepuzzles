@@ -91,27 +91,43 @@ export function BoostDealConfidence() {
     setWarnings([]);
     abortRef.current = false;
 
-    addStatus("Fetching deals with confidence < 0.7 (Wilson score)...");
+    addStatus("Fetching all deals with confidence < 0.9 (Wilson score)...");
 
-    const { data: deals, error } = await supabase
-      .from("deals")
-      .select("id, seed, game_mode, confidence, simulation_count, simulation_wins, min_moves, dds_initial, dds_blended, tier, is_calibration, unique_winning_paths, path_diversity_score, pool_wins, pool_attempts")
-      .lt("confidence", 0.7)
-      .order("confidence", { ascending: true });
+    // Paginate to avoid 1000-row Supabase limit
+    let allDeals: DealRow[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data, error: fetchErr } = await supabase
+        .from("deals")
+        .select("id, seed, game_mode, confidence, simulation_count, simulation_wins, min_moves, dds_initial, dds_blended, tier, is_calibration, unique_winning_paths, path_diversity_score, pool_wins, pool_attempts")
+        .lt("confidence", 0.9)
+        .order("confidence", { ascending: true })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+      if (fetchErr) {
+        addStatus(`✗ Error: ${fetchErr.message}`);
+        setRunning(false);
+        return;
+      }
+      if (!data || data.length === 0) break;
+      allDeals = allDeals.concat(data as unknown as DealRow[]);
+      if (data.length < pageSize) break;
+      page++;
+    }
 
-    if (error || !deals || deals.length === 0) {
-      addStatus(error ? `✗ Error: ${error.message}` : "✓ No deals below 0.7 confidence threshold");
+    if (allDeals.length === 0) {
+      addStatus("✓ No deals below 0.9 confidence threshold");
       setRunning(false);
       return;
     }
 
-    const sorted = (deals as unknown as DealRow[]).sort((a, b) => sortPriority(a) - sortPriority(b));
+    const sorted = allDeals.sort((a, b) => sortPriority(a) - sortPriority(b));
     setRemaining(sorted.length);
     addStatus(`Found ${sorted.length} deals below threshold. Starting boost with Wilson confidence...`);
 
     const engines: Record<string, { engine: PuzzleEngine; simCount: number }> = {
-      klondike: { engine: KlondikeEngine, simCount: 200 },
-      freecell: { engine: FreeCellEngine, simCount: 50 },
+      klondike: { engine: KlondikeEngine, simCount: 500 },
+      freecell: { engine: FreeCellEngine, simCount: 100 },
     };
 
     let boostedCount = 0;
@@ -225,9 +241,9 @@ export function BoostDealConfidence() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Runs additional MCTS simulations on deals with Wilson confidence below 0.7.
+          Runs additional MCTS simulations on deals with Wilson confidence below 0.9.
+          Klondike: 500 sims/run, FreeCell: 100 sims/run. Accumulates cumulatively.
           Confidence = 50% Wilson interval width + 30% DDS tier stability + 20% path diversity.
-          Below 30 sims: capped at 0.4. Below 10 sims: capped at 0.2. Never downgrades.
         </p>
 
         <div className="flex gap-2">

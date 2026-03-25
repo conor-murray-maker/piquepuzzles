@@ -6,6 +6,7 @@ import { useAdminAction } from "@/hooks/useAdminQuery";
 import { useToast } from "@/hooks/use-toast";
 import { KlondikeEngine } from "@/engines/KlondikeEngine";
 import { FreeCellEngine } from "@/engines/FreeCellEngine";
+import { RealmEngine } from "@/engines/RealmEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
@@ -59,6 +60,8 @@ const TARGETS: Target[] = [
   { gameMode: "klondike", engine: KlondikeEngine, simCount: 200, band: "medium", ddsMin: 26, ddsMax: 55, target: 50 },
   { gameMode: "freecell", engine: FreeCellEngine, simCount: 50, band: "easy", ddsMin: 0, ddsMax: 25, target: 75 },
   { gameMode: "freecell", engine: FreeCellEngine, simCount: 50, band: "medium", ddsMin: 26, ddsMax: 55, target: 50 },
+  { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "easy", ddsMin: 0, ddsMax: 25, target: 75 },
+  { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "medium", ddsMin: 26, ddsMax: 55, target: 50 },
 ];
 
 const MAX_CANDIDATES = 8000;

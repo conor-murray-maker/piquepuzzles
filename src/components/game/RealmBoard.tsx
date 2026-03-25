@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { RealmState, createRealmGame, cycleCell, getRealmHint } from '@/game/realm';
+import { supabase } from '@/integrations/supabase/client';
 import { CrownIcon } from './CrownIcon';
 import { GameActionBar } from './GameActionBar';
 import { registerDeal } from '@/services/DealRegistrationService';

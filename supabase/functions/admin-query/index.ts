@@ -908,6 +908,20 @@ Deno.serve(async (req) => {
         return json(data);
       }
 
+      case "update_deal_confidence": {
+        const { deal_id, confidence, simulation_count, min_moves, dds_initial, dds_blended } = params || {};
+        if (!deal_id) return json({ error: "deal_id required" }, 400);
+        const updateFields: any = {};
+        if (confidence !== undefined) updateFields.confidence = confidence;
+        if (simulation_count !== undefined) updateFields.simulation_count = simulation_count;
+        if (min_moves !== undefined) updateFields.min_moves = min_moves;
+        if (dds_initial !== undefined) updateFields.dds_initial = dds_initial;
+        if (dds_blended !== undefined) updateFields.dds_blended = dds_blended;
+        const { error } = await adminClient.from("deals").update(updateFields).eq("id", deal_id);
+        if (error) throw error;
+        return json({ ok: true });
+      }
+
       case "seed_starter_pool": {
         // Accept pre-verified deals from the client-side solver
         const { deals } = params || {};

@@ -253,14 +253,26 @@ Deno.serve(async (req) => {
       }
 
       case "deals_health": {
-        const { data: allDeals } = await adminClient.from("deals").select("tier, game_mode, dds_blended, confidence, pool_attempts, is_calibration");
-        const deals = allDeals || [];
+        // Paginate to avoid 1000-row Supabase limit
+        let allDeals: any[] = [];
+        const fetchSize = 1000;
+        let fetchPage = 0;
+        while (true) {
+          const { data: batch } = await adminClient
+            .from("deals")
+            .select("tier, game_mode, dds_blended, confidence, pool_attempts, is_calibration")
+            .range(fetchPage * fetchSize, (fetchPage + 1) * fetchSize - 1);
+          if (!batch || batch.length === 0) break;
+          allDeals = allDeals.concat(batch);
+          if (batch.length < fetchSize) break;
+          fetchPage++;
+        }
+        const deals = allDeals;
         const byTier: Record<string, number> = {};
         const byMode: Record<string, number> = {};
         const byBand: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0, Expert: 0 };
         let totalConf = 0;
         let solverOnly = 0, blending = 0, empirical = 0;
-        // Histogram buckets: 0-0.1, 0.1-0.2, ..., 0.9-1.0
         const confHistogram = Array(10).fill(0);
 
         for (const d of deals) {
@@ -321,7 +333,11 @@ Deno.serve(async (req) => {
         if (params?.minAttempts) query = query.gte("pool_attempts", params.minAttempts);
 
         const { data } = await query;
-        const { count } = await adminClient.from("deals").select("id", { count: "exact", head: true });
+        let countQuery = adminClient.from("deals").select("id", { count: "exact", head: true });
+        if (params?.gameMode) countQuery = countQuery.eq("game_mode", params.gameMode);
+        if (params?.tier) countQuery = countQuery.eq("tier", params.tier);
+        if (params?.minAttempts) countQuery = countQuery.gte("pool_attempts", params.minAttempts);
+        const { count } = await countQuery;
         return json({ deals: data || [], total: count || 0 });
       }
 

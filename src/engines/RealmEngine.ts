@@ -1,11 +1,11 @@
 import { PuzzleEngine, Deal, VerificationResult, GameMode } from './PuzzleEngine';
-import { generateRealmPuzzle } from '@/game/realm';
+import { generateRealmPuzzle, type RealmGenOptions } from '@/game/realm';
 
 class RealmEngineImpl implements PuzzleEngine {
   gameMode: GameMode = 'realm';
 
-  generateDeal(seed: number): Deal {
-    const puzzle = generateRealmPuzzle(seed);
+  generateDeal(seed: number, options?: RealmGenOptions): Deal {
+    const puzzle = generateRealmPuzzle(seed, options);
     return { seed, gameMode: 'realm', data: puzzle };
   }
 

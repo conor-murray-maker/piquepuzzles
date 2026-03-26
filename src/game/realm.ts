@@ -374,7 +374,7 @@ function assignColors(n: number, rand: () => number): string[] {
 
 function calculateRealmDDS(n: number, deduction: DeductionResult, regionSizeVariance: number): number {
   const sizeRanges: Record<number, [number, number]> = {
-    6: [15, 30], 7: [30, 50], 8: [45, 65], 9: [60, 80], 10: [75, 100],
+    4: [5, 15], 5: [10, 25], 6: [15, 30], 7: [30, 50], 8: [45, 65], 9: [60, 80], 10: [75, 100],
   };
   const [baseMin, baseMax] = sizeRanges[n] || [50, 70];
   let dds = (baseMin + baseMax) / 2;
@@ -431,56 +431,80 @@ function createRealmStateFromDeal(deal: RealmDeal, seed: number): RealmState {
   };
 }
 
-export function generateRealmPuzzle(seed: number): RealmDeal | null {
-  const rand = seededRandom(seed);
-  const sizeWeights = [6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10];
-  const baseSize = sizeWeights[Math.floor(rand() * sizeWeights.length)];
+export interface RealmGenOptions {
+  /** Force a specific grid size instead of random selection */
+  gridSize?: number;
+  /** Skip Stage 4 spatial surprise check */
+  skipSpatialSurprise?: boolean;
+  /** Timeout in ms — abort candidate if verification exceeds this */
+  timeoutMs?: number;
+}
 
-  const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0 };
+export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): RealmDeal | null {
+  const rand = seededRandom(seed);
+  const forcedSize = options?.gridSize;
+  const skipSurprise = options?.skipSpatialSurprise ?? false;
+  const timeoutMs = options?.timeoutMs;
+
+  let n: number;
+  if (forcedSize) {
+    n = forcedSize;
+  } else {
+    const sizeWeights = [4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10];
+    n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
+  }
+
+  const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0, timeout: 0 };
   const genStart = performance.now();
 
-  for (let n = baseSize; n <= 10; n++) {
-    for (let attempt = 0; attempt < 2000; attempt++) {
-      // === Stage 1: Region generation (minimal constraints only) ===
-      const regResult = generateRegions(n, rand);
-      if (!regResult) { discardCounts.stage1++; continue; }
+  for (let attempt = 0; attempt < 2000; attempt++) {
+    // Check global timeout
+    if (timeoutMs && (performance.now() - genStart) > timeoutMs) {
+      discardCounts.timeout++;
+      break;
+    }
 
-      const { regionMap, regions } = regResult;
-      console.log(`[Realm] S1 pass #${attempt + 1} (${(performance.now() - genStart).toFixed(0)}ms) sizes=[${regions.map(r => r.length).join(',')}]`);
+    // === Stage 1: Region generation (minimal constraints only) ===
+    const regResult = generateRegions(n, rand);
+    if (!regResult) { discardCounts.stage1++; continue; }
 
-      // === Stage 2: Solution finding (does ANY valid placement exist?) ===
-      const solutions = findAllSolutions(regionMap, n, 2);
-      if (solutions.length === 0) { discardCounts.stage2++; continue; }
+    const { regionMap, regions } = regResult;
+    console.log(`[Realm] S1 pass #${attempt + 1} (${(performance.now() - genStart).toFixed(0)}ms) sizes=[${regions.map(r => r.length).join(',')}]`);
 
-      // === Stage 3: Unique solution verification (MUST have exactly 1) ===
-      if (solutions.length > 1) { discardCounts.stage3++; continue; }
+    // === Stage 2: Solution finding (does ANY valid placement exist?) ===
+    const solutions = findAllSolutions(regionMap, n, 2);
+    if (solutions.length === 0) { discardCounts.stage2++; continue; }
 
-      const solution = solutions[0];
+    // === Stage 3: Unique solution verification (MUST have exactly 1) ===
+    if (solutions.length > 1) { discardCounts.stage3++; continue; }
 
-      // === Stage 4: Spatial surprise scoring (dynamic threshold) ===
-      const surprise = spatialSurpriseScore(solution, n);
-      // Max theoretical variance for N columns: variance of [0,1,...,N-1] = (N^2-1)/12
+    const solution = solutions[0];
+
+    // === Stage 4: Spatial surprise scoring (skip for Easy/small grids) ===
+    let surprise = 0;
+    if (!skipSurprise) {
+      surprise = spatialSurpriseScore(solution, n);
       const maxVariance = (n * n - 1) / 12;
       const surpriseThreshold = maxVariance * 0.4;
       if (surprise < surpriseThreshold) { discardCounts.stage4++; continue; }
-
-      // All stages passed — compute quality metrics
-      const deduction = solveByDeduction(regionMap, n);
-
-      const sizes = regions.map(r => r.length);
-      const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
-      const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
-
-      const dds = calculateRealmDDS(n, deduction, sizeVariance);
-      const regionColors = assignColors(n, rand);
-
-      console.log(`[Realm] Accepted ${n}x${n} puzzle (attempt ${attempt + 1}). Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4}. Sizes=[${sizes.join(',')}] surprise=${surprise.toFixed(2)} threshold=${surpriseThreshold.toFixed(2)}`);
-
-      return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
     }
+
+    // All stages passed — compute quality metrics
+    const deduction = solveByDeduction(regionMap, n);
+
+    const sizes = regions.map(r => r.length);
+    const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+    const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
+
+    const dds = calculateRealmDDS(n, deduction, sizeVariance);
+    const regionColors = assignColors(n, rand);
+
+    console.log(`[Realm] Accepted ${n}x${n} puzzle (attempt ${attempt + 1}). Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} Timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}] surprise=${surprise.toFixed(2)}`);
+
+    return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
   }
 
-  console.warn(`[Realm] Failed all attempts. Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4}`);
+  console.warn(`[Realm] Failed all attempts for ${n}x${n}. Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} Timeout=${discardCounts.timeout}`);
   return null;
 }
 

@@ -166,18 +166,22 @@ function generateRegions(n: number, rand: () => number): RegionGenResult | null 
 
   // Step 3: Validate shape constraints
   for (let ri = 0; ri < n; ri++) {
-    if (regions[ri].length < 3 || regions[ri].length > n + 4) return null;
+    if (regions[ri].length < 2 || regions[ri].length > n + 4) return null;
 
-    // 2D presence: must span at least 2 rows AND 2 cols
-    const rows = new Set<number>();
-    const cols = new Set<number>();
-    for (const idx of regions[ri]) {
-      rows.add(Math.floor(idx / n));
-      cols.add(idx % n);
-    }
-    if (rows.size < 2 || cols.size < 2) return null;
+    // 2D presence: at least one cell has >= 2 orthogonal neighbours in same region
+    const has2D = regions[ri].some((idx) => {
+      const cr = Math.floor(idx / n);
+      const cc = idx % n;
+      const sameRegionNeighbours = DIRS.filter(([dr, dc]) => {
+        const nr = cr + dr;
+        const nc = cc + dc;
+        return nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri;
+      }).length;
+      return sameRegionNeighbours >= 2;
+    });
+    if (!has2D) return null;
 
-    // No isolated cells (every cell needs at least 1 orthogonal neighbour in same region)
+    // No isolated cells
     for (const idx of regions[ri]) {
       const cr = Math.floor(idx / n);
       const cc = idx % n;
@@ -192,40 +196,24 @@ function generateRegions(n: number, rand: () => number): RegionGenResult | null 
       }
       if (!hasNeighbour) return null;
     }
-  }
 
-  // Adjacent region shape similarity check (bounding box aspect ratios)
-  const adj: Set<number>[] = Array.from({ length: n }, () => new Set());
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      for (const [dr, dc] of [[0, 1], [1, 0]] as const) {
-        const nr = r + dr;
-        const nc = c + dc;
-        if (nr < n && nc < n) {
-          const a = regionMap[r][c];
-          const b = regionMap[nr][nc];
-          if (a !== b) { adj[a].add(b); adj[b].add(a); }
+    // Peninsula check only for regions > 4 cells
+    if (regions[ri].length > 4) {
+      for (const idx of regions[ri]) {
+        const cr = Math.floor(idx / n);
+        const cc = idx % n;
+        const neighbourCount = DIRS.filter(([dr, dc]) => {
+          const nr = cr + dr;
+          const nc = cc + dc;
+          return nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri;
+        }).length;
+        if (neighbourCount === 1) {
+          // Check if this is a seed cell (first cell in region) — allow it
+          if (idx !== regions[ri][0]) return null;
         }
       }
     }
   }
-  const aspectRatios = regions.map(region => {
-    let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
-    for (const idx of region) {
-      const r = Math.floor(idx / n);
-      const c = idx % n;
-      minR = Math.min(minR, r); maxR = Math.max(maxR, r);
-      minC = Math.min(minC, c); maxC = Math.max(maxC, c);
-    }
-    return (maxC - minC + 1) / (maxR - minR + 1);
-  });
-  let similarPairs = 0;
-  for (let i = 0; i < n; i++) {
-    for (const j of adj[i]) {
-      if (j > i && Math.abs(aspectRatios[i] - aspectRatios[j]) < 0.2) similarPairs++;
-    }
-  }
-  if (similarPairs > 2) return null;
 
   console.log(`[Realm] Generated regions for ${n}x${n}: sizes=[${regions.map(r => r.length).join(',')}]`);
   return { regionMap, regions };

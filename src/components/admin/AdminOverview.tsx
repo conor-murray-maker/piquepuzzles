@@ -29,13 +29,30 @@ export function AdminOverview() {
   const { data: stats, isLoading } = useAdminData("overview_stats", undefined, { refetchInterval: 30000 });
   const { data: dauChart } = useAdminData("dau_chart");
   const { data: gamesChart } = useAdminData("games_chart");
+  const { data: poolHealth } = useAdminData("pool_health_check");
 
   if (isLoading) return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   const s = stats || {};
+  const lowPools: Array<{ mode: string; difficulty: string; remaining: number }> = poolHealth?.lowPools || [];
 
   return (
     <div className="space-y-6">
+      {/* Low pool warnings */}
+      {lowPools.length > 0 && (
+        <div className="space-y-2">
+          {lowPools.map((lp) => (
+            <Alert key={`${lp.mode}-${lp.difficulty}`} variant="destructive" className="border-amber-500/50 bg-amber-500/10 text-foreground">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-700 dark:text-amber-400">Low Pool Warning</AlertTitle>
+              <AlertDescription>
+                {lp.mode} {lp.difficulty} pool low — {lp.remaining} unplayed deals remaining for current users. Run the generator.
+              </AlertDescription>
+            </Alert>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard label="Total Users" value={s.totalUsers} icon={Users} />
         <StatCard label="DAU" value={s.dau} icon={Users} />

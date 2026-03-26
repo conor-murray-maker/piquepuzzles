@@ -536,29 +536,36 @@ export function generateRealmPuzzle(seed: number): RealmDeal | null {
   const sizeWeights = [6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10];
   const baseSize = sizeWeights[Math.floor(rand() * sizeWeights.length)];
 
+  const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0 };
+
   for (let n = baseSize; n <= 10; n++) {
     for (let attempt = 0; attempt < 200; attempt++) {
+      // === Stage 1: Region generation (cheap shape constraints only) ===
       const regResult = generateRegions(n, rand);
-      if (!regResult) continue;
+      if (!regResult) { discardCounts.stage1++; continue; }
 
       const { regionMap, regions } = regResult;
-      if (!validateRegions(regions, n, regionMap)) continue;
+      if (!validateRegions(regions, n, regionMap)) { discardCounts.stage1++; continue; }
 
-      // Find ALL solutions (up to 3 to check uniqueness)
-      const solutions = findAllSolutions(regionMap, n, 3);
-      if (solutions.length !== 1) continue;
+      // === Stage 2: Solution finding (does ANY valid placement exist?) ===
+      const solutions = findAllSolutions(regionMap, n, 2);
+      if (solutions.length === 0) { discardCounts.stage2++; continue; }
+
+      // === Stage 3: Unique solution verification (MUST have exactly 1) ===
+      if (solutions.length > 1) { discardCounts.stage3++; continue; }
 
       const solution = solutions[0];
 
-      // Spatial surprise check
+      // === Stage 4: Spatial surprise scoring (dynamic threshold) ===
       const surprise = spatialSurpriseScore(solution, n);
-      if (surprise < 4.0) continue;
+      // Max theoretical variance for N columns: variance of [0,1,...,N-1] = (N^2-1)/12
+      const maxVariance = (n * n - 1) / 12;
+      const surpriseThreshold = maxVariance * 0.4;
+      if (surprise < surpriseThreshold) { discardCounts.stage4++; continue; }
 
-      // Deduction chain verification
+      // All stages passed — compute quality metrics
       const deduction = solveByDeduction(regionMap, n);
-      if (!deduction.solvable) continue;
 
-      // Region size variance
       const sizes = regions.map(r => r.length);
       const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
       const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
@@ -566,10 +573,13 @@ export function generateRealmPuzzle(seed: number): RealmDeal | null {
       const dds = calculateRealmDDS(n, deduction, sizeVariance);
       const regionColors = assignColors(regionMap, n);
 
+      console.log(`[Realm] Accepted ${n}x${n} puzzle (attempt ${attempt + 1}). Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4}. Sizes=[${sizes.join(',')}] surprise=${surprise.toFixed(2)} threshold=${surpriseThreshold.toFixed(2)}`);
+
       return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
     }
   }
 
+  console.warn(`[Realm] Failed all attempts. Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4}`);
   return null;
 }
 

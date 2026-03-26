@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint } from '@/game/realm';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,6 +58,28 @@ interface RealmBoardProps {
 }
 
 const DRAG_HOLD_MS = 150;
+const GOLD_COLOR = '#F4C430';
+const NAVY_COLOR = '#1B2340';
+
+// Star particle component for win animation
+function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: number; angle: number }) {
+  const distance = 30 + Math.random() * 20;
+  const endX = x + Math.cos(angle) * distance;
+  const endY = y + Math.sin(angle) * distance;
+  return (
+    <motion.div
+      className="absolute pointer-events-none"
+      style={{ left: x, top: y, width: 6, height: 6 }}
+      initial={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+      animate={{ opacity: 0, scale: 0.3, x: endX - x, y: endY - y }}
+      transition={{ duration: 0.6, delay, ease: 'easeOut' }}
+    >
+      <svg width="6" height="6" viewBox="0 0 6 6">
+        <polygon points="3,0 3.7,2 6,2.3 4.2,3.8 4.6,6 3,4.8 1.4,6 1.8,3.8 0,2.3 2.3,2" fill={GOLD_COLOR} />
+      </svg>
+    </motion.div>
+  );
+}
 
 export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: RealmBoardProps) {
   const [state, setState] = useState<RealmState>(() => {
@@ -90,10 +112,16 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
   const [errorCells, setErrorCells] = useState<Set<string>>(new Set());
   const [hintCell, setHintCell] = useState<{ row: number; col: number } | null>(null);
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
+  const [winAnimating, setWinAnimating] = useState(false);
+  const [crownColors, setCrownColors] = useState<Record<string, string>>({});
+  const [particles, setParticles] = useState<Array<{ x: number; y: number; delay: number; angle: number; id: string }>>([]);
+  const [boardPulse, setBoardPulse] = useState(false);
+  const [regionGlow, setRegionGlow] = useState<Set<number>>(new Set());
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);
   const completedGameIdRef = useRef<string | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const { profile } = useAuth();
 
   // Drag-to-mark state
@@ -180,8 +208,77 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     }
   }, [state.errors, state.maxErrors, state.isWon, state.gameId, onGameEnd]);
 
+  // Win animation sequence
+  const triggerWinAnimation = useCallback((winState: RealmState, lastRow: number, lastCol: number) => {
+    setWinAnimating(true);
+
+    // Find all crown positions
+    const crownPositions: { row: number; col: number }[] = [];
+    winState.grid.forEach((r) => r.forEach((c) => {
+      if (c.state === 'crown') crownPositions.push({ row: c.row, col: c.col });
+    }));
+
+    // Sort by distance from last placed crown (ripple outward)
+    crownPositions.sort((a, b) => {
+      const distA = Math.abs(a.row - lastRow) + Math.abs(a.col - lastCol);
+      const distB = Math.abs(b.row - lastRow) + Math.abs(b.col - lastCol);
+      return distA - distB;
+    });
+
+    // Staggered crown color transition to gold
+    const colorMap: Record<string, string> = {};
+    crownPositions.forEach((pos, i) => {
+      const key = `${pos.row},${pos.col}`;
+      setTimeout(() => {
+        colorMap[key] = GOLD_COLOR;
+        setCrownColors({ ...colorMap });
+      }, i * 50);
+    });
+
+    // Region border glow sequence
+    const regionCount = winState.regions.length;
+    for (let i = 0; i < regionCount; i++) {
+      setTimeout(() => {
+        setRegionGlow(prev => new Set(prev).add(i));
+      }, 200 + i * (400 / regionCount));
+    }
+
+    // Particle burst from each crown
+    if (gridRef.current) {
+      const gridRect = gridRef.current.getBoundingClientRect();
+      const newParticles: typeof particles = [];
+      crownPositions.forEach((pos, i) => {
+        const cellEl = gridRef.current?.querySelector(`[data-realm-row="${pos.row}"][data-realm-col="${pos.col}"]`);
+        if (cellEl) {
+          const cellRect = cellEl.getBoundingClientRect();
+          const cx = cellRect.left - gridRect.left + cellRect.width / 2;
+          const cy = cellRect.top - gridRect.top + cellRect.height / 2;
+          const numParticles = 6 + Math.floor(Math.random() * 3);
+          for (let p = 0; p < numParticles; p++) {
+            const angle = (p / numParticles) * Math.PI * 2 + Math.random() * 0.5;
+            newParticles.push({
+              x: cx, y: cy, delay: i * 0.05 + 0.1,
+              angle, id: `${pos.row}-${pos.col}-${p}`,
+            });
+          }
+        }
+      });
+      setParticles(newParticles);
+    }
+
+    // Board pulse at end
+    setTimeout(() => setBoardPulse(true), 800);
+    setTimeout(() => setBoardPulse(false), 1000);
+
+    // Transition to win screen after animation
+    setTimeout(() => {
+      setWinAnimating(false);
+      onGameEnd(winState, elapsedRef.current);
+    }, 1200);
+  }, [onGameEnd]);
+
   const handleCellTap = useCallback((row: number, col: number) => {
-    if (state.isWon || state.errors >= state.maxErrors) return;
+    if (state.isWon || state.errors >= state.maxErrors || winAnimating) return;
     if (!gameStarted) setGameStarted(true);
 
     setHistory(h => [...h, state]);
@@ -213,19 +310,21 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
       gameEndedRef.current = true;
       completedGameIdRef.current = state.gameId;
       haptic.success();
-      onGameEnd(newState, elapsedRef.current);
+      // Fire win animation immediately, complete-game runs in background
+      triggerWinAnimation(newState, row, col);
     }
-  }, [state, gameStarted, onGameEnd]);
+  }, [state, gameStarted, winAnimating, triggerWinAnimation]);
 
   const handleUndo = useCallback(() => {
-    if (history.length === 0) return;
+    if (history.length === 0 || winAnimating) return;
     haptic.medium();
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
     setState(prev);
-  }, [history]);
+  }, [history, winAnimating]);
 
   const handleHint = useCallback(() => {
+    if (winAnimating) return;
     haptic.light();
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
 
@@ -243,7 +342,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     } else {
       toast('A crown belongs here');
     }
-  }, [state]);
+  }, [state, winAnimating]);
 
   const handleGiveUp = useCallback(() => {
     setShowGiveUpDialog(false);
@@ -270,7 +369,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
 
   // Drag-to-mark handlers
   const handlePointerDown = useCallback((e: React.PointerEvent, row: number, col: number) => {
-    if (state.isWon || state.errors >= state.maxErrors) return;
+    if (state.isWon || state.errors >= state.maxErrors || winAnimating) return;
 
     const ds = dragStateRef.current;
     ds.pointerId = e.pointerId;
@@ -284,24 +383,21 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
       if (!gameStarted) setGameStarted(true);
       haptic.light();
 
-      // Determine mode from first cell
       const cell = state.grid[row][col];
       if (cell.state === 'crown') return;
       ds.mode = (cell.state === 'marked') ? 'unmark' : 'mark';
 
-      // Apply to first cell
       const key = `${row},${col}`;
       ds.markedCells.add(key);
       setHistory(h => [...h, state]);
       setState(s => toggleMark(s, row, col));
     }, DRAG_HOLD_MS);
-  }, [state, gameStarted]);
+  }, [state, gameStarted, winAnimating]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     const ds = dragStateRef.current;
     if (!ds.active || e.pointerId !== ds.pointerId) return;
 
-    // Find which cell the pointer is over
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const cellEl = el?.closest('[data-realm-cell]') as HTMLElement | null;
     if (!cellEl) return;
@@ -335,7 +431,6 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     }
 
     if (!ds.active && ds.startCell) {
-      // Was a tap, not a drag — handle as cell tap
       handleCellTap(ds.startCell.row, ds.startCell.col);
     }
 
@@ -413,7 +508,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
       </div>
 
       {/* Grid */}
-      <div
+      <motion.div
+        ref={gridRef}
         className="relative touch-none"
         style={{
           display: 'grid',
@@ -421,6 +517,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
           gridTemplateRows: `repeat(${state.size}, ${cellSize}px)`,
           gap: '0px',
         }}
+        animate={boardPulse ? { scale: [1, 1.05, 1] } : { scale: 1 }}
+        transition={{ duration: 0.3 }}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
@@ -429,11 +527,15 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
           const isError = errorCells.has(`${cell.row},${cell.col}`);
           const isHint = hintCell?.row === cell.row && hintCell?.col === cell.col;
           const color = state.regionColors[cell.region];
+          const isGlowing = regionGlow.has(cell.region);
 
           const borderTop = cell.row === 0 || state.grid[cell.row - 1]?.[cell.col]?.region !== cell.region;
           const borderLeft = cell.col === 0 || state.grid[cell.row][cell.col - 1]?.region !== cell.region;
           const borderBottom = cell.row === state.size - 1 || state.grid[cell.row + 1]?.[cell.col]?.region !== cell.region;
           const borderRight = cell.col === state.size - 1 || state.grid[cell.row]?.[cell.col + 1]?.region !== cell.region;
+
+          const crownKey = `${cell.row},${cell.col}`;
+          const crownColor = crownColors[crownKey] || NAVY_COLOR;
 
           return (
             <motion.div
@@ -447,22 +549,31 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
                 width: cellSize,
                 height: cellSize,
                 backgroundColor: `${color}30`,
-                borderTop: borderTop ? `3px solid ${color}` : '1px solid #d1d5db',
-                borderLeft: borderLeft ? `3px solid ${color}` : '1px solid #d1d5db',
-                borderBottom: borderBottom ? `3px solid ${color}` : '1px solid #d1d5db',
-                borderRight: borderRight ? `3px solid ${color}` : '1px solid #d1d5db',
-                boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : 'none',
+                borderTop: borderTop ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
+                borderLeft: borderLeft ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
+                borderBottom: borderBottom ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
+                borderRight: borderRight ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
+                boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : isGlowing ? `0 0 8px ${GOLD_COLOR}80` : 'none',
+                transition: 'border-color 0.3s, box-shadow 0.3s',
               }}
               animate={isError ? { scale: [1, 1.05, 1] } : {}}
               transition={{ duration: 0.3 }}
             >
               {cell.state === 'crown' && (
                 <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                  initial={winAnimating ? {} : { scale: 0 }}
+                  animate={
+                    winAnimating && crownColors[crownKey]
+                      ? { scale: [1, 1.3, 1] }
+                      : { scale: 1 }
+                  }
+                  transition={
+                    winAnimating
+                      ? { duration: 0.3, ease: 'easeInOut' }
+                      : { type: 'spring', stiffness: 400, damping: 15 }
+                  }
                 >
-                  <CrownIcon size={Math.round(cellSize * 0.55)} />
+                  <CrownIcon size={Math.round(cellSize * 0.55)} color={crownColor} />
                 </motion.div>
               )}
               {cell.state === 'marked' && (
@@ -474,7 +585,14 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
             </motion.div>
           );
         })}
-      </div>
+
+        {/* Win particles overlay */}
+        <AnimatePresence>
+          {particles.map(p => (
+            <StarParticle key={p.id} x={p.x} y={p.y} delay={p.delay} angle={p.angle} />
+          ))}
+        </AnimatePresence>
+      </motion.div>
 
       {/* Action bar */}
       <GameActionBar
@@ -488,14 +606,14 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
       <AlertDialog open={showGiveUpDialog} onOpenChange={setShowGiveUpDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Resign this puzzle?</AlertDialogTitle>
+            <AlertDialogTitle>Leave this puzzle?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will count as a loss and affect your Puzzle IQ.
+              Your progress will be lost and this will count as a loss.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep Playing</AlertDialogCancel>
-            <AlertDialogAction onClick={handleGiveUp}>Resign</AlertDialogAction>
+            <AlertDialogAction onClick={handleGiveUp}>Give Up</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

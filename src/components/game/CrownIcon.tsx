@@ -1,9 +1,10 @@
 interface CrownIconProps {
   size?: number;
   className?: string;
+  color?: string;
 }
 
-export function CrownIcon({ size = 24, className = '' }: CrownIconProps) {
+export function CrownIcon({ size = 24, className = '', color = '#1B2340' }: CrownIconProps) {
   return (
     <svg
       width={size}
@@ -15,7 +16,7 @@ export function CrownIcon({ size = 24, className = '' }: CrownIconProps) {
     >
       <path
         d="M3 18H21V20H3V18ZM3 16L5 6L9 10L12 4L15 10L19 6L21 16H3Z"
-        fill="#1B2340"
+        fill={color}
         stroke="white"
         strokeWidth="0.8"
         strokeLinejoin="round"

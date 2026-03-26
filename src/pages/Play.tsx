@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
+import { Loader2 } from 'lucide-react';
 
 interface PlayProps {
   onActiveGameChange?: (active: boolean) => void;
@@ -28,9 +29,10 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
   const { user, profile } = useAuth();
   const { saveGameResult } = useGamePersistence();
-  const { popNextDeal, refillQueue } = useDealQueue();
+  const { popNextDeal } = useDealQueue();
   const [gamePhase, setGamePhase] = useState<'playing' | 'postgame'>('playing');
   const [queuedDeal, setQueuedDeal] = useState<QueuedDeal | null>(null);
+  const [loading, setLoading] = useState(initialSeed === undefined);
   const [lastResult, setLastResult] = useState<{
     won: boolean; moves: number; difficulty: string; hintsUsed: number;
     undosUsed: number; difficultyScore: number; startTime: number; elapsedSeconds: number;
@@ -47,22 +49,17 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   } | null>(null);
   const hasPopped = useRef(false);
 
-  // Pop deal from queue on mount (only for regular games, not challenges/daily)
+  // Pop deal from pool on mount (only for regular games, not challenges/daily)
   useEffect(() => {
-    if (initialSeed !== undefined || hasPopped.current) return;
+    if (initialSeed !== undefined || hasPopped.current) {
+      setLoading(false);
+      return;
+    }
     hasPopped.current = true;
     popNextDeal(gameMode, drawMode).then(deal => {
-      if (deal) {
-        setQueuedDeal(deal);
-      }
-    }).catch(() => { /* queue pop failed — will fall back to direct generation */ });
+      if (deal) setQueuedDeal(deal);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [gameMode, drawMode, initialSeed, popNextDeal]);
-
-  // Refill queue in background on mount
-  useEffect(() => {
-    if (initialSeed !== undefined) return;
-    refillQueue(gameMode, drawMode);
-  }, [gameMode, drawMode, initialSeed, refillQueue]);
 
   // Fetch challenge data
   useEffect(() => {
@@ -132,13 +129,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       });
     }
 
-    // Refill queue in background after game
-    if (!initialSeed) {
-      refillQueue(gameMode, drawMode);
-    }
-
     setPhase('postgame');
-  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, initialSeed, refillQueue]);
+  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode]);
 
   const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
     const lostState = { ...state, isWon: false };
@@ -155,7 +147,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       elapsedSeconds,
       seed,
     });
-    const previousRating = profile?.rating ?? 1000;
     const isDaily = !!dailyDate;
     const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
     setRatingResult(result);
@@ -178,16 +169,10 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     else if (gameMode === 'freecell') clearFreeCellStorage();
     else clearStorage();
 
-    // Refill queue in background
-    if (!initialSeed) {
-      refillQueue(gameMode, drawMode);
-    }
-
     setPhase('postgame');
-  }, [saveGameResult, setPhase, gameMode, profile, dailyDate, dailyDealId, user, drawMode, initialSeed, refillQueue]);
+  }, [saveGameResult, setPhase, gameMode, profile, dailyDate, dailyDealId, user, drawMode]);
 
   const handlePlayAgain = useCallback(async () => {
-    // Clear all game storage before requesting new deal
     if (gameMode === 'realm') clearRealmStorage();
     else if (gameMode === 'freecell') clearFreeCellStorage();
     else clearStorage();
@@ -196,21 +181,33 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     setRatingResult(null);
     setChallengeData(null);
     setQueuedDeal(null);
+    setLoading(true);
 
     if (challengeId || dailyDate) {
       navigate(`/play?mode=${gameMode}`, { replace: true });
       return;
     }
 
-    // Pop next deal from queue for the new game
+    // Pop next deal from pool
     const deal = await popNextDeal(gameMode, drawMode);
-    if (deal) {
-      setQueuedDeal(deal);
-    }
+    if (deal) setQueuedDeal(deal);
 
+    setLoading(false);
     setGameKey(k => k + 1);
     setPhase('playing');
   }, [setPhase, challengeId, dailyDate, gameMode, navigate, popNextDeal, drawMode]);
+
+  // Show loading while fetching deal from pool
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Finding your next puzzle...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (gamePhase === 'postgame' && lastResult) {
     const fakeState = {
@@ -242,7 +239,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     );
   }
 
-  // Determine seed and dealUuid to pass to game board
   const effectiveSeed = initialSeed ?? queuedDeal?.seed;
   const effectiveDealUuid = queuedDeal?.dealUuid;
 

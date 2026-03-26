@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { EngineRegistry } from '@/engines/EngineRegistry';
-import { PerformanceSignals, GameMode } from '@/engines/PuzzleEngine';
+import { GameMode } from '@/engines/PuzzleEngine';
 import { DDSService } from './DDSService';
 import { generateSeed } from '@/game/deck';
 
@@ -17,184 +17,231 @@ export interface VerifiedDeal {
   drawMode: number;
 }
 
+/** Skill bracket DDS ranges based on puzzle IQ */
+function getSkillBracket(rating: number, gamesPlayed: number): { min: number; max: number } {
+  if (gamesPlayed < 3) return { min: 0, max: 35 };
+  if (rating < 1100) return { min: 0, max: 40 };
+  if (rating < 1300) return { min: 30, max: 65 };
+  if (rating < 1500) return { min: 50, max: 80 };
+  return { min: 65, max: 100 };
+}
+
+function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
+  return {
+    dealUuid: deal.id,
+    seed: deal.seed,
+    gameMode: deal.game_mode,
+    tier,
+    minMoves: deal.min_moves,
+    ddsInitial: deal.dds_initial,
+    ddsBlended: deal.dds_blended,
+    difficulty: DDSService.ddsToLabel(deal.dds_blended),
+    difficultyScore: deal.dds_blended,
+    drawMode: deal.draw_mode,
+  };
+}
+
 export class DealPoolService {
   /**
-   * Get next deal for a user. Tries queue first, then generates on demand.
+   * Get next deal for a user via priority-ordered direct pool queries.
+   * No queue infrastructure needed.
    */
-  static async getNextDeal(userId: string, gameMode: GameMode, drawMode: number = 3, gamesPlayed: number = 999): Promise<VerifiedDeal | null> {
-    // New players (< 3 games) get Easy/low-Medium deals exclusively
-    if (gamesPlayed < 3) {
-      const onboarding = await this.popOnboardingDeal(gameMode);
-      if (onboarding) return onboarding;
-    }
+  static async getNextDeal(
+    userId: string,
+    gameMode: GameMode,
+    drawMode: number = 3,
+    gamesPlayed: number = 999,
+    rating: number = 1000,
+    gamesPlayedThisMode: number = 999
+  ): Promise<VerifiedDeal | null> {
+    // Get user's played deal IDs to exclude
+    const playedIds = await this.getUserPlayedDealIds(userId);
 
-    // 1. Pop from user's pre-buffered queue (working set deals)
-    const queued = await this.popFromQueue(userId, gameMode);
-    if (queued) return queued;
-
-    // 2. Generate fresh deal on demand
-    return this.generateFreshDeal(gameMode, drawMode);
-  }
-
-  /**
-   * Buffer deals in background. Fire and forget.
-   * The edge function manages working set membership.
-   */
-  static async bufferDeals(userId: string, gameMode: GameMode, drawMode: number = 3): Promise<void> {
-    try {
-      await supabase.functions.invoke('refill-deal-queue', {
-        body: { gameMode, drawMode, freshDeals: await this.generateFreshDealBatch(gameMode, drawMode, 8), calibrationCount: 2 },
-      });
-    } catch (err) {
-      console.warn('Failed to buffer deals:', err);
-    }
-  }
-
-  /**
-   * Record a game completion — called by the edge function, but pool stats update is also there.
-   * This client method is a no-op — actual recording is server-side.
-   */
-  static async recordCompletion(dealId: string, signals: PerformanceSignals, result: 'win' | 'loss' | 'abandon'): Promise<void> {
-    // Pool stats are updated server-side in complete-game edge function
-  }
-
-  private static async popFromQueue(userId: string, gameMode: string): Promise<VerifiedDeal | null> {
-    try {
-      const { data: queueItems } = await (supabase as any)
-        .from('deal_queue')
-        .select('id, tier, deal_id, deals(id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended)')
-        .eq('user_id', userId)
-        .eq('game_mode', gameMode)
-        .is('served_at', null)
-        .order('queued_at', { ascending: true })
-        .limit(1);
-
-      if (!queueItems?.length) return null;
-
-      const item = queueItems[0];
-      const deal = item.deals;
-      if (!deal) return null;
-
-      // Mark as served
-      await (supabase as any)
-        .from('deal_queue')
-        .update({ served_at: new Date().toISOString() })
-        .eq('id', item.id);
-
-      // Track in user_played_deals
-      await (supabase as any)
-        .from('user_played_deals')
-        .upsert(
-          { user_id: userId, deal_id: deal.id },
-          { onConflict: 'user_id,deal_id', ignoreDuplicates: true }
-        );
-
-      // Update calibration progress if calibration deal
-      if (item.tier === 'calibration') {
-        const { data: progress } = await (supabase as any)
-          .from('user_calibration_progress')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('game_mode', gameMode)
-          .single();
-
-        if (progress) {
-          const played = [...(progress.calibration_deal_ids_played || []), deal.id];
-          await (supabase as any)
-            .from('user_calibration_progress')
-            .update({ calibration_deal_ids_played: played, updated_at: new Date().toISOString() })
-            .eq('id', progress.id);
-        } else {
-          await (supabase as any)
-            .from('user_calibration_progress')
-            .insert({
-              user_id: userId,
-              game_mode: gameMode,
-              calibration_deal_ids_played: [deal.id],
-            });
-        }
+    // Priority 1: New players (< 3 games in this mode) get Easy starters
+    if (gamesPlayedThisMode < 3) {
+      const deal = await this.queryPool(gameMode, playedIds, { min: 0, max: 35 }, 'starter');
+      if (deal) {
+        await this.markPlayed(userId, deal.id);
+        return dealRowToVerified(deal, 'onboarding');
       }
-
-      return {
-        dealUuid: deal.id,
-        seed: deal.seed,
-        gameMode: deal.game_mode,
-        tier: item.tier,
-        minMoves: deal.min_moves,
-        ddsInitial: deal.dds_initial,
-        ddsBlended: deal.dds_blended,
-        difficulty: DDSService.ddsToLabel(deal.dds_blended),
-        difficultyScore: deal.dds_blended,
-        drawMode: deal.draw_mode,
-      };
-    } catch (err) {
-      console.warn('Failed to pop deal from queue:', err);
-      return null;
     }
+
+    const bracket = getSkillBracket(rating, gamesPlayedThisMode);
+
+    // Priority 2: Starter deals matching skill bracket
+    const starter = await this.queryPool(gameMode, playedIds, bracket, 'starter');
+    if (starter) {
+      await this.markPlayed(userId, starter.id);
+      return dealRowToVerified(starter, 'starter');
+    }
+
+    // Priority 3: Fresh deals matching skill bracket
+    const fresh = await this.queryPool(gameMode, playedIds, bracket, null);
+    if (fresh) {
+      await this.markPlayed(userId, fresh.id);
+      return dealRowToVerified(fresh, 'fresh');
+    }
+
+    // Priority 4: Any unplayed deal regardless of difficulty
+    const any = await this.queryPool(gameMode, playedIds, null, null);
+    if (any) {
+      await this.markPlayed(userId, any.id);
+      return dealRowToVerified(any, 'any');
+    }
+
+    // Priority 5: Replay oldest-played deal
+    const replay = await this.getOldestPlayedDeal(userId, gameMode);
+    if (replay) {
+      await this.markPlayed(userId, replay.id);
+      return dealRowToVerified(replay, 'replay');
+    }
+
+    // Priority 6: Generate fallback deal
+    console.warn(`[DealPoolService] Fallback generation triggered for ${gameMode} — pool is exhausted`);
+    return this.generateAndInsertFallback(userId, gameMode, drawMode, bracket);
   }
 
   /**
-   * Serve Easy or low-Medium deals for new players (games_played < 3).
+   * Query the deals pool with optional filters, excluding played deals.
+   * Orders by ascending pool_attempts to concentrate calibration.
    */
-  private static async popOnboardingDeal(gameMode: string): Promise<VerifiedDeal | null> {
+  private static async queryPool(
+    gameMode: string,
+    playedIds: Set<string>,
+    bracket: { min: number; max: number } | null,
+    tier: string | null
+  ): Promise<any | null> {
     try {
-      const { data: easyDeals } = await (supabase as any)
+      let query = (supabase as any)
         .from('deals')
         .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended')
         .eq('game_mode', gameMode)
-        .eq('reserved_for', 'onboarding')
-        .limit(5);
+        .order('pool_attempts', { ascending: true })
+        .limit(20);
 
-      let deal = easyDeals?.[0];
-
-      if (!deal) {
-        const { data: lowDeals } = await (supabase as any)
-          .from('deals')
-          .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended')
-          .eq('game_mode', gameMode)
-          .lte('dds_blended', 40)
-          .order('dds_blended', { ascending: true })
-          .limit(10);
-
-        if (lowDeals?.length) {
-          deal = lowDeals[Math.floor(Math.random() * lowDeals.length)];
-        }
+      if (bracket) {
+        query = query.gte('dds_blended', bracket.min).lte('dds_blended', bracket.max);
       }
 
-      if (!deal) return null;
+      if (tier === 'starter') {
+        query = query.eq('is_calibration', true);
+      }
 
-      return {
-        dealUuid: deal.id,
-        seed: deal.seed,
-        gameMode: deal.game_mode,
-        tier: 'onboarding',
-        minMoves: deal.min_moves,
-        ddsInitial: deal.dds_initial,
-        ddsBlended: deal.dds_blended,
-        difficulty: DDSService.ddsToLabel(deal.dds_blended),
-        difficultyScore: deal.dds_blended,
-        drawMode: deal.draw_mode,
-      };
+      const { data } = await query;
+      if (!data?.length) return null;
+
+      // Filter out played deals client-side
+      const unplayed = data.filter((d: any) => !playedIds.has(d.id));
+      return unplayed.length > 0 ? unplayed[0] : null;
     } catch (err) {
-      console.warn('Failed to pop onboarding deal:', err);
+      console.warn('Failed to query deal pool:', err);
       return null;
     }
   }
 
-  private static generateFreshDeal(gameMode: string, drawMode: number): VerifiedDeal | null {
+  private static async getUserPlayedDealIds(userId: string): Promise<Set<string>> {
+    try {
+      const { data } = await (supabase as any)
+        .from('user_played_deals')
+        .select('deal_id')
+        .eq('user_id', userId);
+      return new Set((data || []).map((d: any) => d.deal_id));
+    } catch {
+      return new Set();
+    }
+  }
+
+  private static async markPlayed(userId: string, dealId: string): Promise<void> {
+    try {
+      await (supabase as any)
+        .from('user_played_deals')
+        .upsert(
+          { user_id: userId, deal_id: dealId },
+          { onConflict: 'user_id,deal_id', ignoreDuplicates: true }
+        );
+    } catch (err) {
+      console.warn('Failed to mark deal as played:', err);
+    }
+  }
+
+  private static async getOldestPlayedDeal(userId: string, gameMode: string): Promise<any | null> {
+    try {
+      const { data } = await (supabase as any)
+        .from('user_played_deals')
+        .select('deal_id, played_at')
+        .eq('user_id', userId)
+        .order('played_at', { ascending: true })
+        .limit(5);
+
+      if (!data?.length) return null;
+
+      for (const entry of data) {
+        const { data: deal } = await (supabase as any)
+          .from('deals')
+          .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended')
+          .eq('id', entry.deal_id)
+          .eq('game_mode', gameMode)
+          .single();
+        if (deal) return deal;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Priority 6: Generate a deal on the client, insert into pool, and serve it.
+   */
+  private static async generateAndInsertFallback(
+    userId: string,
+    gameMode: string,
+    drawMode: number,
+    bracket: { min: number; max: number }
+  ): Promise<VerifiedDeal | null> {
     try {
       const engine = EngineRegistry.get(gameMode);
-      for (let attempt = 0; attempt < 5; attempt++) {
+      const targetDDS = (bracket.min + bracket.max) / 2;
+
+      for (let attempt = 0; attempt < 10; attempt++) {
         const seed = generateSeed();
-        const deal = engine.generateDeal(seed);
+        let deal;
+        if (gameMode === 'realm') {
+          // Pick grid size based on bracket
+          const sizes = bracket.max <= 35 ? [4, 5] :
+                       bracket.max <= 65 ? [6] :
+                       bracket.max <= 80 ? [7, 8] : [9, 10];
+          const size = sizes[Math.floor(Math.random() * sizes.length)];
+          deal = engine.generateDeal(seed, { gridSize: size, skipSpatialSurprise: size <= 5 });
+        } else {
+          deal = engine.generateDeal(seed);
+        }
         const result = engine.verifySolvable(deal, 50);
         if (result.solvable && result.minSolutionLength > 0) {
           const dds = result.complexityScore;
+
+          // Insert into deals table via register-deal edge function
+          const { data: regData } = await supabase.functions.invoke('register-deal', {
+            body: {
+              seed,
+              gameMode,
+              drawMode,
+              minMoves: result.minSolutionLength,
+              difficultyScore: dds,
+            },
+          });
+
+          const dealUuid = regData?.id || '';
+
+          if (dealUuid) {
+            await this.markPlayed(userId, dealUuid);
+          }
+
           return {
-            dealUuid: '',
+            dealUuid,
             seed,
             gameMode,
-            tier: 'fresh',
+            tier: 'fallback',
             minMoves: result.minSolutionLength,
             ddsInitial: dds,
             ddsBlended: dds,
@@ -204,51 +251,12 @@ export class DealPoolService {
           };
         }
       }
-      console.error('Could not generate verified deal after 5 attempts');
+
+      console.error('[DealPoolService] Fallback generation failed after 10 attempts');
       return null;
     } catch (err) {
-      console.error('Deal generation failed:', err);
+      console.error('[DealPoolService] Fallback generation error:', err);
       return null;
     }
-  }
-
-  private static async generateFreshDealBatch(
-    gameMode: string,
-    drawMode: number,
-    count: number
-  ): Promise<Array<{ seed: number; minMoves: number; ddsInitial: number; simulationCount: number }>> {
-    const engine = EngineRegistry.get(gameMode);
-    const deals: Array<{ seed: number; minMoves: number; ddsInitial: number; simulationCount: number }> = [];
-    const simCount = 50;
-
-    const easyTarget = Math.max(2, Math.floor(count * 0.25));
-    let easyFound = 0;
-
-    for (let i = 0; i < count * 3 && deals.length < count; i++) {
-      for (let attempt = 0; attempt < 5; attempt++) {
-        try {
-          const seed = generateSeed();
-          const deal = engine.generateDeal(seed);
-          const result = engine.verifySolvable(deal, simCount);
-          if (result.solvable && result.minSolutionLength > 0) {
-            const dds = result.complexityScore;
-            const isEasy = dds < 26;
-
-            if (isEasy && easyFound < easyTarget) {
-              deals.unshift({ seed, minMoves: result.minSolutionLength, ddsInitial: dds, simulationCount: simCount });
-              easyFound++;
-              break;
-            } else if (deals.length < count) {
-              deals.push({ seed, minMoves: result.minSolutionLength, ddsInitial: dds, simulationCount: simCount });
-              if (isEasy) easyFound++;
-              break;
-            }
-          }
-        } catch {
-          // Skip failed attempt
-        }
-      }
-    }
-    return deals.slice(0, count);
   }
 }

@@ -429,7 +429,6 @@ Deno.serve(async (req) => {
           "deals",
           "game_history",
           "profiles",
-          "deal_queue",
           "user_played_deals",
           "streak_history",
           "daily_challenges",
@@ -490,18 +489,33 @@ Deno.serve(async (req) => {
         return json(result);
       }
 
-      case "trigger_refill": {
-        const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/refill-deal-queue`;
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({}),
-        });
-        const result = await resp.json();
-        return json(result);
+      case "pool_health_check": {
+        // Check how many unplayed deals exist per game mode per difficulty band
+        const gameModes = ['klondike', 'freecell', 'realm'];
+        const bands = [
+          { label: 'Easy', min: 0, max: 35 },
+          { label: 'Medium', min: 26, max: 65 },
+          { label: 'Hard', min: 50, max: 80 },
+          { label: 'Expert', min: 65, max: 100 },
+        ];
+        const lowPools: Array<{ mode: string; difficulty: string; remaining: number }> = [];
+
+        for (const mode of gameModes) {
+          for (const band of bands) {
+            const { count } = await adminClient
+              .from('deals')
+              .select('id', { count: 'exact', head: true })
+              .eq('game_mode', mode)
+              .gte('dds_blended', band.min)
+              .lte('dds_blended', band.max);
+            const remaining = count || 0;
+            if (remaining < 20) {
+              lowPools.push({ mode, difficulty: band.label, remaining });
+            }
+          }
+        }
+
+        return json({ lowPools });
       }
 
       case "diagnostic_snapshot": {

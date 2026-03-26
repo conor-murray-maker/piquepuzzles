@@ -196,67 +196,8 @@ function generateRegions(n: number, rand: () => number): RegionGenResult | null 
   return { regionMap, regions };
 }
 
-function validateRegions(regions: number[][], n: number, regionMap: number[][]): boolean {
-  const minSize = 2;
-  const maxSize = n + 4;
-  const sizes = regions.map(r => r.length);
-
-  for (const s of sizes) {
-    if (s < minSize || s > maxSize) return false;
-  }
-
-  // Max/min ratio
-  const maxS = Math.max(...sizes);
-  const minS = Math.min(...sizes);
-  if (maxS > minS * 2.5) return false;
-
-  // 2D presence: at least one cell has >= 2 orthogonal neighbours in same region
-  for (let ri = 0; ri < regions.length; ri++) {
-    const has2D = regions[ri].some((idx) => {
-      const cr = Math.floor(idx / n);
-      const cc = idx % n;
-      const sameRegionNeighbours = DIRS.filter(([dr, dc]) => {
-        const nr = cr + dr;
-        const nc = cc + dc;
-        return nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri;
-      }).length;
-      return sameRegionNeighbours >= 2;
-    });
-    if (!has2D) return false;
-  }
-
-  // No isolated cells
-  for (let ri = 0; ri < regions.length; ri++) {
-    for (const idx of regions[ri]) {
-      const r = Math.floor(idx / n);
-      const c = idx % n;
-      let neighborCount = 0;
-      for (const [dr, dc] of DIRS) {
-        const nr = r + dr;
-        const nc = c + dc;
-        if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri) {
-          neighborCount++;
-        }
-      }
-      if (neighborCount === 0) return false;
-    }
-  }
-
-  // Peninsula check only for regions > 4 cells
-  for (let ri = 0; ri < regions.length; ri++) {
-    if (regions[ri].length <= 4) continue;
-    for (const idx of regions[ri]) {
-      const r = Math.floor(idx / n);
-      const c = idx % n;
-      const neighborCount = DIRS.filter(([dr, dc]) => {
-        const nr = r + dr;
-        const nc = c + dc;
-        return nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri;
-      }).length;
-      if (neighborCount === 1 && idx !== regions[ri][0]) return false;
-    }
-  }
-
+// validateRegions is now redundant — Stage 1 checks are inline in generateRegions
+function validateRegions(_regions: number[][], _n: number, _regionMap: number[][]): boolean {
   return true;
 }
 

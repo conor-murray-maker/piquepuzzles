@@ -472,7 +472,7 @@ export function generateRealmPuzzle(seed: number): RealmDeal | null {
       const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
 
       const dds = calculateRealmDDS(n, deduction, sizeVariance);
-      const regionColors = assignColors(regionMap, n);
+      const regionColors = assignColors(n, rand);
 
       console.log(`[Realm] Accepted ${n}x${n} puzzle (attempt ${attempt + 1}). Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4}. Sizes=[${sizes.join(',')}] surprise=${surprise.toFixed(2)} threshold=${surpriseThreshold.toFixed(2)}`);
 

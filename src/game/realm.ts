@@ -76,21 +76,13 @@ function generateRegions(n: number, rand: () => number): RegionGenResult | null 
   const regionMap: number[][] = Array.from({ length: n }, () => Array(n).fill(-1));
   const regions: number[][] = Array.from({ length: n }, () => []);
 
-  // Place N seed cells with minimum distance of 2 between seeds
+  // Step 1: Place N seed cells with minimum manhattan distance of 2
   const seeds: [number, number][] = [];
-  const allCells: [number, number][] = [];
-  for (let r = 0; r < n; r++)
-    for (let c = 0; c < n; c++)
-      allCells.push([r, c]);
-
-  // Shuffle cells
-  for (let i = allCells.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [allCells[i], allCells[j]] = [allCells[j], allCells[i]];
-  }
-
-  for (const [r, c] of allCells) {
-    if (seeds.length >= n) break;
+  let attempts = 0;
+  while (seeds.length < n && attempts < 1000) {
+    attempts++;
+    const r = Math.floor(rand() * n);
+    const c = Math.floor(rand() * n);
     const tooClose = seeds.some(([sr, sc]) => Math.abs(sr - r) + Math.abs(sc - c) < 2);
     if (!tooClose) {
       seeds.push([r, c]);
@@ -99,138 +91,142 @@ function generateRegions(n: number, rand: () => number): RegionGenResult | null 
       regions[ri].push(r * n + c);
     }
   }
-
-  // If we couldn't place enough seeds with distance constraint, relax
-  if (seeds.length < n) {
-    for (const [r, c] of allCells) {
-      if (seeds.length >= n) break;
-      if (regionMap[r][c] === -1) {
-        seeds.push([r, c]);
-        const ri = seeds.length - 1;
-        regionMap[r][c] = ri;
-        regions[ri].push(r * n + c);
-      }
-    }
-  }
-
   if (seeds.length < n) return null;
 
-  const seedSet = new Set(seeds.map(([r, c]) => `${r},${c}`));
-  const maxSize = n + 4;
-  let unassigned = n * n - n;
+  // Step 2: Flood fill — round-robin growth with compact bias
+  let unfilled = n * n - n;
+  let safetyCounter = 0;
+  const maxSafety = n * n * 20;
+  while (unfilled > 0 && safetyCounter < maxSafety) {
+    safetyCounter++;
+    let anyGrew = false;
+    for (let regionId = 0; regionId < n; regionId++) {
+      // Collect candidate cells adjacent to this region
+      const candidates: { r: number; c: number; weight: number }[] = [];
+      const seen = new Set<string>();
+      for (const idx of regions[regionId]) {
+        const cr = Math.floor(idx / n);
+        const cc = idx % n;
+        for (const [dr, dc] of DIRS) {
+          const nr = cr + dr;
+          const nc = cc + dc;
+          const key = `${nr},${nc}`;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === -1 && !seen.has(key)) {
+            seen.add(key);
+            // Weight by how many neighbours are already in this region (compact bias)
+            let neighboursInRegion = 0;
+            for (const [dr2, dc2] of DIRS) {
+              const nr2 = nr + dr2;
+              const nc2 = nc + dc2;
+              if (nr2 >= 0 && nr2 < n && nc2 >= 0 && nc2 < n && regionMap[nr2][nc2] === regionId) {
+                neighboursInRegion++;
+              }
+            }
+            candidates.push({ r: nr, c: nc, weight: neighboursInRegion + 1 });
+          }
+        }
+      }
+      if (candidates.length === 0) continue;
 
-  // Build frontier for each region
-  const frontiers: Set<string>[] = Array.from({ length: n }, () => new Set());
-  for (let ri = 0; ri < n; ri++) {
-    const [r, c] = seeds[ri];
-    for (const [dr, dc] of DIRS) {
-      const nr = r + dr;
-      const nc = c + dc;
-      if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === -1) {
-        frontiers[ri].add(`${nr},${nc}`);
+      // Weighted random pick
+      const totalWeight = candidates.reduce((s, c) => s + c.weight, 0);
+      let pick = rand() * totalWeight;
+      for (const { r, c, weight } of candidates) {
+        pick -= weight;
+        if (pick <= 0) {
+          regionMap[r][c] = regionId;
+          regions[regionId].push(r * n + c);
+          unfilled--;
+          anyGrew = true;
+          break;
+        }
+      }
+    }
+    if (!anyGrew) break;
+  }
+
+  // If any cells remain unfilled, assign to nearest neighbour region
+  if (unfilled > 0) {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (regionMap[r][c] !== -1) continue;
+        for (const [dr, dc] of DIRS) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] !== -1) {
+            regionMap[r][c] = regionMap[nr][nc];
+            regions[regionMap[nr][nc]].push(r * n + c);
+            break;
+          }
+        }
       }
     }
   }
 
-  // Grow regions with weighted compact selection
-  let iterations = 0;
-  const maxIterations = n * n * 10;
-  while (unassigned > 0 && iterations < maxIterations) {
-    iterations++;
+  // Step 3: Validate shape constraints
+  for (let ri = 0; ri < n; ri++) {
+    if (regions[ri].length < 3 || regions[ri].length > n + 4) return null;
 
-    // Pick region to grow — prioritize smaller regions
-    const order = Array.from({ length: n }, (_, i) => i)
-      .filter(i => regions[i].length < maxSize && frontiers[i].size > 0);
-
-    if (order.length === 0) break;
-
-    // Weighted by deficit from average size
-    const targetSize = Math.ceil((n * n) / n);
-    const weights = order.map(i => Math.max(1, targetSize - regions[i].length + 1));
-    const totalWeight = weights.reduce((a, b) => a + b, 0);
-    let pick = rand() * totalWeight;
-    let ri = order[0];
-    for (let k = 0; k < order.length; k++) {
-      pick -= weights[k];
-      if (pick <= 0) { ri = order[k]; break; }
+    // 2D presence: must span at least 2 rows AND 2 cols
+    const rows = new Set<number>();
+    const cols = new Set<number>();
+    for (const idx of regions[ri]) {
+      rows.add(Math.floor(idx / n));
+      cols.add(idx % n);
     }
+    if (rows.size < 2 || cols.size < 2) return null;
 
-    // Pick frontier cell weighted by compactness (neighbors already in region)
-    const frontierArr = Array.from(frontiers[ri]);
-    if (frontierArr.length === 0) continue;
-
-    const cellWeights = frontierArr.map(key => {
-      const [cr, cc] = key.split(',').map(Number);
-      let neighborCount = 0;
+    // No isolated cells (every cell needs at least 1 orthogonal neighbour in same region)
+    for (const idx of regions[ri]) {
+      const cr = Math.floor(idx / n);
+      const cc = idx % n;
+      let hasNeighbour = false;
       for (const [dr, dc] of DIRS) {
         const nr = cr + dr;
         const nc = cc + dc;
         if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri) {
-          neighborCount++;
+          hasNeighbour = true;
+          break;
         }
       }
-      return neighborCount + 1; // +1 so isolated cells still have a chance
-    });
-
-    const totalCW = cellWeights.reduce((a, b) => a + b, 0);
-    let cellPick = rand() * totalCW;
-    let chosenIdx = 0;
-    for (let k = 0; k < cellWeights.length; k++) {
-      cellPick -= cellWeights[k];
-      if (cellPick <= 0) { chosenIdx = k; break; }
-    }
-
-    const chosenKey = frontierArr[chosenIdx];
-    const [fr, fc] = chosenKey.split(',').map(Number);
-
-    if (regionMap[fr][fc] !== -1) {
-      frontiers[ri].delete(chosenKey);
-      continue;
-    }
-
-    regionMap[fr][fc] = ri;
-    regions[ri].push(fr * n + fc);
-    unassigned--;
-    frontiers[ri].delete(chosenKey);
-
-    // Remove this cell from other regions' frontiers
-    for (let other = 0; other < n; other++) {
-      if (other !== ri) frontiers[other].delete(chosenKey);
-    }
-
-    // Add new frontier cells
-    for (const [dr, dc] of DIRS) {
-      const nr = fr + dr;
-      const nc = fc + dc;
-      if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === -1) {
-        frontiers[ri].add(`${nr},${nc}`);
-      }
+      if (!hasNeighbour) return null;
     }
   }
 
-  // Assign remaining unassigned cells to nearest region
+  // Adjacent region shape similarity check (bounding box aspect ratios)
+  const adj: Set<number>[] = Array.from({ length: n }, () => new Set());
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      if (regionMap[r][c] !== -1) continue;
-      let best = -1;
-      let bestSize = Infinity;
-      for (const [dr, dc] of DIRS) {
+      for (const [dr, dc] of [[0, 1], [1, 0]] as const) {
         const nr = r + dr;
         const nc = c + dc;
-        if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] !== -1) {
-          const ri2 = regionMap[nr][nc];
-          if (regions[ri2].length < bestSize) {
-            best = ri2;
-            bestSize = regions[ri2].length;
-          }
+        if (nr < n && nc < n) {
+          const a = regionMap[r][c];
+          const b = regionMap[nr][nc];
+          if (a !== b) { adj[a].add(b); adj[b].add(a); }
         }
       }
-      if (best === -1) best = 0;
-      regionMap[r][c] = best;
-      regions[best].push(r * n + c);
     }
   }
+  const aspectRatios = regions.map(region => {
+    let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+    for (const idx of region) {
+      const r = Math.floor(idx / n);
+      const c = idx % n;
+      minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+      minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+    }
+    return (maxC - minC + 1) / (maxR - minR + 1);
+  });
+  let similarPairs = 0;
+  for (let i = 0; i < n; i++) {
+    for (const j of adj[i]) {
+      if (j > i && Math.abs(aspectRatios[i] - aspectRatios[j]) < 0.2) similarPairs++;
+    }
+  }
+  if (similarPairs > 2) return null;
 
+  console.log(`[Realm] Generated regions for ${n}x${n}: sizes=[${regions.map(r => r.length).join(',')}]`);
   return { regionMap, regions };
 }
 

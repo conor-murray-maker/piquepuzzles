@@ -38,6 +38,8 @@ interface Target {
   ddsMin: number;
   ddsMax: number;
   target: number;
+  gridSizes?: number[];
+  skipSpatialSurprise?: boolean;
 }
 
 function applyPathDiversityModifier(baseDds: number, pathDiversityScore: number): number {
@@ -58,19 +60,37 @@ const TARGETS_BY_MODE: Record<string, Target[]> = {
     { gameMode: "freecell", engine: FreeCellEngine, simCount: 50, band: "medium", ddsMin: 26, ddsMax: 55, target: 50 },
   ],
   realm: [
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "easy", ddsMin: 0, ddsMax: 30, target: 50 },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "medium", ddsMin: 31, ddsMax: 55, target: 40 },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "hard", ddsMin: 56, ddsMax: 80, target: 30 },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 81, ddsMax: 100, target: 20 },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "easy", ddsMin: 0, ddsMax: 30, target: 50, gridSizes: [4, 5], skipSpatialSurprise: true },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "medium", ddsMin: 15, ddsMax: 55, target: 40, gridSizes: [6] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "hard", ddsMin: 30, ddsMax: 80, target: 30, gridSizes: [7, 8] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 60, ddsMax: 100, target: 20, gridSizes: [9, 10] },
   ],
 };
 
 const MAX_CANDIDATES = 8000;
 
+const DIFFICULTY_OPTIONS = [
+  { value: "all", label: "All Difficulties" },
+  { value: "easy", label: "Easy only" },
+  { value: "medium", label: "Medium only" },
+  { value: "hard", label: "Hard only" },
+  { value: "expert", label: "Expert only" },
+];
+
+const TIMEOUT_OPTIONS = [
+  { value: "0", label: "None" },
+  { value: "1000", label: "1s" },
+  { value: "2000", label: "2s (recommended)" },
+  { value: "5000", label: "5s" },
+  { value: "10000", label: "10s" },
+];
+
 export function StarterPoolGenerator() {
   const action = useAdminAction();
   const { toast } = useToast();
   const [selectedMode, setSelectedMode] = useState<string>("klondike");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
+  const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
   const [running, setRunning] = useState(false);
   const [candidatesTried, setCandidatesTried] = useState(0);
   const [starterFound, setStarterFound] = useState(0);
@@ -92,7 +112,17 @@ export function StarterPoolGenerator() {
     setResult(null);
     abortRef.current = false;
 
-    const targets = TARGETS_BY_MODE[selectedMode];
+    const allTargets = TARGETS_BY_MODE[selectedMode];
+    const targets = selectedDifficulty === "all"
+      ? allTargets
+      : allTargets.filter(t => t.band === selectedDifficulty);
+
+    if (targets.length === 0) {
+      addStatus(`✗ No targets for ${selectedMode} ${selectedDifficulty}`);
+      setRunning(false);
+      return;
+    }
+
     const collected: VerifiedDeal[] = [];
     const counts: Record<string, number> = {};
     for (const t of targets) counts[t.band] = 0;
@@ -101,14 +131,17 @@ export function StarterPoolGenerator() {
     let totalTried = 0;
     let starterCount = 0;
     let bankedCount = 0;
+    const timeoutMs = parseInt(selectedTimeout, 10);
 
     const isRealm = selectedMode === "realm";
-    addStatus(`Starting ${selectedMode} deal generation...`);
-    addStatus(`Targets: ${targets.map(t => `${t.target} ${t.band}`).join(", ")} (${totalTarget} total)`);
+    addStatus(`Starting ${selectedMode} deal generation (${selectedDifficulty})...`);
+    addStatus(`Targets: ${targets.map(t => `${t.target} ${t.band}${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}`).join(", ")} (${totalTarget} total)`);
+    if (timeoutMs > 0) addStatus(`Timeout per candidate: ${timeoutMs}ms`);
 
     const engine = targets[0].engine;
     const simCount = targets[0].simCount;
     const startTime = Date.now();
+    let timeoutDiscards = 0;
 
     while (totalTried < MAX_CANDIDATES && !abortRef.current) {
       const allMet = targets.every(t => counts[t.band] >= t.target);
@@ -122,7 +155,40 @@ export function StarterPoolGenerator() {
         const seed = generateSeed();
 
         try {
-          const deal = engine.generateDeal(seed);
+          // For Realm, pick a random target band that still needs deals to determine grid size
+          let realmGridSize: number | undefined;
+          let realmSkipSurprise = false;
+          let targetBand: Target | undefined;
+
+          if (isRealm) {
+            // Pick a random unfilled target
+            const unfilled = targets.filter(t => counts[t.band] < t.target);
+            if (unfilled.length === 0) continue;
+            targetBand = unfilled[Math.floor(Math.random() * unfilled.length)];
+            if (targetBand.gridSizes) {
+              realmGridSize = targetBand.gridSizes[Math.floor(Math.random() * targetBand.gridSizes.length)];
+            }
+            realmSkipSurprise = targetBand.skipSpatialSurprise ?? false;
+          }
+
+          const candidateStart = performance.now();
+          let deal;
+          if (isRealm) {
+            deal = engine.generateDeal(seed, {
+              gridSize: realmGridSize,
+              skipSpatialSurprise: realmSkipSurprise,
+              timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
+            });
+          } else {
+            deal = engine.generateDeal(seed);
+          }
+
+          // Check per-candidate timeout
+          if (timeoutMs > 0 && (performance.now() - candidateStart) > timeoutMs) {
+            timeoutDiscards++;
+            continue;
+          }
+
           const verifyResult = engine.verifySolvable(deal, simCount);
 
           if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
@@ -135,10 +201,9 @@ export function StarterPoolGenerator() {
             dds = applyPathDiversityModifier(dds, pathDiv);
           }
 
-          // Confidence: Realm is binary, others use Wilson
           let confidence: number;
           if (isRealm) {
-            confidence = 1.0; // unique solution verified by engine
+            confidence = 1.0;
           } else {
             const confResult = calculateDealConfidence({
               wins: verifyResult.wins,
@@ -195,11 +260,12 @@ export function StarterPoolGenerator() {
       if (totalTried % 5 === 0) {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         const rate = totalTried > 0 ? ((bankedCount / totalTried) * 100).toFixed(1) : "0";
-        const remaining = bankedCount > 0
+        const remaining = starterCount > 0
           ? ((totalTarget - starterCount) / (starterCount / (Date.now() - startTime)) / 1000).toFixed(0)
           : "?";
         const parts = targets.map(t => `${t.band}: ${counts[t.band]}/${t.target}`);
-        addStatus(`[${totalTried}] ${elapsed}s | Rate: ${rate}% | ETA: ${remaining}s — ${parts.join(", ")}`);
+        const timeoutStr = timeoutDiscards > 0 ? ` Timeout=${timeoutDiscards}` : "";
+        addStatus(`[${totalTried}] ${elapsed}s | Rate: ${rate}% | ETA: ${remaining}s — ${parts.join(", ")}${timeoutStr}`);
       }
 
       await new Promise<void>(resolve => setTimeout(resolve, 0));
@@ -214,6 +280,7 @@ export function StarterPoolGenerator() {
     }
 
     addStatus(`Found ${bankedCount} deals (${starterCount} starter) in ${elapsed}s. Inserting...`);
+    if (timeoutDiscards > 0) addStatus(`⚠ ${timeoutDiscards} candidates timed out`);
 
     let totalInserted = 0;
     for (let i = 0; i < collected.length; i += 50) {
@@ -235,11 +302,28 @@ export function StarterPoolGenerator() {
     toast({ title: `${selectedMode} pool seeded`, description: `${totalInserted} verified deals inserted` });
 
     setRunning(false);
-  }, [action, addStatus, toast, selectedMode]);
+  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout]);
 
-  const targets = TARGETS_BY_MODE[selectedMode];
+  const allTargets = TARGETS_BY_MODE[selectedMode];
+  const targets = selectedDifficulty === "all"
+    ? allTargets
+    : allTargets.filter(t => t.band === selectedDifficulty);
   const totalTarget = targets.reduce((s, t) => s + t.target, 0);
-  const progress = Math.min(100, (starterFound / totalTarget) * 100);
+  const progress = Math.min(100, totalTarget > 0 ? (starterFound / totalTarget) * 100 : 0);
+
+  const difficultyOptions = selectedMode === "realm"
+    ? DIFFICULTY_OPTIONS
+    : DIFFICULTY_OPTIONS.filter(d => d.value === "all" || d.value === "easy" || d.value === "medium");
+
+  const modeDescription = () => {
+    if (selectedMode === "realm") {
+      if (selectedDifficulty === "all") return "Realm: 50 Easy (4-5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9-10×).";
+      const t = targets[0];
+      if (!t) return "";
+      return `Realm ${t.band}: ${t.target} deals${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}. Confidence=1.0 (unique solution).`;
+    }
+    return `${selectedMode}: ${targets.map(t => `${t.target} ${t.band}`).join(" + ")} starter deals with Wilson confidence scoring.`;
+  };
 
   return (
     <Card>
@@ -254,15 +338,37 @@ export function StarterPoolGenerator() {
           Generates solver-verified deals per game mode. Select a mode and generate.
         </p>
 
-        <div className="flex items-center gap-3">
-          <Select value={selectedMode} onValueChange={setSelectedMode} disabled={running}>
-            <SelectTrigger className="w-40">
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={selectedMode} onValueChange={(v) => { setSelectedMode(v); setSelectedDifficulty("all"); }} disabled={running}>
+            <SelectTrigger className="w-32">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="klondike">Klondike</SelectItem>
               <SelectItem value="freecell">FreeCell</SelectItem>
               <SelectItem value="realm">Realm</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty} disabled={running}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {difficultyOptions.map(d => (
+                <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedTimeout} onValueChange={setSelectedTimeout} disabled={running}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Timeout" />
+            </SelectTrigger>
+            <SelectContent>
+              {TIMEOUT_OPTIONS.map(t => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -278,11 +384,7 @@ export function StarterPoolGenerator() {
           )}
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          {selectedMode === "realm"
-            ? "Realm: 50 Easy (6×6), 40 Medium (7-8×), 30 Hard (8-9×), 20 Expert (9-10×). Confidence=1.0 (unique solution)."
-            : `${selectedMode}: 75 Easy + 50 Medium starter deals with Wilson confidence scoring.`}
-        </p>
+        <p className="text-xs text-muted-foreground">{modeDescription()}</p>
 
         {(running || result) && (
           <div className="space-y-2">

@@ -30,7 +30,7 @@ export interface GameState {
 
 export interface PuzzleEngine {
   gameMode: GameMode;
-  generateDeal(seed: number): Deal;
+  generateDeal(seed: number, options?: unknown): Deal;
   verifySolvable(deal: Deal, simulations: number): VerificationResult;
   getComplexityScore(minSolutionLength: number): number; // maps solution length to 0-100
 }

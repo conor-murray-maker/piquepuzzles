@@ -455,15 +455,16 @@ export function generateRealmPuzzle(seed: number): RealmDeal | null {
   const baseSize = sizeWeights[Math.floor(rand() * sizeWeights.length)];
 
   const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0 };
+  const genStart = performance.now();
 
   for (let n = baseSize; n <= 10; n++) {
     for (let attempt = 0; attempt < 2000; attempt++) {
-      // === Stage 1: Region generation (cheap shape constraints only) ===
+      // === Stage 1: Region generation (minimal constraints only) ===
       const regResult = generateRegions(n, rand);
       if (!regResult) { discardCounts.stage1++; continue; }
 
       const { regionMap, regions } = regResult;
-      if (!validateRegions(regions, n, regionMap)) { discardCounts.stage1++; continue; }
+      console.log(`[Realm] S1 pass #${attempt + 1} (${(performance.now() - genStart).toFixed(0)}ms) sizes=[${regions.map(r => r.length).join(',')}]`);
 
       // === Stage 2: Solution finding (does ANY valid placement exist?) ===
       const solutions = findAllSolutions(regionMap, n, 2);

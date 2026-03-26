@@ -40,18 +40,18 @@ export interface RealmState {
   gameId: string;
 }
 
-// Curated palette
+// Maximally perceptually distinct palette (10 colours)
 const REALM_COLORS = [
   '#E8735A', // coral
-  '#4A9E8E', // teal
-  '#E8A135', // amber
-  '#5B7FA6', // slate blue
-  '#7BAF6F', // sage green
-  '#9B7BB8', // dusty purple
-  '#C4A882', // warm sand
-  '#4A7FA5', // steel blue
-  '#C4704F', // terracotta
-  '#6BB89E', // mint
+  '#2A9D8F', // teal
+  '#E9C46A', // amber
+  '#3A86FF', // deep blue
+  '#6A994E', // sage
+  '#9B5DE5', // purple
+  '#F15BB5', // rose
+  '#F4A261', // orange
+  '#2D6A4F', // forest
+  '#8E9AAF', // slate
 ];
 
 // Seeded PRNG
@@ -357,35 +357,17 @@ function solveByDeduction(regionMap: number[][], n: number): DeductionResult {
 
 // ==================== Graph Coloring ====================
 
-function assignColors(regionMap: number[][], n: number): string[] {
-  const adj: Set<number>[] = Array.from({ length: n }, () => new Set());
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      for (const [dr, dc] of [[0, 1], [1, 0]] as const) {
-        const nr = r + dr;
-        const nc = c + dc;
-        if (nr < n && nc < n) {
-          const a = regionMap[r][c];
-          const b = regionMap[nr][nc];
-          if (a !== b) { adj[a].add(b); adj[b].add(a); }
-        }
-      }
-    }
+function assignColors(n: number, rand: () => number): string[] {
+  // Shuffled one-to-one mapping — N regions get N unique colours
+  const indices = Array.from({ length: REALM_COLORS.length }, (_, i) => i);
+  // Fisher-Yates shuffle
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
   }
-
-  const colorAssignment: number[] = Array(n).fill(-1);
-  for (let ri = 0; ri < n; ri++) {
-    const usedColors = new Set<number>();
-    for (const neighbor of adj[ri]) {
-      if (colorAssignment[neighbor] !== -1) usedColors.add(colorAssignment[neighbor]);
-    }
-    for (let ci = 0; ci < REALM_COLORS.length; ci++) {
-      if (!usedColors.has(ci)) { colorAssignment[ri] = ci; break; }
-    }
-    if (colorAssignment[ri] === -1) colorAssignment[ri] = ri % REALM_COLORS.length;
-  }
-
-  return colorAssignment.map(ci => REALM_COLORS[ci]);
+  const assigned = indices.slice(0, n).map(i => REALM_COLORS[i]);
+  console.log(`[Realm] Region colours: ${assigned.map((c, i) => `R${i}=${c}`).join(', ')}`);
+  return assigned;
 }
 
 // ==================== DDS Calculation ====================
@@ -490,7 +472,7 @@ export function generateRealmPuzzle(seed: number): RealmDeal | null {
       const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
 
       const dds = calculateRealmDDS(n, deduction, sizeVariance);
-      const regionColors = assignColors(regionMap, n);
+      const regionColors = assignColors(n, rand);
 
       console.log(`[Realm] Accepted ${n}x${n} puzzle (attempt ${attempt + 1}). Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4}. Sizes=[${sizes.join(',')}] surprise=${surprise.toFixed(2)} threshold=${surpriseThreshold.toFixed(2)}`);
 

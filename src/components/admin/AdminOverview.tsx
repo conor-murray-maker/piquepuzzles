@@ -2,7 +2,8 @@ import { useAdminData } from "@/hooks/useAdminQuery";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer } from "@/components/ui/chart";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, Users, Gamepad2, Brain, Crown, CalendarCheck, Database } from "lucide-react";
+import { TrendingUp, TrendingDown, Users, Gamepad2, Brain, Crown, CalendarCheck, Database, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 function StatCard({ label, value, icon: Icon, delta }: { label: string; value: string | number; icon: any; delta?: number }) {
   return (

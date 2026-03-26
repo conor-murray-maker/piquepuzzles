@@ -73,6 +73,7 @@ interface RegionGenResult {
 }
 
 function generateRegions(n: number, rand: () => number): RegionGenResult | null {
+  console.log('GENERATION PATH');
   const regionMap: number[][] = Array.from({ length: n }, () => Array(n).fill(-1));
   const regions: number[][] = Array.from({ length: n }, () => []);
 
@@ -530,41 +531,76 @@ export interface RealmDeal {
   spatialSurprise: number;
 }
 
+function createRealmStateFromDeal(deal: RealmDeal, seed: number): RealmState {
+  const grid: RealmCell[][] = Array.from({ length: deal.size }, (_, r) =>
+    Array.from({ length: deal.size }, (_, c) => ({
+      row: r,
+      col: c,
+      region: deal.regionMap[r][c],
+      state: 'empty' as CellState,
+    }))
+  );
+
+  return {
+    grid,
+    size: deal.size,
+    regions: deal.regions,
+    regionColors: deal.regionColors,
+    solution: deal.solution,
+    moves: 0,
+    startTime: Date.now(),
+    hintsUsed: 0,
+    undosUsed: 0,
+    isWon: false,
+    errors: 0,
+    maxErrors: 3,
+    dealId: `realm-${seed}`,
+    difficulty: ddsToRealmDifficulty(deal.dds),
+    difficultyScore: deal.dds,
+    seed,
+    minMoves: deal.size,
+    autoMarkMap: {},
+    gameId: generateGameId(),
+  };
+}
+
 export function generateRealmPuzzle(seed: number): RealmDeal | null {
   const rand = seededRandom(seed);
   const sizeWeights = [6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10];
-  const n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
+  const baseSize = sizeWeights[Math.floor(rand() * sizeWeights.length)];
 
-  for (let attempt = 0; attempt < 50; attempt++) {
-    const regResult = generateRegions(n, rand);
-    if (!regResult) continue;
+  for (let n = baseSize; n <= 10; n++) {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const regResult = generateRegions(n, rand);
+      if (!regResult) continue;
 
-    const { regionMap, regions } = regResult;
-    if (!validateRegions(regions, n, regionMap)) continue;
+      const { regionMap, regions } = regResult;
+      if (!validateRegions(regions, n, regionMap)) continue;
 
-    // Find ALL solutions (up to 3 to check uniqueness)
-    const solutions = findAllSolutions(regionMap, n, 3);
-    if (solutions.length !== 1) continue;
+      // Find ALL solutions (up to 3 to check uniqueness)
+      const solutions = findAllSolutions(regionMap, n, 3);
+      if (solutions.length !== 1) continue;
 
-    const solution = solutions[0];
+      const solution = solutions[0];
 
-    // Spatial surprise check
-    const surprise = spatialSurpriseScore(solution, n);
-    if (surprise < 4.0) continue;
+      // Spatial surprise check
+      const surprise = spatialSurpriseScore(solution, n);
+      if (surprise < 4.0) continue;
 
-    // Deduction chain verification
-    const deduction = solveByDeduction(regionMap, n);
-    if (!deduction.solvable) continue;
+      // Deduction chain verification
+      const deduction = solveByDeduction(regionMap, n);
+      if (!deduction.solvable) continue;
 
-    // Region size variance
-    const sizes = regions.map(r => r.length);
-    const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
-    const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
+      // Region size variance
+      const sizes = regions.map(r => r.length);
+      const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+      const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
 
-    const dds = calculateRealmDDS(n, deduction, sizeVariance);
-    const regionColors = assignColors(regionMap, n);
+      const dds = calculateRealmDDS(n, deduction, sizeVariance);
+      const regionColors = assignColors(regionMap, n);
 
-    return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
+      return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
+    }
   }
 
   return null;
@@ -585,65 +621,20 @@ export function createRealmGame(seed?: number): RealmState {
     return createFallbackRealmGame(actualSeed);
   }
 
-  const grid: RealmCell[][] = Array.from({ length: deal.size }, (_, r) =>
-    Array.from({ length: deal.size }, (_, c) => ({
-      row: r, col: c, region: deal.regionMap[r][c], state: 'empty' as CellState,
-    }))
-  );
-
-  return {
-    grid,
-    size: deal.size,
-    regions: deal.regions,
-    regionColors: deal.regionColors,
-    solution: deal.solution,
-    moves: 0,
-    startTime: Date.now(),
-    hintsUsed: 0,
-    undosUsed: 0,
-    isWon: false,
-    errors: 0,
-    maxErrors: 3,
-    dealId: `realm-${actualSeed}`,
-    difficulty: ddsToRealmDifficulty(deal.dds),
-    difficultyScore: deal.dds,
-    seed: actualSeed,
-    minMoves: deal.size,
-    autoMarkMap: {},
-    gameId: generateGameId(),
-  };
+  return createRealmStateFromDeal(deal, actualSeed);
 }
 
 function createFallbackRealmGame(seed: number): RealmState {
-  const n = 6;
-  const regionMap: number[][] = [];
-  const regions: number[][] = Array.from({ length: n }, () => []);
-
-  // Create a 2x3 block layout
-  for (let r = 0; r < n; r++) {
-    regionMap.push([]);
-    for (let c = 0; c < n; c++) {
-      const ri = Math.floor(r / 2) * 2 + Math.floor(c / 3);
-      const regionIdx = Math.min(ri, n - 1);
-      regionMap[r].push(regionIdx);
-      regions[regionIdx].push(r * n + c);
+  for (let offset = 1; offset <= 200; offset++) {
+    const retrySeed = seed + offset;
+    const deal = generateRealmPuzzle(retrySeed);
+    if (deal) {
+      console.warn(`[Realm] Recovered generation with retry seed ${retrySeed}`);
+      return createRealmStateFromDeal(deal, retrySeed);
     }
   }
 
-  const solution: [number, number][] = [[0, 1], [1, 4], [2, 0], [3, 3], [4, 5], [5, 2]];
-
-  const grid: RealmCell[][] = Array.from({ length: n }, (_, r) =>
-    Array.from({ length: n }, (_, c) => ({
-      row: r, col: c, region: regionMap[r][c], state: 'empty' as CellState,
-    }))
-  );
-
-  return {
-    grid, size: n, regions, regionColors: REALM_COLORS.slice(0, n), solution,
-    moves: 0, startTime: Date.now(), hintsUsed: 0, undosUsed: 0, isWon: false,
-    errors: 0, maxErrors: 3, dealId: `realm-${seed}`, difficulty: 'Easy',
-    difficultyScore: 20, seed, minMoves: n, autoMarkMap: {}, gameId: generateGameId(),
-  };
+  throw new Error('Realm generation failed after exhausting recovery attempts');
 }
 
 function ddsToRealmDifficulty(dds: number): 'Easy' | 'Medium' | 'Hard' | 'Expert' {

@@ -164,55 +164,32 @@ function generateRegions(n: number, rand: () => number): RegionGenResult | null 
     }
   }
 
-  // Step 3: Validate shape constraints
+  // Step 3: Minimal validation — contiguous regions of reasonable size only
   for (let ri = 0; ri < n; ri++) {
-    if (regions[ri].length < 2 || regions[ri].length > n + 4) return null;
+    if (regions[ri].length < 3 || regions[ri].length > n * 2) return null;
 
-    // 2D presence: at least one cell has >= 2 orthogonal neighbours in same region
-    const has2D = regions[ri].some((idx) => {
+    // Contiguity check via BFS
+    const cellSet = new Set(regions[ri].map(idx => idx));
+    const visited = new Set<number>();
+    const queue = [regions[ri][0]];
+    visited.add(regions[ri][0]);
+    while (queue.length > 0) {
+      const idx = queue.shift()!;
       const cr = Math.floor(idx / n);
       const cc = idx % n;
-      const sameRegionNeighbours = DIRS.filter(([dr, dc]) => {
-        const nr = cr + dr;
-        const nc = cc + dc;
-        return nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri;
-      }).length;
-      return sameRegionNeighbours >= 2;
-    });
-    if (!has2D) return null;
-
-    // No isolated cells
-    for (const idx of regions[ri]) {
-      const cr = Math.floor(idx / n);
-      const cc = idx % n;
-      let hasNeighbour = false;
       for (const [dr, dc] of DIRS) {
         const nr = cr + dr;
         const nc = cc + dc;
-        if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri) {
-          hasNeighbour = true;
-          break;
-        }
-      }
-      if (!hasNeighbour) return null;
-    }
-
-    // Peninsula check only for regions > 4 cells
-    if (regions[ri].length > 4) {
-      for (const idx of regions[ri]) {
-        const cr = Math.floor(idx / n);
-        const cc = idx % n;
-        const neighbourCount = DIRS.filter(([dr, dc]) => {
-          const nr = cr + dr;
-          const nc = cc + dc;
-          return nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === ri;
-        }).length;
-        if (neighbourCount === 1) {
-          // Check if this is a seed cell (first cell in region) — allow it
-          if (idx !== regions[ri][0]) return null;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n) {
+          const nIdx = nr * n + nc;
+          if (cellSet.has(nIdx) && !visited.has(nIdx)) {
+            visited.add(nIdx);
+            queue.push(nIdx);
+          }
         }
       }
     }
+    if (visited.size !== regions[ri].length) return null;
   }
 
   console.log(`[Realm] Generated regions for ${n}x${n}: sizes=[${regions.map(r => r.length).join(',')}]`);
@@ -539,7 +516,7 @@ export function generateRealmPuzzle(seed: number): RealmDeal | null {
   const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0 };
 
   for (let n = baseSize; n <= 10; n++) {
-    for (let attempt = 0; attempt < 200; attempt++) {
+    for (let attempt = 0; attempt < 2000; attempt++) {
       // === Stage 1: Region generation (cheap shape constraints only) ===
       const regResult = generateRegions(n, rand);
       if (!regResult) { discardCounts.stage1++; continue; }

@@ -1049,6 +1049,51 @@ Deno.serve(async (req) => {
         if (inactiveUsers > 0) alerts.push({ severity: "info", code: "INACTIVE_USERS", message: `${inactiveUsers} users inactive for 7+ days`, affectedCount: inactiveUsers, detectedAt: ts });
         if (starterPoolSize < 100) alerts.push({ severity: "info", code: "LOW_HIGH_CONFIDENCE", message: `Only ${starterPoolSize} deals with confidence ≥0.85 (target: 100+)`, affectedCount: starterPoolSize, detectedAt: ts });
 
+        // === SCORING INTEGRITY: check puzzle_iq mismatch ===
+        let puzzleIQMismatchCount = 0;
+        for (const p of profiles) {
+          // Calculate expected puzzle_iq from mode ratings
+          const userRatings = modeRatingsByUser[p.id] || [];
+          const activeModeIds = ['klondike', 'freecell', 'realm']; // known active modes
+          let iqSum = 0;
+          for (const m of activeModeIds) {
+            const mr = userRatings.find((r: any) => r.game_mode === m);
+            iqSum += mr ? mr.iq : 1000;
+          }
+          const expectedPIQ = Math.floor(iqSum / activeModeIds.length);
+          if (Math.abs(p.rating - expectedPIQ) > 1) puzzleIQMismatchCount++;
+        }
+        if (puzzleIQMismatchCount > 0) {
+          alerts.push({ severity: "warning", code: "PUZZLE_IQ_MISMATCH", message: `${puzzleIQMismatchCount} users have profiles.rating != calculate_puzzle_iq()`, affectedCount: puzzleIQMismatchCount, detectedAt: ts });
+        }
+
+        // === AVG MODE IQ DELTA per game ===
+        const modeIQDeltaByMode: Record<string, { sum: number; count: number }> = {};
+        for (const mr of allModeRatings) {
+          if (!modeIQDeltaByMode[mr.game_mode]) modeIQDeltaByMode[mr.game_mode] = { sum: 0, count: 0 };
+          if (mr.games_played > 0) {
+            modeIQDeltaByMode[mr.game_mode].sum += mr.iq - 1000;
+            modeIQDeltaByMode[mr.game_mode].count += mr.games_played;
+          }
+        }
+        for (const mode of gameModes) {
+          if (gamesByMode[mode] && modeIQDeltaByMode[mode]) {
+            gamesByMode[mode].avgModeIQDelta = modeIQDeltaByMode[mode].count > 0
+              ? +(modeIQDeltaByMode[mode].sum / modeIQDeltaByMode[mode].count).toFixed(2) : 0;
+          }
+        }
+
+        // === PERFORMANCE EXPECTATIONS DIAGNOSTIC ===
+        const performanceExpectations = allPerfExp.map((pe: any) => ({
+          game_mode: pe.game_mode,
+          dds_bucket: pe.dds_bucket,
+          iq_bucket: pe.iq_bucket,
+          sample_count: pe.sample_count,
+          avg_time_seconds: +pe.avg_time_seconds.toFixed(1),
+          avg_moves: +pe.avg_moves.toFixed(1),
+          dataSource: pe.sample_count >= 100 ? 'empirical' : pe.sample_count >= 30 ? 'blended' : 'hardcoded',
+        }));
+
         const snapshot = {
           generatedAt: now.toISOString(),
           alerts,

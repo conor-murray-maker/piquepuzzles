@@ -241,7 +241,9 @@ export function StarterPoolGenerator() {
           });
 
           bankedCount++;
-          if (isStarter) starterCount++;
+          // Count deals that matched a target band
+          const matchedTarget = targets.some(t => dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] <= t.target);
+          if (matchedTarget) starterCount++;
         } catch {
           // Skip failed attempt
         }

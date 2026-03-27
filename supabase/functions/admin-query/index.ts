@@ -1221,6 +1221,131 @@ Deno.serve(async (req) => {
         return json(allDeals);
       }
 
+      case "recalculate_mode_iqs": {
+        // Delete all player_mode_ratings
+        await adminClient.from("player_mode_ratings").delete().neq("user_id", "00000000-0000-0000-0000-000000000000");
+
+        // Get active game modes
+        const { data: gameModeRows } = await adminClient.from("game_modes").select("id").eq("is_active", true);
+        const activeModes = (gameModeRows || []).map((m: any) => m.id);
+
+        // Get all profiles
+        const { data: allProfs } = await adminClient.from("profiles").select("id");
+        const profileIds = (allProfs || []).map((p: any) => p.id);
+
+        // Re-insert defaults
+        const defaultRows = profileIds.flatMap((uid: string) =>
+          activeModes.map((mode: string) => ({ user_id: uid, game_mode: mode, iq: 1000, games_played: 0, updated_at: new Date().toISOString() }))
+        );
+        if (defaultRows.length > 0) {
+          // Batch insert in chunks of 500
+          for (let i = 0; i < defaultRows.length; i += 500) {
+            await adminClient.from("player_mode_ratings").insert(defaultRows.slice(i, i + 500));
+          }
+        }
+
+        // Clear and re-seed performance_expectations
+        await adminClient.from("performance_expectations").delete().neq("game_mode", "___none___");
+        // Re-seed with hardcoded values (same as migration)
+        const peSeeds = [
+          // Klondike
+          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
+            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
+              game_mode: 'klondike', dds_bucket: dds, iq_bucket: iq,
+              avg_time_seconds: [120,100,80,70, 240,200,170,140, 360,300,250,210, 480,400,340,280, 540,450,380,320][di*4+ii],
+              avg_moves: [95,85,75,65, 120,105,95,85, 150,135,120,110, 180,160,145,130, 200,180,160,145][di*4+ii],
+              sample_count: 0,
+            }))
+          ),
+          // FreeCell
+          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
+            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
+              game_mode: 'freecell', dds_bucket: dds, iq_bucket: iq,
+              avg_time_seconds: [150,120,100,85, 210,180,150,120, 300,250,210,175, 390,330,280,230, 450,380,320,270][di*4+ii],
+              avg_moves: [75,65,55,50, 100,85,75,65, 130,115,100,90, 160,140,125,110, 180,160,140,125][di*4+ii],
+              sample_count: 0,
+            }))
+          ),
+          // Realm
+          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
+            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
+              game_mode: 'realm', dds_bucket: dds, iq_bucket: iq,
+              avg_time_seconds: [20,15,12,10, 45,35,28,22, 75,60,48,38, 120,95,78,62, 180,145,115,90][di*4+ii],
+              avg_moves: [8,7,6,5, 18,15,13,11, 28,24,20,17, 40,34,28,24, 55,46,38,32][di*4+ii],
+              sample_count: 0,
+            }))
+          ),
+        ];
+        for (let i = 0; i < peSeeds.length; i += 500) {
+          await adminClient.from("performance_expectations").insert(peSeeds.slice(i, i + 500));
+        }
+
+        // Replay game_history chronologically
+        let allHistory: any[] = [];
+        let histPage = 0;
+        while (true) {
+          const { data: batch } = await adminClient.from("game_history")
+            .select("user_id, game_mode, won, moves, time_seconds, hints_used, difficulty_score, deal_uuid")
+            .order("played_at", { ascending: true })
+            .range(histPage * 1000, (histPage + 1) * 1000 - 1);
+          if (!batch || batch.length === 0) break;
+          allHistory = allHistory.concat(batch);
+          if (batch.length < 1000) break;
+          histPage++;
+        }
+
+        // Build in-memory state
+        const modeState: Record<string, { iq: number; gp: number }> = {};
+        const getKey = (uid: string, mode: string) => `${uid}|${mode}`;
+
+        for (const uid of profileIds) {
+          for (const mode of activeModes) {
+            modeState[getKey(uid, mode)] = { iq: 1000, gp: 0 };
+          }
+        }
+
+        // Helper functions inline
+        const getDdsBucket = (d: number) => d <= 25 ? '0-25' : d <= 50 ? '26-50' : d <= 75 ? '51-75' : d <= 100 ? '76-100' : '101+';
+        const getIqBucket = (iq: number) => iq < 1100 ? '800-1100' : iq < 1300 ? '1100-1300' : iq < 1500 ? '1300-1500' : '1500+';
+
+        for (const g of allHistory) {
+          const key = getKey(g.user_id, g.game_mode);
+          if (!modeState[key]) modeState[key] = { iq: 1000, gp: 0 };
+          const st = modeState[key];
+          const dds = g.difficulty_score || 50;
+          const dealRating = 800 + (dds / 100) * 1200;
+          const K = st.gp < 20 ? 32 : st.gp < 50 ? 24 : 16;
+          const expected = 1 / (1 + Math.pow(10, (dealRating - st.iq) / 400));
+          const outcome = g.won ? 1 : 0;
+          let delta = Math.round(K * (outcome - expected));
+          if (g.won) delta = Math.max(1, delta);
+          else delta = Math.max(-20, delta);
+          st.iq = Math.max(0, st.iq + delta);
+          st.gp += 1;
+        }
+
+        // Write back to player_mode_ratings
+        const upsertRows = Object.entries(modeState).map(([key, st]) => {
+          const [uid, mode] = key.split('|');
+          return { user_id: uid, game_mode: mode, iq: st.iq, games_played: st.gp, updated_at: new Date().toISOString() };
+        });
+        for (let i = 0; i < upsertRows.length; i += 500) {
+          await adminClient.from("player_mode_ratings").upsert(upsertRows.slice(i, i + 500), { onConflict: "user_id,game_mode" });
+        }
+
+        // Update profiles.rating via calculate_puzzle_iq
+        const results: any[] = [];
+        for (const uid of profileIds) {
+          const { data: puzzleIQ } = await adminClient.rpc("calculate_puzzle_iq", { p_user_id: uid });
+          await adminClient.from("profiles").update({ rating: puzzleIQ ?? 1000 }).eq("id", uid);
+          const userModes = activeModes.map((m: string) => ({ mode: m, iq: modeState[getKey(uid, m)]?.iq ?? 1000 }));
+          const { data: prof } = await adminClient.from("profiles").select("display_name").eq("id", uid).single();
+          results.push({ userId: uid, displayName: prof?.display_name, puzzleIQ: puzzleIQ ?? 1000, modeIQs: userModes });
+        }
+
+        return json({ recalculated: results.length, results });
+      }
+
       default:
         return json({ error: "Unknown action" }, 400);
     }

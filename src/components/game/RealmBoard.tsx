@@ -234,13 +234,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
       }, i * 50);
     });
 
-    // Region border glow sequence
-    const regionCount = winState.regions.length;
-    for (let i = 0; i < regionCount; i++) {
-      setTimeout(() => {
-        setRegionGlow(prev => new Set(prev).add(i));
-      }, 200 + i * (400 / regionCount));
-    }
+    // Particle burst from each crown
 
     // Particle burst from each crown
     if (gridRef.current) {
@@ -526,7 +520,6 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
           const isError = errorCells.has(`${cell.row},${cell.col}`);
           const isHint = hintCell?.row === cell.row && hintCell?.col === cell.col;
           const color = state.regionColors[cell.region];
-          const isGlowing = regionGlow.has(cell.region);
 
           const borderTop = cell.row === 0 || state.grid[cell.row - 1]?.[cell.col]?.region !== cell.region;
           const borderLeft = cell.col === 0 || state.grid[cell.row][cell.col - 1]?.region !== cell.region;

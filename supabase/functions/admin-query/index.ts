@@ -1108,8 +1108,10 @@ Deno.serve(async (req) => {
           scoringIntegrity: {
             ratingValidityScore, gamesWithZeroDDS, gamesWithDefaultModifier,
             gamesWithZeroDeltaOnWin, ratingMismatchCount, duplicateGameCount,
+            puzzleIQMismatchCount,
             brokenGameIds: brokenGameIds.slice(0, 50),
           },
+          performanceExpectations,
           dealGenerationHealth: {
             dealsWithZeroMinSolutionLength: dealsWithZeroMinMoves,
             avgSimulationCount: +(totalSimCount / n).toFixed(1),

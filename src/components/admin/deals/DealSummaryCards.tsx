@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface HealthStats {
   total: number;
-  byTier: Record<string, number>;
+  byConfBand: Record<string, number>;
   byBand: Record<string, number>;
   avgConfidence: string;
   solverOnly: number;
@@ -34,9 +34,9 @@ export function DealSummaryCards({ health, summary }: Props) {
           <CardContent><div className="text-2xl font-bold">{health.total.toLocaleString()}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">By Tier</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Pool Depth (Confidence)</CardTitle></CardHeader>
           <CardContent>
-            {Object.entries(health.byTier).map(([k, v]) => (
+            {Object.entries(health.byConfBand).map(([k, v]) => (
               <div key={k} className="flex justify-between text-sm"><span>{k}</span><span className="font-mono">{v.toLocaleString()}</span></div>
             ))}
           </CardContent>

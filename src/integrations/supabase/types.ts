@@ -426,6 +426,9 @@ export type Database = {
           daily_wins_today: number
           display_name: string | null
           games_played: number
+          games_played_freecell: number
+          games_played_klondike: number
+          games_played_realm: number
           games_won: number
           id: string
           last_streak_date: string | null
@@ -449,6 +452,9 @@ export type Database = {
           daily_wins_today?: number
           display_name?: string | null
           games_played?: number
+          games_played_freecell?: number
+          games_played_klondike?: number
+          games_played_realm?: number
           games_won?: number
           id: string
           last_streak_date?: string | null
@@ -472,6 +478,9 @@ export type Database = {
           daily_wins_today?: number
           display_name?: string | null
           games_played?: number
+          games_played_freecell?: number
+          games_played_klondike?: number
+          games_played_realm?: number
           games_won?: number
           id?: string
           last_streak_date?: string | null

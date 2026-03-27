@@ -562,7 +562,19 @@ Deno.serve(async (req) => {
           cronRes, userPlayedDealsRes,
         ] = await Promise.all([
           adminClient.from("profiles").select("*"),
-          adminClient.from("deals").select("*"),
+          (async () => {
+            let all: any[] = [];
+            let pg = 0;
+            const sz = 1000;
+            while (true) {
+              const { data: batch } = await adminClient.from("deals").select("*").range(pg * sz, (pg + 1) * sz - 1);
+              if (!batch || batch.length === 0) break;
+              all = all.concat(batch);
+              if (batch.length < sz) break;
+              pg++;
+            }
+            return { data: all, error: null };
+          })(),
           adminClient.from("game_history").select("*").order("played_at", { ascending: false }).limit(200),
           adminClient.from("game_history").select("id, user_id, won, difficulty, performance_modifier, final_delta, base_delta, time_seconds, moves, game_mode, deal_uuid, played_at, rating_before, rating_after, difficulty_score").limit(1000),
           adminClient.from("streak_history").select("*").gte("date", weekAgo),

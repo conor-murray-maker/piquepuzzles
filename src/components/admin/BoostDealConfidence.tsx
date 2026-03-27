@@ -129,7 +129,6 @@ export function BoostDealConfidence() {
     const engines: Record<string, { engine: PuzzleEngine; simCount: number }> = {
       klondike: { engine: KlondikeEngine, simCount: 500 },
       freecell: { engine: FreeCellEngine, simCount: 100 },
-      realm: { engine: RealmEngine, simCount: 1 },
     };
 
     let boostedCount = 0;
@@ -143,74 +142,112 @@ export function BoostDealConfidence() {
       }
 
       const deal = sorted[i];
-      const engineInfo = engines[deal.game_mode];
-      if (!engineInfo) continue;
 
       try {
-        const generatedDeal = engineInfo.engine.generateDeal(deal.seed);
-        const verifyResult = engineInfo.engine.verifySolvable(generatedDeal, engineInfo.simCount);
+        // Realm deals: binary uniqueness verification, no MCTS
+        if (deal.game_mode === 'realm') {
+          const generatedDeal = RealmEngine.generateDeal(deal.seed);
+          const verifyResult = RealmEngine.verifySolvable(generatedDeal, 1);
 
-        const oldSims = deal.simulation_count || 0;
-        const oldSimWins = deal.simulation_wins || 0;
-        const newSims = engineInfo.simCount;
-        const newWins = verifyResult.wins;
-        
-        // Accumulate: add new simulation results to existing totals
-        const totalSims = oldSims + newSims;
-        const totalWins = oldSimWins + newWins;
+          const isUnique = verifyResult.solvable && verifyResult.confidence === 1.0;
+          const newConfidence = isUnique ? 1.0 : 0;
+          const improvement = newConfidence - deal.confidence;
 
-        const finalMinMoves = verifyResult.solvable && verifyResult.minSolutionLength > 0
-          ? Math.min(deal.min_moves > 0 ? deal.min_moves : Infinity, verifyResult.minSolutionLength)
-          : deal.min_moves;
+          if (!isUnique) {
+            newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Realm", pathDiversityScore: 0, threshold: 0 });
+          }
 
-        // Recalculate DDS with path diversity modifier
-        let finalDds = engineInfo.engine.getComplexityScore(finalMinMoves);
-        const combinedUniquePaths = Math.max(deal.unique_winning_paths || 0, verifyResult.uniqueWinningPaths);
-        const finalPathDiversity = verifyResult.pathDiversityScore;
-        finalDds = applyPathDiversityModifier(finalDds, finalPathDiversity);
-        const finalBlended = finalDds;
+          await action.mutateAsync({
+            action: "update_deal_confidence",
+            params: {
+              deal_id: deal.id,
+              confidence: newConfidence,
+              simulation_count: 1,
+              simulation_wins: isUnique ? 1 : 0,
+              min_moves: verifyResult.minSolutionLength || deal.min_moves,
+              dds_initial: Math.round(verifyResult.complexityScore * 10) / 10,
+              dds_blended: Math.round(verifyResult.complexityScore * 10) / 10,
+              unique_winning_paths: isUnique ? 1 : 0,
+              path_diversity_score: 0,
+            },
+          });
 
-        // Calculate Wilson confidence
-        const confResult = calculateDealConfidence({
-          wins: totalWins,
-          totalSimulations: totalSims,
-          dds: finalDds,
-        });
+          boostedCount++;
+          totalImp += improvement;
+          setBoosted(boostedCount);
+          setRemaining(sorted.length - i - 1);
+          setTotalImprovement(totalImp);
 
-        const improvement = confResult.confidence - deal.confidence;
+          if (isUnique) {
+            addStatus(`[Realm] seed ${deal.seed}: unique solution verified → conf 1.0`);
+          } else {
+            addStatus(`[Realm] seed ${deal.seed}: multiple/no solutions → flagged`);
+          }
+        } else {
+          // Klondike / FreeCell: MCTS boost
+          const engineInfo = engines[deal.game_mode];
+          if (!engineInfo) continue;
 
-        // Check path diversity thresholds and flag warnings
-        const diffTier = getDifficultyTier(finalDds);
-        if (diffTier === "Easy" && (finalPathDiversity < 0.3 || confResult.confidence < 0.5)) {
-          newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Easy", pathDiversityScore: finalPathDiversity, threshold: 0.3 });
-        } else if (diffTier === "Medium" && (finalPathDiversity < 0.15 || confResult.confidence < 0.25)) {
-          newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Medium", pathDiversityScore: finalPathDiversity, threshold: 0.15 });
-        }
+          const generatedDeal = engineInfo.engine.generateDeal(deal.seed);
+          const verifyResult = engineInfo.engine.verifySolvable(generatedDeal, engineInfo.simCount);
 
-        await action.mutateAsync({
-          action: "update_deal_confidence",
-          params: {
-            deal_id: deal.id,
-            confidence: confResult.confidence,
-            simulation_count: totalSims,
-            simulation_wins: totalWins,
-            min_moves: finalMinMoves,
-            dds_initial: Math.round(finalDds * 10) / 10,
-            dds_blended: Math.round(finalBlended * 10) / 10,
-            unique_winning_paths: combinedUniquePaths,
-            path_diversity_score: Math.round(finalPathDiversity * 1000) / 1000,
-          },
-        });
+          const oldSims = deal.simulation_count || 0;
+          const oldSimWins = deal.simulation_wins || 0;
+          const newSims = engineInfo.simCount;
+          const newWins = verifyResult.wins;
+          
+          const totalSims = oldSims + newSims;
+          const totalWins = oldSimWins + newWins;
 
-        boostedCount++;
-        totalImp += improvement;
-        setBoosted(boostedCount);
-        setRemaining(sorted.length - i - 1);
-        setTotalImprovement(totalImp);
+          const finalMinMoves = verifyResult.solvable && verifyResult.minSolutionLength > 0
+            ? Math.min(deal.min_moves > 0 ? deal.min_moves : Infinity, verifyResult.minSolutionLength)
+            : deal.min_moves;
 
-        if (boostedCount % 5 === 0 || i === sorted.length - 1) {
-          const avgImp = boostedCount > 0 ? (totalImp / boostedCount * 100).toFixed(1) : "0";
-          addStatus(`[${boostedCount}/${sorted.length}] ${deal.game_mode} seed ${deal.seed}: conf ${(deal.confidence * 100).toFixed(0)}% → ${(confResult.confidence * 100).toFixed(0)}% [${(confResult.wilsonLower * 100).toFixed(0)}–${(confResult.wilsonUpper * 100).toFixed(0)}% WR] | PD: ${(finalPathDiversity * 100).toFixed(0)}%`);
+          let finalDds = engineInfo.engine.getComplexityScore(finalMinMoves);
+          const combinedUniquePaths = Math.max(deal.unique_winning_paths || 0, verifyResult.uniqueWinningPaths);
+          const finalPathDiversity = verifyResult.pathDiversityScore;
+          finalDds = applyPathDiversityModifier(finalDds, finalPathDiversity);
+          const finalBlended = finalDds;
+
+          const confResult = calculateDealConfidence({
+            wins: totalWins,
+            totalSimulations: totalSims,
+            dds: finalDds,
+          });
+
+          const improvement = confResult.confidence - deal.confidence;
+
+          const diffTier = getDifficultyTier(finalDds);
+          if (diffTier === "Easy" && (finalPathDiversity < 0.3 || confResult.confidence < 0.5)) {
+            newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Easy", pathDiversityScore: finalPathDiversity, threshold: 0.3 });
+          } else if (diffTier === "Medium" && (finalPathDiversity < 0.15 || confResult.confidence < 0.25)) {
+            newWarnings.push({ dealId: deal.id, seed: deal.seed, tier: "Medium", pathDiversityScore: finalPathDiversity, threshold: 0.15 });
+          }
+
+          await action.mutateAsync({
+            action: "update_deal_confidence",
+            params: {
+              deal_id: deal.id,
+              confidence: confResult.confidence,
+              simulation_count: totalSims,
+              simulation_wins: totalWins,
+              min_moves: finalMinMoves,
+              dds_initial: Math.round(finalDds * 10) / 10,
+              dds_blended: Math.round(finalBlended * 10) / 10,
+              unique_winning_paths: combinedUniquePaths,
+              path_diversity_score: Math.round(finalPathDiversity * 1000) / 1000,
+            },
+          });
+
+          boostedCount++;
+          totalImp += improvement;
+          setBoosted(boostedCount);
+          setRemaining(sorted.length - i - 1);
+          setTotalImprovement(totalImp);
+
+          if (boostedCount % 5 === 0 || i === sorted.length - 1) {
+            addStatus(`[${boostedCount}/${sorted.length}] ${deal.game_mode} seed ${deal.seed}: conf ${(deal.confidence * 100).toFixed(0)}% → ${(confResult.confidence * 100).toFixed(0)}% [${(confResult.wilsonLower * 100).toFixed(0)}–${(confResult.wilsonUpper * 100).toFixed(0)}% WR] | PD: ${(finalPathDiversity * 100).toFixed(0)}%`);
+          }
         }
       } catch (e: any) {
         addStatus(`✗ Failed deal ${deal.seed}: ${e.message}`);
@@ -242,9 +279,9 @@ export function BoostDealConfidence() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Runs additional MCTS simulations on deals with Wilson confidence below 0.9.
+          Runs additional MCTS simulations on Klondike/FreeCell deals with Wilson confidence below 0.9.
           Klondike: 500 sims/run, FreeCell: 100 sims/run. Accumulates cumulatively.
-          Confidence = 70% Wilson interval width + 30% DDS tier stability. Path diversity applies as a DDS modifier only.
+          Realm deals are verified via uniqueness solver (binary confidence: 1.0 or 0).
         </p>
 
         <div className="flex gap-2">

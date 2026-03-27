@@ -50,11 +50,11 @@ export function usePlayerStats() {
       if (!user) return [];
       // Fetch game_modes and player_mode_ratings
       const [modesRes, ratingsRes] = await Promise.all([
-        supabase.from('game_modes' as any).select('id, display_name, is_active').eq('is_active', true),
-        supabase.from('player_mode_ratings' as any).select('game_mode, iq, games_played').eq('user_id', user.id),
+        supabase.from('game_modes' as any).select('id, display_name, is_active').eq('is_active', true) as any,
+        supabase.from('player_mode_ratings' as any).select('game_mode, iq, games_played').eq('user_id', user.id) as any,
       ]);
-      const modes = (modesRes.data || []) as Array<{ id: string; display_name: string; is_active: boolean }>;
-      const ratings = (ratingsRes.data || []) as Array<{ game_mode: string; iq: number; games_played: number }>;
+      const modes = ((modesRes as any).data || []) as Array<{ id: string; display_name: string; is_active: boolean }>;
+      const ratings = ((ratingsRes as any).data || []) as Array<{ game_mode: string; iq: number; games_played: number }>;
       const ratingMap = new Map(ratings.map(r => [r.game_mode, r]));
 
       return modes.map(m => ({

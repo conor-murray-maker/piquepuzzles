@@ -17,7 +17,14 @@ export function useDealQueue() {
     if (!user) return null;
     const rating = profile?.rating ?? 1000;
     const gamesPlayed = profile?.games_played ?? 0;
-    const gamesPlayedThisMode = await getGamesPlayed(gameMode);
+
+    // Use per-mode column from profile if available, fallback to game_history count
+    const perModeKey = `games_played_${gameMode}` as keyof typeof profile;
+    const profilePerMode = profile?.[perModeKey] as number | undefined;
+    const gamesPlayedThisMode = profilePerMode != null && profilePerMode > 0
+      ? profilePerMode
+      : await getGamesPlayed(gameMode);
+
     return DealPoolService.getNextDeal(user.id, gameMode, drawMode, gamesPlayed, rating, gamesPlayedThisMode);
   }, [user, profile, getGamesPlayed]);
 

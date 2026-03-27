@@ -508,10 +508,13 @@ Deno.serve(async (req) => {
     );
 
     // 7. Update profile rating, timezone, game counts, and streak state in one write
+    const perModeKey = `games_played_${gameMode}` as string;
+    const currentPerMode = (profile[perModeKey] as number) ?? 0;
     const profileUpdate: Record<string, unknown> = {
       rating: newRating,
       games_played: gamesPlayed + 1,
       games_won: (profile.games_won as number) + (isWin ? 1 : 0),
+      [perModeKey]: currentPerMode + 1,
       updated_at: new Date().toISOString(),
       ...streakResult.profileUpdate,
     };

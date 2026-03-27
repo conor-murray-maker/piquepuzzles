@@ -541,11 +541,11 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
                 width: cellSize,
                 height: cellSize,
                 backgroundColor: `${color}30`,
-                borderTop: borderTop ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
-                borderLeft: borderLeft ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
-                borderBottom: borderBottom ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
-                borderRight: borderRight ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
-                boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : isGlowing ? `0 0 8px ${GOLD_COLOR}80` : 'none',
+                borderTop: borderTop ? `3px solid ${color}` : '1px solid #d1d5db',
+                borderLeft: borderLeft ? `3px solid ${color}` : '1px solid #d1d5db',
+                borderBottom: borderBottom ? `3px solid ${color}` : '1px solid #d1d5db',
+                borderRight: borderRight ? `3px solid ${color}` : '1px solid #d1d5db',
+                boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : 'none',
                 transition: 'border-color 0.3s, box-shadow 0.3s',
               }}
               animate={isError ? { scale: [1, 1.05, 1] } : {}}

@@ -554,7 +554,7 @@ Deno.serve(async (req) => {
         const [
           profilesRes, allDealsRes, recentGamesRes, allGamesRes,
           streakHistRes, dailyChalRes, dailyCompRes, tableCountsRes,
-          cronRes, userPlayedDealsRes,
+          cronRes, userPlayedDealsRes, modeRatingsRes, perfExpRes,
         ] = await Promise.all([
           adminClient.from("profiles").select("*"),
           (async () => {
@@ -581,8 +581,10 @@ Deno.serve(async (req) => {
               return [t, count || 0] as [string, number];
             })
           ),
-          (async () => { try { const { data, error } = await adminClient.rpc("get_cron_jobs"); if (error) { console.warn("get_cron_jobs RPC error:", error.message); return null; } return data || []; } catch (e) { console.warn("get_cron_jobs exception:", e); return null; } })(),
+          (async () => { try { const { data, error } = await adminClient.rpc("get_cron_jobs"); if (error) { return null; } return data || []; } catch { return null; } })(),
           adminClient.from("user_played_deals").select("deal_id, user_id"),
+          adminClient.from("player_mode_ratings").select("*"),
+          adminClient.from("performance_expectations").select("*"),
         ]);
 
         const profiles = profilesRes.data || [];

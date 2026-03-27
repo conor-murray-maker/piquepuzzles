@@ -331,6 +331,12 @@ export function AdminSystem() {
               </Button>
               <p className="text-xs text-muted-foreground">Run once only — backfills historical game counts from game_history.</p>
             </div>
+            <div className="flex flex-col gap-1">
+              <Button variant="outline" onClick={() => triggerAction("recalculate_mode_iqs", "Recalculate Mode IQs")} disabled={action.isPending}>
+                <RefreshCw className="h-4 w-4 mr-2" /> Recalculate All Mode IQs
+              </Button>
+              <p className="text-xs text-muted-foreground">Replays all game history to calculate per-mode IQs from scratch. Run once after deploying.</p>
+            </div>
           </div>
         </CardContent>
       </Card>

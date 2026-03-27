@@ -129,7 +129,6 @@ export function BoostDealConfidence() {
     const engines: Record<string, { engine: PuzzleEngine; simCount: number }> = {
       klondike: { engine: KlondikeEngine, simCount: 500 },
       freecell: { engine: FreeCellEngine, simCount: 100 },
-      realm: { engine: RealmEngine, simCount: 1 },
     };
 
     let boostedCount = 0;
@@ -280,9 +279,9 @@ export function BoostDealConfidence() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Runs additional MCTS simulations on deals with Wilson confidence below 0.9.
+          Runs additional MCTS simulations on Klondike/FreeCell deals with Wilson confidence below 0.9.
           Klondike: 500 sims/run, FreeCell: 100 sims/run. Accumulates cumulatively.
-          Confidence = 70% Wilson interval width + 30% DDS tier stability. Path diversity applies as a DDS modifier only.
+          Realm deals are verified via uniqueness solver (binary confidence: 1.0 or 0).
         </p>
 
         <div className="flex gap-2">

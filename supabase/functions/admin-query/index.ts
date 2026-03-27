@@ -426,15 +426,10 @@ Deno.serve(async (req) => {
 
       case "system_tables": {
         const tables = [
-          "deals",
-          "game_history",
-          "profiles",
-          "user_played_deals",
-          "streak_history",
-          "daily_challenges",
-          "daily_challenge_completions",
-          "challenges",
-          "challenge_completions",
+          "deals", "game_history", "profiles", "user_played_deals",
+          "streak_history", "daily_challenges", "daily_challenge_completions",
+          "challenges", "challenge_completions", "game_modes",
+          "player_mode_ratings", "performance_expectations",
         ];
         const counts: Record<string, number> = {};
         for (const t of tables) {

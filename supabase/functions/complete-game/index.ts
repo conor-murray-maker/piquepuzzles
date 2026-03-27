@@ -30,6 +30,21 @@ function getTierName(rating: number): string {
   return 'Elite';
 }
 
+function getDdsBucket(dds: number): string {
+  if (dds <= 25) return '0-25';
+  if (dds <= 50) return '26-50';
+  if (dds <= 75) return '51-75';
+  if (dds <= 100) return '76-100';
+  return '101+';
+}
+
+function getIqBucket(iq: number): string {
+  if (iq < 1100) return '800-1100';
+  if (iq < 1300) return '1100-1300';
+  if (iq < 1500) return '1300-1500';
+  return '1500+';
+}
+
 const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
 
 function getUserLocalDate(timezoneOffset: number, baseDate = new Date()): string {
@@ -67,63 +82,25 @@ async function updateStreak(
   const initialConditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
 
   console.log('[complete-game] streak start:', {
-    userId,
-    today,
-    lastStreakDate,
-    lastWinDate,
-    dailyWinsToday,
-    dailyChallengeCompletedToday,
-    conditionMet: initialConditionMet,
+    userId, today, lastStreakDate, lastWinDate, dailyWinsToday,
+    dailyChallengeCompletedToday, conditionMet: initialConditionMet,
   });
 
-  // Reset daily counters if last_win_date is not today
   if (!lastWinDate || lastWinDate < today) {
     dailyWinsToday = 0;
     dailyChallengeCompletedToday = false;
-    console.log('[complete-game] streak counters reset:', {
-      userId,
-      today,
-      lastWinDate,
-    });
   }
 
   const isWin = result === 'win';
-  if (isDailyChallenge && isWin) {
-    dailyChallengeCompletedToday = true;
-  }
-  if (isWin) {
-    dailyWinsToday += 1;
-  }
+  if (isDailyChallenge && isWin) dailyChallengeCompletedToday = true;
+  if (isWin) dailyWinsToday += 1;
 
   const conditionMet = dailyChallengeCompletedToday || dailyWinsToday >= 2;
   const conditionType = dailyChallengeCompletedToday ? 'daily_challenge' : (dailyWinsToday >= 2 ? 'two_wins' : 'none');
 
-  console.log('[complete-game] streak evaluation:', {
-    userId,
-    result,
-    isDailyChallenge,
-    today,
-    dailyWinsToday,
-    dailyChallengeCompletedToday,
-    conditionMet,
-    conditionType,
-  });
-
-  // Check if streak was already earned today
   const { data: existingStreakToday } = await supabaseAdmin
-    .from('streak_history')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('date', today)
-    .limit(1);
+    .from('streak_history').select('id').eq('user_id', userId).eq('date', today).limit(1);
   const streakAlreadyEarnedToday = (existingStreakToday?.length ?? 0) > 0;
-
-  console.log('[complete-game] streak debug:', {
-    conditionMet, lastStreakDate, lastWinDate, today, dailyWinsToday,
-    dailyChallengeCompletedToday, isWin: result === 'win',
-    streakAlreadyEarnedToday,
-    willWrite: conditionMet && !streakAlreadyEarnedToday,
-  });
 
   let currentStreak = profile.current_streak as number;
   let bestStreak = profile.best_streak as number;
@@ -138,48 +115,31 @@ async function updateStreak(
 
     if (lastStreakDate === yesterday) {
       currentStreak += 1;
-    } else if (
-      lastStreakDate === dayBeforeYesterday &&
-      freezesRemaining > 0 &&
-      freezeUsedOn !== yesterday
-    ) {
+    } else if (lastStreakDate === dayBeforeYesterday && freezesRemaining > 0 && freezeUsedOn !== yesterday) {
       currentStreak += 1;
       freezesRemaining -= 1;
       freezeUsedOn = yesterday;
       freezeUsed = true;
     } else if (!lastStreakDate) {
-      // First ever streak day
       currentStreak = 1;
     } else {
       currentStreak = 1;
     }
 
     bestStreak = Math.max(currentStreak, bestStreak);
+    if (STREAK_MILESTONES.includes(currentStreak)) milestoneReached = currentStreak;
 
-    if (STREAK_MILESTONES.includes(currentStreak)) {
-      milestoneReached = currentStreak;
-    }
-
-    // Insert streak history — wrapped in try/catch to prevent silent failures
     try {
       const { error: shError } = await supabaseAdmin.from('streak_history').insert({
-        user_id: userId,
-        date: today,
-        streak_day_number: currentStreak,
-        condition_met: conditionType,
-        streak_length_at_time: currentStreak,
+        user_id: userId, date: today, streak_day_number: currentStreak,
+        condition_met: conditionType, streak_length_at_time: currentStreak,
       });
-      if (shError) {
-        console.error('[complete-game] streak_history insert failed:', shError);
-      } else {
-        console.log('[complete-game] streak_history written: day', currentStreak, 'for user', userId);
-      }
+      if (shError) console.error('[complete-game] streak_history insert failed:', shError);
     } catch (shErr) {
       console.error('[complete-game] streak_history insert exception:', shErr);
     }
   }
 
-  // Update profile with streak data — always write daily counters even if condition not met
   const streakUpdate: Record<string, unknown> = {
     daily_wins_today: dailyWinsToday,
     daily_challenge_completed_today: dailyChallengeCompletedToday,
@@ -188,25 +148,10 @@ async function updateStreak(
     streak_freezes_remaining: freezesRemaining,
   };
 
-  // Only set last_streak_date when condition is actually met and streak earned
-  if (conditionMet && !streakAlreadyEarnedToday) {
-    streakUpdate.last_streak_date = today;
-  }
-
-  if (freezeUsed) {
-    streakUpdate.streak_freeze_used_on = freezeUsedOn;
-  }
-  if (milestoneReached !== null) {
-    streakUpdate.pending_milestone = milestoneReached;
-  }
-  if (isWin) {
-    streakUpdate.last_win_date = today;
-  }
-
-  console.log('[complete-game] streak profile update prepared:', {
-    userId,
-    streakUpdate,
-  });
+  if (conditionMet && !streakAlreadyEarnedToday) streakUpdate.last_streak_date = today;
+  if (freezeUsed) streakUpdate.streak_freeze_used_on = freezeUsedOn;
+  if (milestoneReached !== null) streakUpdate.pending_milestone = milestoneReached;
+  if (isWin) streakUpdate.last_win_date = today;
 
   return { currentStreak, bestStreak, freezeUsed, milestoneReached, profileUpdate: streakUpdate };
 }
@@ -220,46 +165,28 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    const supabaseUser = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const supabaseUser = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     const { data: { user: authUser }, error: authError } = await supabaseUser.auth.getUser(authHeader.replace('Bearer ', ''));
     if (authError || !authUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     const userId = authUser.id;
 
     const body = await req.json();
     const {
-      dealSeed,
-      gameMode,
-      drawMode = 3,
-      result,
-      actualMoves,
-      actualTime,
-      hintsUsed = 0,
-      undosUsed = 0,
-      dealId: clientDealId,
-      dealUuid: clientDealUuid,
-      isDaily: clientIsDaily = false,
-      timezoneOffset = 0,
-      dealDDS: clientDealDDS = 0,
+      dealSeed, gameMode, drawMode = 3, result, actualMoves, actualTime,
+      hintsUsed = 0, undosUsed = 0, dealId: clientDealId, dealUuid: clientDealUuid,
+      isDaily: clientIsDaily = false, timezoneOffset = 0, dealDDS: clientDealDDS = 0,
     } = body;
 
     // Input validation
@@ -284,21 +211,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    // === Step 5: Duplicate detection ===
-    // Check for duplicate game within last 30 seconds
+    // Duplicate detection
     const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
     const { data: existingGame } = await supabaseAdmin
-      .from('game_history')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('deal_id', clientDealId || `deal-${dealSeed}`)
-      .eq('won', result === 'win')
-      .eq('moves', actualMoves)
-      .gte('played_at', thirtySecsAgo)
-      .limit(1);
+      .from('game_history').select('id')
+      .eq('user_id', userId).eq('deal_id', clientDealId || `deal-${dealSeed}`)
+      .eq('won', result === 'win').eq('moves', actualMoves)
+      .gte('played_at', thirtySecsAgo).limit(1);
 
     if (existingGame && existingGame.length > 0) {
-      console.log('[complete-game] duplicate detected, skipping:', existingGame[0].id);
       return new Response(JSON.stringify({ error: 'duplicate_game', message: 'Game already recorded' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -311,10 +232,7 @@ Deno.serve(async (req) => {
       const todayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
         .toISOString().split('T')[0];
       const { data: dc } = await supabaseAdmin
-        .from('daily_challenges')
-        .select('deal_id')
-        .eq('date', todayStr)
-        .single();
+        .from('daily_challenges').select('deal_id').eq('date', todayStr).single();
       isDaily = dc?.deal_id === clientDealUuid;
     }
 
@@ -322,144 +240,172 @@ Deno.serve(async (req) => {
 
     // 1. Fetch user profile
     const { data: profile, error: profileErr } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
+      .from('profiles').select('*').eq('id', userId).single();
     if (profileErr || !profile) {
       return new Response(JSON.stringify({ error: 'Profile not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Update timezone offset in-memory; it will be persisted with the profile update below
     if (Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840) {
       profile.timezone_offset = timezoneOffset;
     }
 
-    // 2. Fetch deal — with robust fallback for DDS
+    // 2. Fetch deal
     let deal: any = null;
     if (clientDealUuid) {
-      const { data } = await supabaseAdmin
-        .from('deals')
-        .select('*')
-        .eq('id', clientDealUuid)
-        .single();
+      const { data } = await supabaseAdmin.from('deals').select('*').eq('id', clientDealUuid).single();
       deal = data;
     }
     if (!deal) {
-      const { data } = await supabaseAdmin
-        .from('deals')
-        .select('*')
-        .eq('seed', dealSeed)
-        .eq('game_mode', gameMode)
-        .eq('draw_mode', drawMode)
-        .single();
+      const { data } = await supabaseAdmin.from('deals').select('*')
+        .eq('seed', dealSeed).eq('game_mode', gameMode).eq('draw_mode', drawMode).single();
       deal = data;
     }
 
-    // === Step 3: Robust DDS — resolution chain with logging ===
+    // 3. DDS resolution — use dds_empirical as ground truth when available
     let dds = 0;
     let ddsSource = 'fallback';
 
-    // 1. Try client-provided dealDDS
-    if (clientDealDDS > 0) {
+    if (deal && (deal.dds_empirical as number | null) != null && (deal.dds_empirical as number) > 0) {
+      dds = deal.dds_empirical as number;
+      ddsSource = 'deal-empirical';
+    } else if (clientDealDDS > 0) {
       dds = clientDealDDS;
       ddsSource = 'client-parameter';
-    }
-    // 2. Try deal record dds_blended
-    if (dds === 0 && deal && (deal.dds_blended as number) > 0) {
+    } else if (deal && (deal.dds_blended as number) > 0) {
       dds = deal.dds_blended as number;
-      ddsSource = 'deal-lookup';
-    }
-    // 3. Try recalculating from min_moves with updated curves
-    const minMoves = deal ? (deal.min_moves as number) : 0;
-    if (dds === 0 && minMoves > 0) {
-      if (gameMode === 'freecell') {
-        if (minMoves < 125) dds = Math.round((minMoves / 125) * 25);
-        else if (minMoves < 175) dds = Math.round(26 + ((minMoves - 125) / 50) * 29);
-        else if (minMoves < 250) dds = Math.round(56 + ((minMoves - 175) / 75) * 24);
-        else dds = Math.round(Math.min(100, 81 + ((minMoves - 250) / 100) * 19));
-      } else {
-        if (minMoves < 100) dds = Math.round((minMoves / 100) * 25);
-        else if (minMoves < 130) dds = Math.round(26 + ((minMoves - 100) / 30) * 29);
-        else if (minMoves < 160) dds = Math.round(56 + ((minMoves - 130) / 30) * 24);
-        else dds = Math.round(Math.min(100, 81 + ((minMoves - 160) / 60) * 19));
+      ddsSource = 'deal-blended';
+    } else {
+      const minMoves = deal ? (deal.min_moves as number) : 0;
+      if (minMoves > 0) {
+        if (gameMode === 'freecell') {
+          if (minMoves < 125) dds = Math.round((minMoves / 125) * 25);
+          else if (minMoves < 175) dds = Math.round(26 + ((minMoves - 125) / 50) * 29);
+          else if (minMoves < 250) dds = Math.round(56 + ((minMoves - 175) / 75) * 24);
+          else dds = Math.round(Math.min(150, 81 + ((minMoves - 250) / 100) * 19));
+        } else {
+          if (minMoves < 100) dds = Math.round((minMoves / 100) * 25);
+          else if (minMoves < 130) dds = Math.round(26 + ((minMoves - 100) / 30) * 29);
+          else if (minMoves < 160) dds = Math.round(56 + ((minMoves - 130) / 30) * 24);
+          else dds = Math.round(Math.min(150, 81 + ((minMoves - 160) / 60) * 19));
+        }
+        ddsSource = 'calculated-from-min-moves';
       }
-      ddsSource = 'calculated-from-min-moves';
-    }
-    // 4. Neutral fallback — never block rating update
-    if (dds === 0) {
-      dds = 50;
-      ddsSource = 'neutral-fallback';
+      if (dds === 0) { dds = 50; ddsSource = 'neutral-fallback'; }
     }
 
-    console.log('[complete-game] DDS resolution:', { dds, ddsSource, clientDealDDS, dealDdsBlended: deal?.dds_blended, minMoves });
+    console.log('[complete-game] DDS resolution:', { dds, ddsSource });
 
-    // 3. Performance modifier — with fallbacks that actually produce non-1.0 values
+    // 4. Fetch player mode rating from player_mode_ratings
+    const { data: modeRatingRow } = await supabaseAdmin
+      .from('player_mode_ratings')
+      .select('iq, games_played')
+      .eq('user_id', userId).eq('game_mode', gameMode).single();
+
+    const modeIQ = modeRatingRow?.iq ?? 1000;
+    const modeGamesPlayed = modeRatingRow?.games_played ?? 0;
+
+    // 5. Performance modifier via performance_expectations
+    const ddsBucket = getDdsBucket(dds);
+    const iqBucket = getIqBucket(modeIQ);
+
+    const { data: perfExpRow } = await supabaseAdmin
+      .from('performance_expectations')
+      .select('avg_time_seconds, avg_moves, sample_count')
+      .eq('game_mode', gameMode).eq('dds_bucket', ddsBucket).eq('iq_bucket', iqBucket)
+      .single();
+
     let performanceModifier = 1.0;
     let timeEfficiency = 1.0;
     let moveEfficiency = 1.0;
     let hintPenalty = 1.0;
-    const hasPoolData = deal && (deal.pool_attempts as number) >= 10;
-    const dealAvgTime = hasPoolData ? (deal.pool_avg_time as number) : null;
-    const dealAvgMoves = hasPoolData ? (deal.pool_avg_moves as number) : null;
+    let expectedTime = 0;
+    let expectedMoves = 0;
+
+    // Hardcoded fallbacks (same seed data values)
+    const hardcodedTime = perfExpRow?.avg_time_seconds ?? 200;
+    const hardcodedMoves = perfExpRow?.avg_moves ?? 100;
+    const sampleCount = perfExpRow?.sample_count ?? 0;
 
     if (isWin) {
-      // DDS-based fallbacks when no pool data
-      const klondikeExpTime = 60 + (dds / 100) * 480;
-      const klondikeExpMoves = 80 + (dds / 100) * 120;
-      const freecellExpTime = 90 + (dds / 100) * 300;
-      const freecellExpMoves = 60 + (dds / 100) * 100;
+      if (sampleCount >= 30) {
+        const empiricalWeight = Math.min(1.0, (sampleCount - 30) / 70);
+        // At sample_count < 30 use hardcoded; at >= 100 use empirical exclusively
+        // But since we only enter this branch when >= 30, blend:
+        expectedTime = hardcodedTime * (1 - empiricalWeight) + (perfExpRow?.avg_time_seconds ?? hardcodedTime) * empiricalWeight;
+        expectedMoves = hardcodedMoves * (1 - empiricalWeight) + (perfExpRow?.avg_moves ?? hardcodedMoves) * empiricalWeight;
+      } else {
+        expectedTime = hardcodedTime;
+        expectedMoves = hardcodedMoves;
+      }
 
-      const poolAvgTime = dealAvgTime ?? (gameMode === 'freecell' ? freecellExpTime : klondikeExpTime);
-      const expectedTime = Math.max(poolAvgTime, 30);
-      timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 10)));
-
-      const poolAvgMoves = dealAvgMoves ?? (gameMode === 'freecell' ? freecellExpMoves : klondikeExpMoves);
-      const expectedMoves = Math.max(poolAvgMoves, 20);
-      moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 10)));
-
+      timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 1)));
+      moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 1)));
       hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
-
-      performanceModifier = Math.max(0.5, Math.min(1.5,
-        (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty
-      ));
+      performanceModifier = Math.max(0.5, Math.min(1.5, (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty));
 
       console.log('[complete-game] perf calc:', {
-        expectedTime, actualTime, timeEfficiency,
-        expectedMoves, actualMoves, moveEfficiency,
-        hintPenalty, performanceModifier, minMoves, hasPoolData,
+        expectedTime, actualTime, timeEfficiency, expectedMoves, actualMoves,
+        moveEfficiency, hintPenalty, performanceModifier, sampleCount,
       });
     }
 
-    // 4. ELO calculation — pure formula, no context multipliers
+    // 6. ELO calculation using mode IQ
     const dealRating = 800 + (dds / 100) * 1200;
-    const playerRating = profile.rating as number;
-    const gamesPlayed = profile.games_played as number;
-
-    const K = gamesPlayed < 20 ? 32 : gamesPlayed < 50 ? 24 : 16;
-    const expected = 1 / (1 + Math.pow(10, (dealRating - playerRating) / 400));
+    const K = modeGamesPlayed < 20 ? 32 : modeGamesPlayed < 50 ? 24 : 16;
+    const expected = 1 / (1 + Math.pow(10, (dealRating - modeIQ) / 400));
     const outcome = isWin ? 1 : 0;
     const baseDelta = Math.round(K * (outcome - expected));
 
     let finalDelta = Math.round(baseDelta * performanceModifier);
 
-    // Win floor and loss ceiling — no other adjustments
+    // Part 4: Daily challenge floor
+    if (isDaily) {
+      let bracketMin = 0;
+      if (modeIQ < 1100) bracketMin = 0;
+      else if (modeIQ < 1300) bracketMin = 25;
+      else if (modeIQ < 1500) bracketMin = 45;
+      else bracketMin = 60;
+
+      if (dds < bracketMin) {
+        // Player is above the deal's difficulty
+        if (isWin) finalDelta = Math.max(0, finalDelta);
+        else finalDelta = -1;
+      }
+    }
+
+    // Win floor and loss ceiling
     if (isWin) finalDelta = Math.max(1, finalDelta);
     else finalDelta = Math.max(-20, finalDelta);
 
-    const newRating = Math.max(0, playerRating + finalDelta);
+    const newModeIQ = Math.max(0, modeIQ + finalDelta);
 
     console.log('[complete-game] ELO:', {
-      playerRating, dealRating, dds, K, expected: expected.toFixed(3),
+      modeIQ, dealRating, dds, K, expected: expected.toFixed(3),
       outcome, baseDelta, performanceModifier: performanceModifier.toFixed(3),
-      finalDelta, newRating,
+      finalDelta, newModeIQ,
     });
 
-    // 5. Update deal pool stats
+    // 7. Upsert player_mode_ratings
+    const { error: modeUpsertErr } = await supabaseAdmin
+      .from('player_mode_ratings')
+      .upsert({
+        user_id: userId,
+        game_mode: gameMode,
+        iq: newModeIQ,
+        games_played: modeGamesPlayed + 1,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,game_mode' });
+    if (modeUpsertErr) console.error('[complete-game] mode rating upsert failed:', modeUpsertErr);
+
+    // 8. Calculate composite puzzle IQ
+    const { data: puzzleIQResult } = await supabaseAdmin.rpc('calculate_puzzle_iq', { p_user_id: userId });
+    const newPuzzleIQ = puzzleIQResult ?? modeIQ;
+    const previousPuzzleIQ = profile.rating as number;
+    const puzzleIQDelta = newPuzzleIQ - previousPuzzleIQ;
+
+    // 9. Update deal pool stats
     if (deal) {
       const pa = deal.pool_attempts as number;
       const newAttempts = pa + 1;
@@ -477,7 +423,8 @@ Deno.serve(async (req) => {
       const norm = getNormConfig(gameMode);
       const normMoves = Math.max(0, Math.min(1, (newAvgMoves - norm.movesMin) / norm.movesRange));
       const normTime = Math.max(0, Math.min(1, (newAvgTime - norm.timeMin) / norm.timeRange));
-      const ddsEmpirical = (1 - winRate) * 25 + normMoves * 25 + normTime * 25 + newAbandons * 25;
+      // Part 6: allow dds_empirical to exceed 100, cap at 150
+      const ddsEmpirical = Math.min(150, (1 - winRate) * 25 + normMoves * 25 + normTime * 25 + newAbandons * 25);
 
       const ddsInitial = deal.dds_initial as number;
       let ddsBlended: number;
@@ -488,30 +435,33 @@ Deno.serve(async (req) => {
       } else ddsBlended = ddsEmpirical;
 
       await supabaseAdmin.from('deals').update({
-        pool_attempts: newAttempts,
-        pool_wins: newWins,
-        pool_avg_moves: newAvgMoves,
-        pool_avg_time: newAvgTime,
-        pool_abandons: newAbandons,
-        dds_empirical: ddsEmpirical,
-        dds_blended: ddsBlended,
+        pool_attempts: newAttempts, pool_wins: newWins, pool_avg_moves: newAvgMoves,
+        pool_avg_time: newAvgTime, pool_abandons: newAbandons,
+        dds_empirical: ddsEmpirical, dds_blended: ddsBlended,
       }).eq('id', deal.id);
     }
 
-    // 6. Evaluate streak progression before persisting the final profile state
-    const streakResult = await updateStreak(
-      supabaseAdmin,
-      userId,
-      result,
-      isDaily,
-      profile,
-    );
+    // 10. Update performance_expectations (wins only)
+    if (isWin && perfExpRow) {
+      const oldSC = perfExpRow.sample_count ?? 0;
+      const newAvgT = (perfExpRow.avg_time_seconds * oldSC + actualTime) / (oldSC + 1);
+      const newAvgM = (perfExpRow.avg_moves * oldSC + actualMoves) / (oldSC + 1);
+      await supabaseAdmin.from('performance_expectations').upsert({
+        game_mode: gameMode, dds_bucket: ddsBucket, iq_bucket: iqBucket,
+        avg_time_seconds: newAvgT, avg_moves: newAvgM,
+        sample_count: oldSC + 1, updated_at: new Date().toISOString(),
+      }, { onConflict: 'game_mode,dds_bucket,iq_bucket' });
+    }
 
-    // 7. Update profile rating, timezone, game counts, and streak state in one write
+    // 11. Evaluate streak
+    const streakResult = await updateStreak(supabaseAdmin, userId, result, isDaily, profile);
+
+    // 12. Update profile with composite puzzle IQ and streak
+    const gamesPlayed = profile.games_played as number;
     const perModeKey = `games_played_${gameMode}` as string;
     const currentPerMode = (profile[perModeKey] as number) ?? 0;
     const profileUpdate: Record<string, unknown> = {
-      rating: newRating,
+      rating: newPuzzleIQ,
       games_played: gamesPlayed + 1,
       games_won: (profile.games_won as number) + (isWin ? 1 : 0),
       [perModeKey]: currentPerMode + 1,
@@ -524,72 +474,53 @@ Deno.serve(async (req) => {
     }
 
     const { error: profileUpdateErr } = await supabaseAdmin.from('profiles').update(profileUpdate).eq('id', userId);
-    if (profileUpdateErr) {
-      console.error('[complete-game] profiles update failed:', profileUpdateErr);
-    } else {
-      console.log('[complete-game] profiles updated with streak state:', {
-        userId,
-        profileUpdate,
-      });
-    }
+    if (profileUpdateErr) console.error('[complete-game] profiles update failed:', profileUpdateErr);
 
-    // 8. Insert game history
+    // 13. Insert game history
     const { error: historyErr } = await supabaseAdmin.from('game_history').insert({
-      user_id: userId,
-      deal_id: clientDealId || `deal-${dealSeed}`,
-      won: isWin,
-      moves: actualMoves,
-      time_seconds: actualTime,
-      hints_used: hintsUsed,
-      undos_used: undosUsed,
-      difficulty: ddsToLabel(dds),
-      difficulty_score: dds,
-      rating_before: playerRating,
-      rating_after: newRating,
-      rating_change: finalDelta,
-      game_mode: gameMode,
+      user_id: userId, deal_id: clientDealId || `deal-${dealSeed}`,
+      won: isWin, moves: actualMoves, time_seconds: actualTime,
+      hints_used: hintsUsed, undos_used: undosUsed,
+      difficulty: ddsToLabel(dds), difficulty_score: dds,
+      rating_before: previousPuzzleIQ, rating_after: newPuzzleIQ,
+      rating_change: puzzleIQDelta, game_mode: gameMode,
       performance_modifier: performanceModifier,
-      base_delta: baseDelta,
-      final_delta: finalDelta,
+      base_delta: baseDelta, final_delta: finalDelta,
       deal_uuid: deal?.id || null,
     } as Record<string, unknown>);
-    if (historyErr) {
-      console.error('[complete-game] game_history insert failed:', historyErr);
-    }
+    if (historyErr) console.error('[complete-game] game_history insert failed:', historyErr);
 
-    // 9. Compute breakdown points that sum exactly to finalDelta
+    // 14. Compute breakdown points
     let timeBonusPoints = 0;
     let movesBonusPoints = 0;
     let hintPenaltyPoints = 0;
-    const baseDeltaForBreakdown = baseDelta;
 
     if (isWin) {
       timeBonusPoints = Math.round(baseDelta * (timeEfficiency - 1.0) * 0.4);
       movesBonusPoints = Math.round(baseDelta * (moveEfficiency - 1.0) * 0.4);
       hintPenaltyPoints = Math.round(baseDelta * (1 - hintPenalty));
-      // Fix rounding: adjust baseDelta display so sum equals finalDelta
-      const partialSum = timeBonusPoints + movesBonusPoints - hintPenaltyPoints;
-      // finalDelta = baseDeltaDisplay + timeBonusPoints + movesBonusPoints - hintPenaltyPoints
-      // so baseDeltaDisplay = finalDelta - partialSum
     }
     const baseDeltaDisplay = isWin ? (finalDelta - timeBonusPoints - movesBonusPoints + hintPenaltyPoints) : finalDelta;
 
-    // 10. Return result
+    // 15. Return result with mode IQ and puzzle IQ
     return new Response(JSON.stringify({
       finalDelta,
       baseDelta: baseDeltaDisplay,
-      newRating,
-      previousRating: playerRating,
-      newTier: getTierName(newRating),
+      newRating: newPuzzleIQ,
+      previousRating: previousPuzzleIQ,
+      newTier: getTierName(newPuzzleIQ),
       performanceModifier,
       dealDDS: dds,
-      dealAvgTime: dealAvgTime,
-      dealAvgMoves: dealAvgMoves,
-      timeBonusPoints,
-      movesBonusPoints,
-      hintPenaltyPoints,
-      hintsUsed,
-      currentStreak: streakResult.currentStreak,
+      dealAvgTime: expectedTime > 0 ? expectedTime : null,
+      dealAvgMoves: expectedMoves > 0 ? expectedMoves : null,
+      timeBonusPoints, movesBonusPoints, hintPenaltyPoints, hintsUsed,
+      // New: mode-specific IQ data
+      modeIQ: newModeIQ,
+      previousModeIQ: modeIQ,
+      modeIQDelta: finalDelta,
+      gameMode,
+      puzzleIQ: newPuzzleIQ,
+      puzzleIQDelta,
       streakUpdate: {
         currentStreak: streakResult.currentStreak,
         bestStreak: streakResult.bestStreak,
@@ -603,8 +534,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error('[complete-game] internal error:', err);
     return new Response(JSON.stringify({ error: 'An internal error occurred' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });

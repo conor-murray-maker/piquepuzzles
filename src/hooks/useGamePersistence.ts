@@ -15,11 +15,21 @@ export interface ScoreBreakdownData {
   hintsUsed: number;
 }
 
+export interface ModeIQData {
+  modeIQ: number;
+  previousModeIQ: number;
+  modeIQDelta: number;
+  gameMode: string;
+  puzzleIQ: number;
+  puzzleIQDelta: number;
+}
+
 export interface GameResult {
   newRating: number;
   ratingChange: number;
   previousRating: number;
   breakdown: ScoreBreakdownData;
+  modeIQData?: ModeIQData;
   streakUpdate?: {
     currentStreak: number;
     bestStreak: number;
@@ -69,14 +79,12 @@ export function useGamePersistence() {
 
       if (error) throw error;
 
-      
-
       const r = data as any;
       await refreshProfile();
 
       const gameResult: GameResult = {
         newRating: r.newRating,
-        ratingChange: r.finalDelta,
+        ratingChange: r.puzzleIQDelta ?? r.finalDelta,
         previousRating: r.previousRating,
         breakdown: {
           baseDelta: r.baseDelta ?? r.finalDelta,
@@ -89,10 +97,16 @@ export function useGamePersistence() {
           hintPenaltyPoints: r.hintPenaltyPoints ?? 0,
           hintsUsed: r.hintsUsed ?? 0,
         },
+        modeIQData: r.modeIQ != null ? {
+          modeIQ: r.modeIQ,
+          previousModeIQ: r.previousModeIQ,
+          modeIQDelta: r.modeIQDelta,
+          gameMode: r.gameMode,
+          puzzleIQ: r.puzzleIQ,
+          puzzleIQDelta: r.puzzleIQDelta,
+        } : undefined,
         streakUpdate: r.streakUpdate,
       };
-
-      
 
       return gameResult;
     } catch (err) {

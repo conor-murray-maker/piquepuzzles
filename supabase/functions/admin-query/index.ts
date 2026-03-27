@@ -593,14 +593,24 @@ Deno.serve(async (req) => {
         const allGames = allGamesRes.data || [];
         const completions = dailyCompRes.data || [];
         const userPlayedDeals = userPlayedDealsRes.data || [];
+        const allModeRatings = (modeRatingsRes as any).data || [];
+        const allPerfExp = (perfExpRes as any).data || [];
 
-        // Users
+        // Build mode rating lookup per user
+        const modeRatingsByUser: Record<string, Array<{ game_mode: string; iq: number; games_played: number }>> = {};
+        for (const mr of allModeRatings) {
+          if (!modeRatingsByUser[mr.user_id]) modeRatingsByUser[mr.user_id] = [];
+          modeRatingsByUser[mr.user_id].push({ game_mode: mr.game_mode, iq: mr.iq, games_played: mr.games_played });
+        }
+
+        // Users — include perModeRatings
         const users = profiles.map((p: any) => ({
           userId: p.id, displayName: p.display_name, puzzleIQ: p.rating,
           tier: p.subscription_tier || "free", gamesPlayed: p.games_played,
           wins: p.games_won, winRate: p.games_played > 0 ? +(p.games_won / p.games_played).toFixed(3) : 0,
           currentStreak: p.current_streak, bestStreak: p.best_streak,
           subscriptionStatus: p.subscription_status, joinedAt: p.created_at, lastActiveAt: p.updated_at,
+          perModeRatings: modeRatingsByUser[p.id] || [],
         }));
 
         // Deal pool

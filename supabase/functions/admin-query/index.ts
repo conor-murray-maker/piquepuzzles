@@ -475,6 +475,37 @@ Deno.serve(async (req) => {
         }
       }
 
+      case "backfill_per_mode_counts": {
+        const { data: allProfiles, error: profErr } = await adminClient
+          .from('profiles')
+          .select('id');
+        if (profErr) return json({ error: profErr.message }, 500);
+
+        let updated = 0;
+        for (const profile of (allProfiles || [])) {
+          const [klon, fc, realm] = await Promise.all(
+            ['klondike', 'freecell', 'realm'].map(async (mode) => {
+              const { count } = await adminClient
+                .from('game_history')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', profile.id)
+                .eq('game_mode', mode);
+              return count ?? 0;
+            })
+          );
+          const { error: upErr } = await adminClient
+            .from('profiles')
+            .update({
+              games_played_klondike: klon,
+              games_played_freecell: fc,
+              games_played_realm: realm,
+            })
+            .eq('id', profile.id);
+          if (!upErr) updated++;
+        }
+        return json({ profilesUpdated: updated });
+      }
+
       case "trigger_seed": {
         const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/seed-today-challenge`;
         const resp = await fetch(url, {

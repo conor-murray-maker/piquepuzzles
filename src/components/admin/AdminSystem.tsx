@@ -325,6 +325,12 @@ export function AdminSystem() {
             <Button variant="outline" onClick={() => triggerAction("trigger_seed", "Seed daily")} disabled={action.isPending}>
               <Play className="h-4 w-4 mr-2" /> Seed Today's Challenge
             </Button>
+            <div className="flex flex-col gap-1">
+              <Button variant="outline" onClick={() => triggerAction("backfill_per_mode_counts", "Backfill per-mode counts")} disabled={action.isPending}>
+                <RefreshCw className="h-4 w-4 mr-2" /> Backfill Per-Mode Game Counts
+              </Button>
+              <p className="text-xs text-muted-foreground">Run once only — backfills historical game counts from game_history.</p>
+            </div>
           </div>
         </CardContent>
       </Card>

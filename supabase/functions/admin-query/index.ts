@@ -830,7 +830,7 @@ Deno.serve(async (req) => {
           avgMovesByDifficulty: avgMovesByDifficultyRealm,
         };
 
-        // === POOL CONSUMPTION ===
+        // === POOL CONSUMPTION — by confidence band ===
         const playedDealIds = new Set(userPlayedDeals.map((upd: any) => upd.deal_id));
         const playedByUser: Record<string, Set<string>> = {};
         for (const upd of userPlayedDeals) {
@@ -848,17 +848,77 @@ Deno.serve(async (req) => {
         for (const mode of gameModes) {
           for (const band of diffBands) {
             const modeDeals = allDeals.filter((d: any) => d.game_mode === mode && d.dds_blended >= band.min && d.dds_blended <= band.max);
-            const unplayed = modeDeals.filter((d: any) => !playedDealIds.has(d.id));
+            const unplayedByAny = modeDeals.filter((d: any) => d.pool_attempts === 0);
             const playedByAtLeast1 = modeDeals.filter((d: any) => playedByUser[d.id]?.size > 0);
             const avgAttempts = modeDeals.length > 0 ? +(modeDeals.reduce((s: number, d: any) => s + d.pool_attempts, 0) / modeDeals.length).toFixed(1) : 0;
+            // Concentration set: deals with lowest pool_attempts, capped at 150
+            const sorted = [...modeDeals].sort((a: any, b: any) => a.pool_attempts - b.pool_attempts);
+            const concentrationSet = sorted.slice(0, 150);
+            const confBand = (conf: number) => conf > 0.85 ? 'High' : conf >= 0.7 ? 'Medium' : 'Low';
             poolConsumption.push({
               mode,
               difficulty: band.label,
+              confidenceBand: modeDeals.length > 0 ? confBand(modeDeals.reduce((s: number, d: any) => s + d.confidence, 0) / modeDeals.length) : 'Low',
               totalDeals: modeDeals.length,
-              unplayedDeals: unplayed.length,
+              unplayedByAnyUser: unplayedByAny.length,
               playedByAtLeastOneUser: playedByAtLeast1.length,
               avgPoolAttempts: avgAttempts,
-              dealsBelow20Unplayed: unplayed.length < 20,
+              dealsInConcentrationSet: concentrationSet.length,
+              status: unplayedByAny.length > 20 ? 'green' : unplayedByAny.length >= 10 ? 'amber' : 'red',
+            });
+          }
+        }
+
+        // === POOL DEPTH ===
+        const poolDepth: Array<any> = [];
+        for (const mode of gameModes) {
+          for (const band of diffBands) {
+            const modeDeals = allDeals.filter((d: any) => d.game_mode === mode && d.dds_blended >= band.min && d.dds_blended <= band.max);
+            const unplayedByAny = modeDeals.filter((d: any) => d.pool_attempts === 0);
+            const avgAttempts = modeDeals.length > 0 ? +(modeDeals.reduce((s: number, d: any) => s + d.pool_attempts, 0) / modeDeals.length).toFixed(1) : 0;
+            const sorted = [...modeDeals].sort((a: any, b: any) => a.pool_attempts - b.pool_attempts);
+            poolDepth.push({
+              gameMode: mode,
+              difficulty: band.label,
+              totalDeals: modeDeals.length,
+              unplayedByAnyUser: unplayedByAny.length,
+              avgPoolAttempts: avgAttempts,
+              dealsInConcentrationSet: Math.min(sorted.length, 150),
+              status: unplayedByAny.length > 20 ? 'green' : unplayedByAny.length >= 10 ? 'amber' : 'red',
+            });
+          }
+        }
+
+        // === SERVING ELIGIBILITY ===
+        const servingEligibility: Array<any> = [];
+        const playerStages = [
+          { label: 'new (0 games)', gamesPlayed: 0 },
+          { label: 'early (10 games)', gamesPlayed: 10 },
+          { label: 'mid (50 games)', gamesPlayed: 50 },
+          { label: 'established (200 games)', gamesPlayed: 200 },
+        ];
+        for (const mode of gameModes) {
+          for (const stage of playerStages) {
+            let eligibleCount = 0;
+            const gp = stage.gamesPlayed;
+            const modeDeals = allDeals.filter((d: any) => d.game_mode === mode);
+            for (const d of modeDeals) {
+              const dds = d.dds_blended;
+              const conf = d.confidence;
+              if (gp < 3) {
+                if (dds <= 25 && conf >= 0.85) eligibleCount++;
+              } else if (gp <= 20) {
+                if (dds <= 55 && conf >= 0.75) eligibleCount++;
+              } else {
+                eligibleCount++;
+              }
+            }
+            const cap = gp < 3 ? 15 : gp <= 20 ? 50 : gp <= 100 ? 150 : eligibleCount;
+            servingEligibility.push({
+              gameMode: mode,
+              playerStage: stage.label,
+              eligibleDeals: eligibleCount,
+              concentrationSetSize: Math.min(eligibleCount, cap),
             });
           }
         }
@@ -911,7 +971,7 @@ Deno.serve(async (req) => {
           return (now.getTime() - lastActive) > 7 * 86400000;
         }).length;
 
-        const starterPoolSize = allDeals.filter((d: any) => d.is_calibration || d.tier === "calibration" || d.tier === "starter").length;
+        const starterPoolSize = allDeals.filter((d: any) => d.confidence >= 0.85).length;
 
         // === ALERTS ===
         const alerts: Array<{ severity: string; code: string; message: string; affectedCount: number; detectedAt: string }> = [];
@@ -928,13 +988,15 @@ Deno.serve(async (req) => {
         if (ghostGameIds.length > 0) alerts.push({ severity: "warning", code: "GHOST_GAMES", message: `${ghostGameIds.length} ghost games detected (< 3 moves, loss)`, affectedCount: ghostGameIds.length, detectedAt: ts });
         // Low pool alerts from poolConsumption
         for (const pc of poolConsumption) {
-          if (pc.dealsBelow20Unplayed && pc.totalDeals > 0) {
-            alerts.push({ severity: "warning", code: "LOW_POOL", message: `${pc.mode} ${pc.difficulty} pool low — ${pc.unplayedDeals} unplayed deals remaining`, affectedCount: pc.unplayedDeals, detectedAt: ts });
+          if (pc.status === 'red' && pc.totalDeals > 0) {
+            alerts.push({ severity: "critical", code: "LOW_POOL_CRITICAL", message: `${pc.mode} ${pc.difficulty} pool critical — ${pc.unplayedByAnyUser} unplayed deals remaining`, affectedCount: pc.unplayedByAnyUser, detectedAt: ts });
+          } else if (pc.status === 'amber' && pc.totalDeals > 0) {
+            alerts.push({ severity: "warning", code: "LOW_POOL", message: `${pc.mode} ${pc.difficulty} pool low — ${pc.unplayedByAnyUser} unplayed deals remaining`, affectedCount: pc.unplayedByAnyUser, detectedAt: ts });
           }
         }
 
         if (inactiveUsers > 0) alerts.push({ severity: "info", code: "INACTIVE_USERS", message: `${inactiveUsers} users inactive for 7+ days`, affectedCount: inactiveUsers, detectedAt: ts });
-        if (starterPoolSize < 100) alerts.push({ severity: "info", code: "SMALL_STARTER_POOL", message: `Starter pool has ${starterPoolSize} deals (target: 100+)`, affectedCount: starterPoolSize, detectedAt: ts });
+        if (starterPoolSize < 100) alerts.push({ severity: "info", code: "LOW_HIGH_CONFIDENCE", message: `Only ${starterPoolSize} deals with confidence ≥0.85 (target: 100+)`, affectedCount: starterPoolSize, detectedAt: ts });
 
         const snapshot = {
           generatedAt: now.toISOString(),

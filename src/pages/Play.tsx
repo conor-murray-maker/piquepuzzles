@@ -235,6 +235,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
         challengeData={challengeData}
         streakUpdate={ratingResult?.streakUpdate}
         breakdown={ratingResult?.breakdown}
+        modeIQData={ratingResult?.modeIQData}
       />
     );
   }

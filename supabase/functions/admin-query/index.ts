@@ -527,7 +527,7 @@ Deno.serve(async (req) => {
         const [
           profilesRes, allDealsRes, recentGamesRes, allGamesRes,
           streakHistRes, dailyChalRes, dailyCompRes, tableCountsRes,
-          dealQueueRes, cronRes,
+          cronRes, userPlayedDealsRes,
         ] = await Promise.all([
           adminClient.from("profiles").select("*"),
           adminClient.from("deals").select("*"),
@@ -537,13 +537,13 @@ Deno.serve(async (req) => {
           adminClient.from("daily_challenges").select("*, deals(*)").eq("date", today).maybeSingle(),
           adminClient.from("daily_challenge_completions").select("*, profiles(display_name)").eq("date", today).order("actual_time", { ascending: true }),
           Promise.all(
-            ["deals","game_history","profiles","deal_queue","user_played_deals","streak_history","daily_challenges"].map(async t => {
+            ["deals","game_history","profiles","user_played_deals","streak_history","daily_challenges"].map(async t => {
               const { count } = await adminClient.from(t).select("id", { count: "exact", head: true });
               return [t, count || 0] as [string, number];
             })
           ),
-          adminClient.from("deal_queue").select("user_id, game_mode, served_at"),
           (async () => { try { const { data, error } = await adminClient.rpc("get_cron_jobs"); if (error) { console.warn("get_cron_jobs RPC error:", error.message); return null; } return data || []; } catch (e) { console.warn("get_cron_jobs exception:", e); return null; } })(),
+          adminClient.from("user_played_deals").select("deal_id, user_id"),
         ]);
 
         const profiles = profilesRes.data || [];
@@ -551,7 +551,7 @@ Deno.serve(async (req) => {
         const recentGames = recentGamesRes.data || [];
         const allGames = allGamesRes.data || [];
         const completions = dailyCompRes.data || [];
-        const dealQueue = dealQueueRes.data || [];
+        const userPlayedDeals = userPlayedDealsRes.data || [];
 
         // Users
         const users = profiles.map((p: any) => ({

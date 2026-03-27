@@ -55,13 +55,18 @@ export function AdminSystem() {
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
+  const [poolConsumption, setPoolConsumption] = useState<Array<{
+    mode: string; difficulty: string; totalDeals: number; unplayedDeals: number;
+    playedByAtLeastOneUser: number; avgPoolAttempts: number; dealsBelow20Unplayed: boolean;
+  }>>([]);
 
-  // Fetch alerts on mount
+  // Fetch alerts + pool consumption on mount
   useEffect(() => {
     (async () => {
       try {
         const result = await action.mutateAsync({ action: "diagnostic_snapshot" });
         if (result?.alerts) setAlerts(result.alerts);
+        if (result?.poolConsumption) setPoolConsumption(result.poolConsumption);
       } catch {
         // silently fail — alerts are best-effort
       } finally {

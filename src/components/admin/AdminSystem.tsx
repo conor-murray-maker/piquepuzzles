@@ -56,8 +56,8 @@ export function AdminSystem() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
   const [poolConsumption, setPoolConsumption] = useState<Array<{
-    mode: string; difficulty: string; totalDeals: number; unplayedDeals: number;
-    playedByAtLeastOneUser: number; avgPoolAttempts: number; dealsBelow20Unplayed: boolean;
+    mode: string; difficulty: string; confidenceBand: string; totalDeals: number; unplayedByAnyUser: number;
+    avgPoolAttempts: number; dealsInConcentrationSet: number; status: string;
   }>>([]);
 
   // Fetch alerts + pool consumption on mount
@@ -280,8 +280,10 @@ export function AdminSystem() {
                 <TableRow>
                   <TableHead>Mode</TableHead>
                   <TableHead>Difficulty</TableHead>
+                  <TableHead>Confidence</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Unplayed</TableHead>
+                  <TableHead className="text-right">Concentration</TableHead>
                   <TableHead className="text-right">Avg Attempts</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -291,18 +293,20 @@ export function AdminSystem() {
                   <TableRow key={`${pc.mode}-${pc.difficulty}`}>
                     <TableCell className="font-mono text-sm">{pc.mode}</TableCell>
                     <TableCell>{pc.difficulty}</TableCell>
+                    <TableCell>{pc.confidenceBand}</TableCell>
                     <TableCell className="text-right font-mono">{pc.totalDeals}</TableCell>
-                    <TableCell className="text-right font-mono">{pc.unplayedDeals}</TableCell>
+                    <TableCell className="text-right font-mono">{pc.unplayedByAnyUser}</TableCell>
+                    <TableCell className="text-right font-mono">{pc.dealsInConcentrationSet}</TableCell>
                     <TableCell className="text-right font-mono">{pc.avgPoolAttempts}</TableCell>
                     <TableCell>
                       <Badge className={
-                        pc.unplayedDeals > 20
+                        pc.status === 'green'
                           ? 'bg-emerald-500/20 text-emerald-700 hover:bg-emerald-500/30'
-                          : pc.unplayedDeals >= 10
+                          : pc.status === 'amber'
                           ? 'bg-amber-500/20 text-amber-700 hover:bg-amber-500/30'
                           : 'bg-destructive/20 text-destructive hover:bg-destructive/30'
                       }>
-                        {pc.unplayedDeals > 20 ? 'OK' : pc.unplayedDeals >= 10 ? 'Low' : 'Critical'}
+                        {pc.status === 'green' ? 'OK' : pc.status === 'amber' ? 'Low' : 'Critical'}
                       </Badge>
                     </TableCell>
                   </TableRow>

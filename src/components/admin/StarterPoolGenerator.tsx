@@ -213,16 +213,10 @@ export function StarterPoolGenerator() {
             confidence = confResult.confidence;
           }
 
-          let isStarter = false;
           let reservedFor: string | null = null;
 
           for (const t of targets) {
             if (dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] < t.target) {
-              if (isRealm) {
-                isStarter = t.band === "easy" || t.band === "medium";
-              } else {
-                isStarter = true;
-              }
               counts[t.band]++;
               if (t.band === "easy") reservedFor = "onboarding";
               break;
@@ -239,15 +233,17 @@ export function StarterPoolGenerator() {
             simulation_count: isRealm ? 1 : verifyResult.simulations,
             simulation_wins: isRealm ? 0 : verifyResult.wins,
             confidence,
-            tier: isStarter ? "starter" : "fresh",
-            is_calibration: isStarter,
+            tier: "fresh",
+            is_calibration: false,
             reserved_for: reservedFor,
             unique_winning_paths: isRealm ? 1 : uniquePaths,
             path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
           });
 
           bankedCount++;
-          if (isStarter) starterCount++;
+          // Count deals that matched a target band
+          const matchedTarget = targets.some(t => dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] <= t.target);
+          if (matchedTarget) starterCount++;
         } catch {
           // Skip failed attempt
         }
@@ -279,7 +275,7 @@ export function StarterPoolGenerator() {
       return;
     }
 
-    addStatus(`Found ${bankedCount} deals (${starterCount} starter) in ${elapsed}s. Inserting...`);
+    addStatus(`Found ${bankedCount} deals in ${elapsed}s. Inserting...`);
     if (timeoutDiscards > 0) addStatus(`⚠ ${timeoutDiscards} candidates timed out`);
 
     let totalInserted = 0;
@@ -298,7 +294,7 @@ export function StarterPoolGenerator() {
     }
 
     setResult({ inserted: totalInserted, total: collected.length });
-    addStatus(`✓ Total inserted: ${totalInserted} deals (${starterCount} starter)`);
+    addStatus(`✓ Total inserted: ${totalInserted} deals`);
     toast({ title: `${selectedMode} pool seeded`, description: `${totalInserted} verified deals inserted` });
 
     setRunning(false);
@@ -330,7 +326,7 @@ export function StarterPoolGenerator() {
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <Database className="h-4 w-4" />
-          Starter Pool Generator
+          Pool Generator
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">

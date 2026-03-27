@@ -112,7 +112,7 @@ export function AdminDeals() {
                 <TableRow>
                   <TableHead>Seed</TableHead>
                   <TableHead>Mode</TableHead>
-                  <TableHead>Tier</TableHead>
+                  <TableHead>Conf Band</TableHead>
                   <TableHead>DDS Init</TableHead>
                   <TableHead>DDS Blend</TableHead>
                   <TableHead>Confidence</TableHead>
@@ -139,7 +139,7 @@ export function AdminDeals() {
                     <TableRow key={d.id}>
                       <TableCell className="font-mono text-xs">{String(d.seed).slice(0, 8)}</TableCell>
                       <TableCell><Badge variant="secondary">{d.game_mode}</Badge></TableCell>
-                      <TableCell>{d.tier}</TableCell>
+                      <TableCell>{d.confidence > 0.85 ? 'High' : d.confidence >= 0.7 ? 'Med' : 'Low'}</TableCell>
                       <TableCell className="font-mono">{d.dds_initial?.toFixed(1)}</TableCell>
                       <TableCell className="font-mono">{d.dds_blended?.toFixed(1)}</TableCell>
                       <TableCell className="font-mono">

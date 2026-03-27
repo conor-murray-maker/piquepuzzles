@@ -1,21 +1,21 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface DealFilterState {
-  tier: string;
   difficulty: string;
   ddsSource: string;
   confidence: string;
   pathDiversity: string;
   gameMode: string;
+  poolAttempts: string;
 }
 
 export const DEFAULT_FILTERS: DealFilterState = {
-  tier: "all",
   difficulty: "all",
   ddsSource: "all",
   confidence: "all",
   pathDiversity: "all",
   gameMode: "all",
+  poolAttempts: "all",
 };
 
 interface Props {
@@ -29,11 +29,6 @@ export function DealFilters({ filters, onChange }: Props) {
 
   return (
     <div className="flex flex-wrap gap-3 p-4 bg-muted/50 rounded-lg border">
-      <FilterSelect label="Tier" value={filters.tier} onChange={v => set("tier", v)} options={[
-        { value: "all", label: "All Tiers" },
-        { value: "starter", label: "Starter" },
-        { value: "fresh", label: "Fresh" },
-      ]} />
       <FilterSelect label="Difficulty" value={filters.difficulty} onChange={v => set("difficulty", v)} options={[
         { value: "all", label: "All Difficulty" },
         { value: "easy", label: "Easy" },
@@ -41,17 +36,24 @@ export function DealFilters({ filters, onChange }: Props) {
         { value: "hard", label: "Hard" },
         { value: "expert", label: "Expert" },
       ]} />
+      <FilterSelect label="Confidence" value={filters.confidence} onChange={v => set("confidence", v)} options={[
+        { value: "all", label: "All Confidence" },
+        { value: "high", label: "High (>0.85)" },
+        { value: "medium", label: "Medium (0.7–0.85)" },
+        { value: "low", label: "Low (<0.7)" },
+      ]} />
+      <FilterSelect label="Pool Attempts" value={filters.poolAttempts} onChange={v => set("poolAttempts", v)} options={[
+        { value: "all", label: "All Attempts" },
+        { value: "0", label: "Zero attempts" },
+        { value: "1-10", label: "1–10" },
+        { value: "11-50", label: "11–50" },
+        { value: "50+", label: "50+" },
+      ]} />
       <FilterSelect label="DDS Source" value={filters.ddsSource} onChange={v => set("ddsSource", v)} options={[
         { value: "all", label: "All Sources" },
         { value: "solver", label: "Solver only (<30)" },
         { value: "blending", label: "Blending (30–100)" },
         { value: "empirical", label: "Empirical (100+)" },
-      ]} />
-      <FilterSelect label="Confidence" value={filters.confidence} onChange={v => set("confidence", v)} options={[
-        { value: "all", label: "All Confidence" },
-        { value: "below_0.7", label: "Below 0.7" },
-        { value: "0.7_0.9", label: "0.7–0.9" },
-        { value: "above_0.9", label: "Above 0.9" },
       ]} />
       <FilterSelect label="Path Diversity" value={filters.pathDiversity} onChange={v => set("pathDiversity", v)} options={[
         { value: "all", label: "All PD" },

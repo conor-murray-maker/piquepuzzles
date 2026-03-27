@@ -31,17 +31,28 @@ function getDdsSource(poolAttempts: number): string {
   return "empirical";
 }
 
+function getConfidenceBand(conf: number): string {
+  if (conf > 0.85) return "high";
+  if (conf >= 0.7) return "medium";
+  return "low";
+}
+
 export function applyFilters(deals: DealRow[], filters: DealFilterState): DealRow[] {
   return deals.filter(d => {
-    if (filters.tier !== "all" && d.tier !== filters.tier) return false;
     if (filters.gameMode !== "all" && d.game_mode !== filters.gameMode) return false;
     if (filters.difficulty !== "all" && getDifficultyBand(d.dds_blended) !== filters.difficulty) return false;
     if (filters.ddsSource !== "all" && getDdsSource(d.pool_attempts) !== filters.ddsSource) return false;
 
     if (filters.confidence !== "all") {
-      if (filters.confidence === "below_0.7" && d.confidence >= 0.7) return false;
-      if (filters.confidence === "0.7_0.9" && (d.confidence < 0.7 || d.confidence > 0.9)) return false;
-      if (filters.confidence === "above_0.9" && d.confidence <= 0.9) return false;
+      const band = getConfidenceBand(d.confidence);
+      if (band !== filters.confidence) return false;
+    }
+
+    if (filters.poolAttempts !== "all") {
+      if (filters.poolAttempts === "0" && d.pool_attempts !== 0) return false;
+      if (filters.poolAttempts === "1-10" && (d.pool_attempts < 1 || d.pool_attempts > 10)) return false;
+      if (filters.poolAttempts === "11-50" && (d.pool_attempts < 11 || d.pool_attempts > 50)) return false;
+      if (filters.poolAttempts === "50+" && d.pool_attempts <= 50) return false;
     }
 
     if (filters.pathDiversity !== "all") {
@@ -78,19 +89,24 @@ export function computeSummaryStats(deals: DealRow[]) {
 }
 
 export function computeHealthStats(deals: DealRow[]) {
-  const byTier: Record<string, number> = {};
+  const byConfBand: Record<string, number> = { High: 0, Medium: 0, Low: 0 };
   const byBand: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0, Expert: 0 };
   let solverOnly = 0, blending = 0, empirical = 0, totalConf = 0;
   const confHistogram = Array(10).fill(0);
 
   for (const d of deals) {
-    byTier[d.tier] = (byTier[d.tier] || 0) + 1;
     totalConf += d.confidence;
     const bucket = Math.min(9, Math.floor(d.confidence * 10));
     confHistogram[bucket]++;
     if (d.pool_attempts < 30) solverOnly++;
     else if (d.pool_attempts < 100) blending++;
     else empirical++;
+
+    // Confidence band
+    if (d.confidence > 0.85) byConfBand.High++;
+    else if (d.confidence >= 0.7) byConfBand.Medium++;
+    else byConfBand.Low++;
+
     const dds = d.dds_blended;
     if (dds < 35) byBand.Easy++;
     else if (dds < 58) byBand.Medium++;
@@ -100,7 +116,7 @@ export function computeHealthStats(deals: DealRow[]) {
 
   return {
     total: deals.length,
-    byTier,
+    byConfBand,
     byBand,
     avgConfidence: deals.length ? (totalConf / deals.length).toFixed(2) : "0",
     solverOnly,
@@ -148,7 +164,7 @@ export function buildConfidenceHistogram(deals: DealRow[]): HistogramBucket[] {
 }
 
 export function buildPathDiversityHistogram(deals: DealRow[]): HistogramBucket[] {
-  const bucketCount = 10; // 0.0-0.1, 0.1-0.2, ... 0.9-1.0
+  const bucketCount = 10;
   const buckets: { count: number; totalConf: number }[] = Array.from({ length: bucketCount }, () => ({ count: 0, totalConf: 0 }));
   for (const d of deals) {
     const idx = Math.min(bucketCount - 1, Math.floor(d.path_diversity_score * 10));
@@ -166,7 +182,7 @@ export function buildPathDiversityHistogram(deals: DealRow[]): HistogramBucket[]
 
 export function buildWinRateHistogram(deals: DealRow[]): HistogramBucket[] {
   const eligible = deals.filter(d => d.pool_attempts >= 10);
-  const bucketCount = 10; // 0-10%, 10-20%, ..., 90-100%
+  const bucketCount = 10;
   const buckets: { count: number; totalConf: number }[] = Array.from({ length: bucketCount }, () => ({ count: 0, totalConf: 0 }));
   for (const d of eligible) {
     const wr = (d.pool_wins / d.pool_attempts) * 100;
@@ -184,14 +200,13 @@ export function buildWinRateHistogram(deals: DealRow[]): HistogramBucket[] {
 }
 
 export function buildSimCountHistogram(deals: DealRow[]): HistogramBucket[] {
-  // Find max to determine bucket count
   let maxSim = 0;
   for (const d of deals) {
     if (d.simulation_count > maxSim) maxSim = d.simulation_count;
   }
   const bucketSize = 100;
   const bucketCount = Math.max(1, Math.ceil((maxSim + 1) / bucketSize));
-  const capped = Math.min(bucketCount, 20); // cap at 20 buckets
+  const capped = Math.min(bucketCount, 20);
   const buckets: { count: number; totalConf: number }[] = Array.from({ length: capped }, () => ({ count: 0, totalConf: 0 }));
   for (const d of deals) {
     const idx = Math.min(capped - 1, Math.floor(d.simulation_count / bucketSize));

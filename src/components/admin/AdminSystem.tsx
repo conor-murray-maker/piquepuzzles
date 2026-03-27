@@ -80,6 +80,7 @@ export function AdminSystem() {
     try {
       const result = await action.mutateAsync({ action: "diagnostic_snapshot" });
       if (result?.alerts) setAlerts(result.alerts);
+      if (result?.poolConsumption) setPoolConsumption(result.poolConsumption);
       const jsonStr = JSON.stringify(result, null, 2);
       setSnapshotData(jsonStr);
       setSnapshotOpen(true);

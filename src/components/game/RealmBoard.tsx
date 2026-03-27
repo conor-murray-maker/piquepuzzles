@@ -116,7 +116,6 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
   const [crownColors, setCrownColors] = useState<Record<string, string>>({});
   const [particles, setParticles] = useState<Array<{ x: number; y: number; delay: number; angle: number; id: string }>>([]);
   const [boardPulse, setBoardPulse] = useState(false);
-  const [regionGlow, setRegionGlow] = useState<Set<number>>(new Set());
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);
@@ -235,13 +234,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
       }, i * 50);
     });
 
-    // Region border glow sequence
-    const regionCount = winState.regions.length;
-    for (let i = 0; i < regionCount; i++) {
-      setTimeout(() => {
-        setRegionGlow(prev => new Set(prev).add(i));
-      }, 200 + i * (400 / regionCount));
-    }
+    // Particle burst from each crown
 
     // Particle burst from each crown
     if (gridRef.current) {
@@ -527,7 +520,6 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
           const isError = errorCells.has(`${cell.row},${cell.col}`);
           const isHint = hintCell?.row === cell.row && hintCell?.col === cell.col;
           const color = state.regionColors[cell.region];
-          const isGlowing = regionGlow.has(cell.region);
 
           const borderTop = cell.row === 0 || state.grid[cell.row - 1]?.[cell.col]?.region !== cell.region;
           const borderLeft = cell.col === 0 || state.grid[cell.row][cell.col - 1]?.region !== cell.region;
@@ -549,11 +541,11 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
                 width: cellSize,
                 height: cellSize,
                 backgroundColor: `${color}30`,
-                borderTop: borderTop ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
-                borderLeft: borderLeft ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
-                borderBottom: borderBottom ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
-                borderRight: borderRight ? `3px solid ${isGlowing ? GOLD_COLOR : color}` : '1px solid #d1d5db',
-                boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : isGlowing ? `0 0 8px ${GOLD_COLOR}80` : 'none',
+                borderTop: borderTop ? `3px solid ${color}` : '1px solid #d1d5db',
+                borderLeft: borderLeft ? `3px solid ${color}` : '1px solid #d1d5db',
+                borderBottom: borderBottom ? `3px solid ${color}` : '1px solid #d1d5db',
+                borderRight: borderRight ? `3px solid ${color}` : '1px solid #d1d5db',
+                boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : 'none',
                 transition: 'border-color 0.3s, box-shadow 0.3s',
               }}
               animate={isError ? { scale: [1, 1.05, 1] } : {}}

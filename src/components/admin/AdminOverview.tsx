@@ -34,7 +34,7 @@ export function AdminOverview() {
   if (isLoading) return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   const s = stats || {};
-  const lowPools: Array<{ mode: string; difficulty: string; remaining: number }> = poolHealth?.lowPools || [];
+  const lowPools: Array<{ mode: string; difficulty: string; remaining: number; severity: string }> = poolHealth?.lowPools || [];
 
   return (
     <div className="space-y-6">
@@ -42,8 +42,8 @@ export function AdminOverview() {
       {lowPools.length > 0 && (
         <div className="space-y-2">
           {lowPools.map((lp) => (
-            <Alert key={`${lp.mode}-${lp.difficulty}`} variant="destructive" className="border-amber-500/50 bg-amber-500/10 text-foreground">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <Alert key={`${lp.mode}-${lp.difficulty}`} variant={lp.severity === 'critical' ? "destructive" : "default"} className={lp.severity === 'critical' ? '' : 'border-amber-500/50 bg-amber-500/10 text-foreground'}>
+              <AlertTriangle className={`h-4 w-4 ${lp.severity === 'critical' ? '' : 'text-amber-600'}`} />
               <AlertTitle className="text-amber-700 dark:text-amber-400">Low Pool Warning</AlertTitle>
               <AlertDescription>
                 {lp.mode} {lp.difficulty} pool low — {lp.remaining} unplayed deals remaining for current users. Run the generator.

@@ -490,7 +490,7 @@ Deno.serve(async (req) => {
       }
 
       case "pool_health_check": {
-        // Check how many unplayed deals exist per game mode per difficulty band
+        // Check how many zero-attempt deals exist per game mode per difficulty band
         const gameModes = ['klondike', 'freecell', 'realm'];
         const bands = [
           { label: 'Easy', min: 0, max: 35 },
@@ -498,7 +498,7 @@ Deno.serve(async (req) => {
           { label: 'Hard', min: 50, max: 80 },
           { label: 'Expert', min: 65, max: 100 },
         ];
-        const lowPools: Array<{ mode: string; difficulty: string; remaining: number }> = [];
+        const lowPools: Array<{ mode: string; difficulty: string; remaining: number; severity: string }> = [];
 
         for (const mode of gameModes) {
           for (const band of bands) {
@@ -507,10 +507,11 @@ Deno.serve(async (req) => {
               .select('id', { count: 'exact', head: true })
               .eq('game_mode', mode)
               .gte('dds_blended', band.min)
-              .lte('dds_blended', band.max);
+              .lte('dds_blended', band.max)
+              .eq('pool_attempts', 0);
             const remaining = count || 0;
             if (remaining < 20) {
-              lowPools.push({ mode, difficulty: band.label, remaining });
+              lowPools.push({ mode, difficulty: band.label, remaining, severity: remaining < 10 ? 'critical' : 'warning' });
             }
           }
         }

@@ -1006,6 +1006,8 @@ Deno.serve(async (req) => {
           gamesByMode,
           realmMetrics,
           poolConsumption,
+          poolDepth,
+          servingEligibility,
           ghostGames: { count: ghostGameIds.length, gameIds: ghostGameIds.slice(0, 50) },
           scoringIntegrity: {
             ratingValidityScore, gamesWithZeroDDS, gamesWithDefaultModifier,

@@ -4,11 +4,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
-import { usePlayerStats } from '@/hooks/usePlayerStats';
+import { usePlayerStats, ModeRating } from '@/hooks/usePlayerStats';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Trophy, Flame, BarChart3, LogOut, Share2, Check, Edit3, User, Layers, Grid3X3, Shield } from 'lucide-react';
+import { Trophy, Flame, BarChart3, LogOut, Share2, Check, Edit3, User, Layers, Grid3X3, Shield, Brain, Puzzle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Profile() {
@@ -178,8 +178,35 @@ export default function Profile() {
           </Card>
         </motion.div>
 
+        {/* Per-Mode IQ Breakdown */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+          <Card>
+            <CardContent className="pt-4 pb-3 space-y-3">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium flex items-center gap-1.5">
+                <Brain className="w-3.5 h-3.5" /> Per-Mode IQ
+              </p>
+              {stats.modeRatings.map((mr: ModeRating) => (
+                <div key={mr.game_mode} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                  <div className="flex items-center gap-2">
+                    <Puzzle className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium">{mr.display_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-mono font-bold">{mr.iq}</span>
+                    {mr.games_played === 0 ? (
+                      <span className="text-xs text-muted-foreground">Unranked</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{mr.games_played} games</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </motion.div>
+
         {/* Games summary */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
           <Card>
             <CardContent className="pt-4 pb-3 space-y-3">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Games Played</p>
@@ -190,12 +217,19 @@ export default function Profile() {
                 </div>
                 <span className="text-sm font-mono text-muted-foreground">{stats.gameBreakdown.klondike} games</span>
               </div>
-              <div className="flex items-center justify-between py-2">
+              <div className="flex items-center justify-between py-2 border-b border-border">
                 <div className="flex items-center gap-2">
                   <Grid3X3 className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium">FreeCell</span>
                 </div>
                 <span className="text-sm font-mono text-muted-foreground">{stats.gameBreakdown.freecell} games</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-2">
+                  <Puzzle className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Realm</span>
+                </div>
+                <span className="text-sm font-mono text-muted-foreground">{stats.gameBreakdown.realm} games</span>
               </div>
             </CardContent>
           </Card>

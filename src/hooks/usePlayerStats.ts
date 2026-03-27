@@ -18,6 +18,13 @@ interface GameRecord {
   game_mode: string;
 }
 
+export interface ModeRating {
+  game_mode: string;
+  display_name: string;
+  iq: number;
+  games_played: number;
+}
+
 export function usePlayerStats() {
   const { user, profile } = useAuth();
 
@@ -36,16 +43,39 @@ export function usePlayerStats() {
     staleTime: 30000,
   });
 
-  // Only show percentile when there are 10+ players with 3+ games
+  // Fetch per-mode ratings
+  const { data: modeRatings = [] } = useQuery({
+    queryKey: ['player-mode-ratings', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      // Fetch game_modes and player_mode_ratings
+      const [modesRes, ratingsRes] = await Promise.all([
+        supabase.from('game_modes' as any).select('id, display_name, is_active').eq('is_active', true) as any,
+        supabase.from('player_mode_ratings' as any).select('game_mode, iq, games_played').eq('user_id', user.id) as any,
+      ]);
+      const modes = ((modesRes as any).data || []) as Array<{ id: string; display_name: string; is_active: boolean }>;
+      const ratings = ((ratingsRes as any).data || []) as Array<{ game_mode: string; iq: number; games_played: number }>;
+      const ratingMap = new Map(ratings.map(r => [r.game_mode, r]));
+
+      return modes.map(m => ({
+        game_mode: m.id,
+        display_name: m.display_name,
+        iq: ratingMap.get(m.id)?.iq ?? 1000,
+        games_played: ratingMap.get(m.id)?.games_played ?? 0,
+      })) as ModeRating[];
+    },
+    enabled: !!user,
+    staleTime: 30000,
+  });
+
   const { data: percentile = 0 } = useQuery({
     queryKey: ['rating-percentile', profile?.rating],
     queryFn: async () => {
-      // First check if we have enough qualified players
       const { count } = await supabase
         .from('profiles')
         .select('id', { count: 'exact', head: true })
         .gte('games_played', 3);
-      if (!count || count < 10) return 0; // Not enough data
+      if (!count || count < 10) return 0;
       const { data } = await supabase.rpc('get_rating_percentile', {
         user_rating: profile?.rating ?? 1000,
       });
@@ -64,8 +94,6 @@ export function usePlayerStats() {
   const gamesPlayed = games.length;
   const winRate = gamesPlayed > 0 ? Math.round((wins.length / gamesPlayed) * 100) : 0;
 
-  // formatTime imported from @/lib/format
-
   return {
     puzzleIQ: rating,
     tier,
@@ -82,7 +110,9 @@ export function usePlayerStats() {
     gameBreakdown: {
       klondike: games.filter(g => !g.game_mode || g.game_mode === 'klondike').length,
       freecell: games.filter(g => g.game_mode === 'freecell').length,
+      realm: games.filter(g => g.game_mode === 'realm').length,
     },
+    modeRatings,
     games,
     percentile,
     profile,

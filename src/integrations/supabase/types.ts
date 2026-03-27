@@ -416,6 +416,104 @@ export type Database = {
           },
         ]
       }
+      game_modes: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id: string
+          is_active?: boolean
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_active?: boolean
+        }
+        Relationships: []
+      }
+      performance_expectations: {
+        Row: {
+          avg_moves: number
+          avg_time_seconds: number
+          dds_bucket: string
+          game_mode: string
+          iq_bucket: string
+          sample_count: number
+          updated_at: string
+        }
+        Insert: {
+          avg_moves: number
+          avg_time_seconds: number
+          dds_bucket: string
+          game_mode: string
+          iq_bucket: string
+          sample_count?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_moves?: number
+          avg_time_seconds?: number
+          dds_bucket?: string
+          game_mode?: string
+          iq_bucket?: string
+          sample_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "performance_expectations_game_mode_fkey"
+            columns: ["game_mode"]
+            isOneToOne: false
+            referencedRelation: "game_modes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_mode_ratings: {
+        Row: {
+          game_mode: string
+          games_played: number
+          iq: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          game_mode: string
+          games_played?: number
+          iq?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          game_mode?: string
+          games_played?: number
+          iq?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_mode_ratings_game_mode_fkey"
+            columns: ["game_mode"]
+            isOneToOne: false
+            referencedRelation: "game_modes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_mode_ratings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -609,6 +707,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_puzzle_iq: { Args: { p_user_id: string }; Returns: number }
       count_daily_attempts: { Args: { p_date: string }; Returns: number }
       create_challenge: {
         Args: {

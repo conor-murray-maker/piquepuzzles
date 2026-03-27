@@ -426,15 +426,10 @@ Deno.serve(async (req) => {
 
       case "system_tables": {
         const tables = [
-          "deals",
-          "game_history",
-          "profiles",
-          "user_played_deals",
-          "streak_history",
-          "daily_challenges",
-          "daily_challenge_completions",
-          "challenges",
-          "challenge_completions",
+          "deals", "game_history", "profiles", "user_played_deals",
+          "streak_history", "daily_challenges", "daily_challenge_completions",
+          "challenges", "challenge_completions", "game_modes",
+          "player_mode_ratings", "performance_expectations",
         ];
         const counts: Record<string, number> = {};
         for (const t of tables) {
@@ -559,7 +554,7 @@ Deno.serve(async (req) => {
         const [
           profilesRes, allDealsRes, recentGamesRes, allGamesRes,
           streakHistRes, dailyChalRes, dailyCompRes, tableCountsRes,
-          cronRes, userPlayedDealsRes,
+          cronRes, userPlayedDealsRes, modeRatingsRes, perfExpRes,
         ] = await Promise.all([
           adminClient.from("profiles").select("*"),
           (async () => {
@@ -586,8 +581,10 @@ Deno.serve(async (req) => {
               return [t, count || 0] as [string, number];
             })
           ),
-          (async () => { try { const { data, error } = await adminClient.rpc("get_cron_jobs"); if (error) { console.warn("get_cron_jobs RPC error:", error.message); return null; } return data || []; } catch (e) { console.warn("get_cron_jobs exception:", e); return null; } })(),
+          (async () => { try { const { data, error } = await adminClient.rpc("get_cron_jobs"); if (error) { return null; } return data || []; } catch { return null; } })(),
           adminClient.from("user_played_deals").select("deal_id, user_id"),
+          adminClient.from("player_mode_ratings").select("*"),
+          adminClient.from("performance_expectations").select("*"),
         ]);
 
         const profiles = profilesRes.data || [];
@@ -596,14 +593,24 @@ Deno.serve(async (req) => {
         const allGames = allGamesRes.data || [];
         const completions = dailyCompRes.data || [];
         const userPlayedDeals = userPlayedDealsRes.data || [];
+        const allModeRatings = (modeRatingsRes as any).data || [];
+        const allPerfExp = (perfExpRes as any).data || [];
 
-        // Users
+        // Build mode rating lookup per user
+        const modeRatingsByUser: Record<string, Array<{ game_mode: string; iq: number; games_played: number }>> = {};
+        for (const mr of allModeRatings) {
+          if (!modeRatingsByUser[mr.user_id]) modeRatingsByUser[mr.user_id] = [];
+          modeRatingsByUser[mr.user_id].push({ game_mode: mr.game_mode, iq: mr.iq, games_played: mr.games_played });
+        }
+
+        // Users — include perModeRatings
         const users = profiles.map((p: any) => ({
           userId: p.id, displayName: p.display_name, puzzleIQ: p.rating,
           tier: p.subscription_tier || "free", gamesPlayed: p.games_played,
           wins: p.games_won, winRate: p.games_played > 0 ? +(p.games_won / p.games_played).toFixed(3) : 0,
           currentStreak: p.current_streak, bestStreak: p.best_streak,
           subscriptionStatus: p.subscription_status, joinedAt: p.created_at, lastActiveAt: p.updated_at,
+          perModeRatings: modeRatingsByUser[p.id] || [],
         }));
 
         // Deal pool
@@ -1042,6 +1049,51 @@ Deno.serve(async (req) => {
         if (inactiveUsers > 0) alerts.push({ severity: "info", code: "INACTIVE_USERS", message: `${inactiveUsers} users inactive for 7+ days`, affectedCount: inactiveUsers, detectedAt: ts });
         if (starterPoolSize < 100) alerts.push({ severity: "info", code: "LOW_HIGH_CONFIDENCE", message: `Only ${starterPoolSize} deals with confidence ≥0.85 (target: 100+)`, affectedCount: starterPoolSize, detectedAt: ts });
 
+        // === SCORING INTEGRITY: check puzzle_iq mismatch ===
+        let puzzleIQMismatchCount = 0;
+        for (const p of profiles) {
+          // Calculate expected puzzle_iq from mode ratings
+          const userRatings = modeRatingsByUser[p.id] || [];
+          const activeModeIds = ['klondike', 'freecell', 'realm']; // known active modes
+          let iqSum = 0;
+          for (const m of activeModeIds) {
+            const mr = userRatings.find((r: any) => r.game_mode === m);
+            iqSum += mr ? mr.iq : 1000;
+          }
+          const expectedPIQ = Math.floor(iqSum / activeModeIds.length);
+          if (Math.abs(p.rating - expectedPIQ) > 1) puzzleIQMismatchCount++;
+        }
+        if (puzzleIQMismatchCount > 0) {
+          alerts.push({ severity: "warning", code: "PUZZLE_IQ_MISMATCH", message: `${puzzleIQMismatchCount} users have profiles.rating != calculate_puzzle_iq()`, affectedCount: puzzleIQMismatchCount, detectedAt: ts });
+        }
+
+        // === AVG MODE IQ DELTA per game ===
+        const modeIQDeltaByMode: Record<string, { sum: number; count: number }> = {};
+        for (const mr of allModeRatings) {
+          if (!modeIQDeltaByMode[mr.game_mode]) modeIQDeltaByMode[mr.game_mode] = { sum: 0, count: 0 };
+          if (mr.games_played > 0) {
+            modeIQDeltaByMode[mr.game_mode].sum += mr.iq - 1000;
+            modeIQDeltaByMode[mr.game_mode].count += mr.games_played;
+          }
+        }
+        for (const mode of gameModes) {
+          if (gamesByMode[mode] && modeIQDeltaByMode[mode]) {
+            gamesByMode[mode].avgModeIQDelta = modeIQDeltaByMode[mode].count > 0
+              ? +(modeIQDeltaByMode[mode].sum / modeIQDeltaByMode[mode].count).toFixed(2) : 0;
+          }
+        }
+
+        // === PERFORMANCE EXPECTATIONS DIAGNOSTIC ===
+        const performanceExpectations = allPerfExp.map((pe: any) => ({
+          game_mode: pe.game_mode,
+          dds_bucket: pe.dds_bucket,
+          iq_bucket: pe.iq_bucket,
+          sample_count: pe.sample_count,
+          avg_time_seconds: +pe.avg_time_seconds.toFixed(1),
+          avg_moves: +pe.avg_moves.toFixed(1),
+          dataSource: pe.sample_count >= 100 ? 'empirical' : pe.sample_count >= 30 ? 'blended' : 'hardcoded',
+        }));
+
         const snapshot = {
           generatedAt: now.toISOString(),
           alerts,
@@ -1056,8 +1108,10 @@ Deno.serve(async (req) => {
           scoringIntegrity: {
             ratingValidityScore, gamesWithZeroDDS, gamesWithDefaultModifier,
             gamesWithZeroDeltaOnWin, ratingMismatchCount, duplicateGameCount,
+            puzzleIQMismatchCount,
             brokenGameIds: brokenGameIds.slice(0, 50),
           },
+          performanceExpectations,
           dealGenerationHealth: {
             dealsWithZeroMinSolutionLength: dealsWithZeroMinMoves,
             avgSimulationCount: +(totalSimCount / n).toFixed(1),
@@ -1224,6 +1278,131 @@ Deno.serve(async (req) => {
           pg++;
         }
         return json(allDeals);
+      }
+
+      case "recalculate_mode_iqs": {
+        // Delete all player_mode_ratings
+        await adminClient.from("player_mode_ratings").delete().neq("user_id", "00000000-0000-0000-0000-000000000000");
+
+        // Get active game modes
+        const { data: gameModeRows } = await adminClient.from("game_modes").select("id").eq("is_active", true);
+        const activeModes = (gameModeRows || []).map((m: any) => m.id);
+
+        // Get all profiles
+        const { data: allProfs } = await adminClient.from("profiles").select("id");
+        const profileIds = (allProfs || []).map((p: any) => p.id);
+
+        // Re-insert defaults
+        const defaultRows = profileIds.flatMap((uid: string) =>
+          activeModes.map((mode: string) => ({ user_id: uid, game_mode: mode, iq: 1000, games_played: 0, updated_at: new Date().toISOString() }))
+        );
+        if (defaultRows.length > 0) {
+          // Batch insert in chunks of 500
+          for (let i = 0; i < defaultRows.length; i += 500) {
+            await adminClient.from("player_mode_ratings").insert(defaultRows.slice(i, i + 500));
+          }
+        }
+
+        // Clear and re-seed performance_expectations
+        await adminClient.from("performance_expectations").delete().neq("game_mode", "___none___");
+        // Re-seed with hardcoded values (same as migration)
+        const peSeeds = [
+          // Klondike
+          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
+            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
+              game_mode: 'klondike', dds_bucket: dds, iq_bucket: iq,
+              avg_time_seconds: [120,100,80,70, 240,200,170,140, 360,300,250,210, 480,400,340,280, 540,450,380,320][di*4+ii],
+              avg_moves: [95,85,75,65, 120,105,95,85, 150,135,120,110, 180,160,145,130, 200,180,160,145][di*4+ii],
+              sample_count: 0,
+            }))
+          ),
+          // FreeCell
+          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
+            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
+              game_mode: 'freecell', dds_bucket: dds, iq_bucket: iq,
+              avg_time_seconds: [150,120,100,85, 210,180,150,120, 300,250,210,175, 390,330,280,230, 450,380,320,270][di*4+ii],
+              avg_moves: [75,65,55,50, 100,85,75,65, 130,115,100,90, 160,140,125,110, 180,160,140,125][di*4+ii],
+              sample_count: 0,
+            }))
+          ),
+          // Realm
+          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
+            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
+              game_mode: 'realm', dds_bucket: dds, iq_bucket: iq,
+              avg_time_seconds: [20,15,12,10, 45,35,28,22, 75,60,48,38, 120,95,78,62, 180,145,115,90][di*4+ii],
+              avg_moves: [8,7,6,5, 18,15,13,11, 28,24,20,17, 40,34,28,24, 55,46,38,32][di*4+ii],
+              sample_count: 0,
+            }))
+          ),
+        ];
+        for (let i = 0; i < peSeeds.length; i += 500) {
+          await adminClient.from("performance_expectations").insert(peSeeds.slice(i, i + 500));
+        }
+
+        // Replay game_history chronologically
+        let allHistory: any[] = [];
+        let histPage = 0;
+        while (true) {
+          const { data: batch } = await adminClient.from("game_history")
+            .select("user_id, game_mode, won, moves, time_seconds, hints_used, difficulty_score, deal_uuid")
+            .order("played_at", { ascending: true })
+            .range(histPage * 1000, (histPage + 1) * 1000 - 1);
+          if (!batch || batch.length === 0) break;
+          allHistory = allHistory.concat(batch);
+          if (batch.length < 1000) break;
+          histPage++;
+        }
+
+        // Build in-memory state
+        const modeState: Record<string, { iq: number; gp: number }> = {};
+        const getKey = (uid: string, mode: string) => `${uid}|${mode}`;
+
+        for (const uid of profileIds) {
+          for (const mode of activeModes) {
+            modeState[getKey(uid, mode)] = { iq: 1000, gp: 0 };
+          }
+        }
+
+        // Helper functions inline
+        const getDdsBucket = (d: number) => d <= 25 ? '0-25' : d <= 50 ? '26-50' : d <= 75 ? '51-75' : d <= 100 ? '76-100' : '101+';
+        const getIqBucket = (iq: number) => iq < 1100 ? '800-1100' : iq < 1300 ? '1100-1300' : iq < 1500 ? '1300-1500' : '1500+';
+
+        for (const g of allHistory) {
+          const key = getKey(g.user_id, g.game_mode);
+          if (!modeState[key]) modeState[key] = { iq: 1000, gp: 0 };
+          const st = modeState[key];
+          const dds = g.difficulty_score || 50;
+          const dealRating = 800 + (dds / 100) * 1200;
+          const K = st.gp < 20 ? 32 : st.gp < 50 ? 24 : 16;
+          const expected = 1 / (1 + Math.pow(10, (dealRating - st.iq) / 400));
+          const outcome = g.won ? 1 : 0;
+          let delta = Math.round(K * (outcome - expected));
+          if (g.won) delta = Math.max(1, delta);
+          else delta = Math.max(-20, delta);
+          st.iq = Math.max(0, st.iq + delta);
+          st.gp += 1;
+        }
+
+        // Write back to player_mode_ratings
+        const upsertRows = Object.entries(modeState).map(([key, st]) => {
+          const [uid, mode] = key.split('|');
+          return { user_id: uid, game_mode: mode, iq: st.iq, games_played: st.gp, updated_at: new Date().toISOString() };
+        });
+        for (let i = 0; i < upsertRows.length; i += 500) {
+          await adminClient.from("player_mode_ratings").upsert(upsertRows.slice(i, i + 500), { onConflict: "user_id,game_mode" });
+        }
+
+        // Update profiles.rating via calculate_puzzle_iq
+        const results: any[] = [];
+        for (const uid of profileIds) {
+          const { data: puzzleIQ } = await adminClient.rpc("calculate_puzzle_iq", { p_user_id: uid });
+          await adminClient.from("profiles").update({ rating: puzzleIQ ?? 1000 }).eq("id", uid);
+          const userModes = activeModes.map((m: string) => ({ mode: m, iq: modeState[getKey(uid, m)]?.iq ?? 1000 }));
+          const { data: prof } = await adminClient.from("profiles").select("display_name").eq("id", uid).single();
+          results.push({ userId: uid, displayName: prof?.display_name, puzzleIQ: puzzleIQ ?? 1000, modeIQs: userModes });
+        }
+
+        return json({ recalculated: results.length, results });
       }
 
       default:

@@ -3,11 +3,11 @@ import { motion } from 'framer-motion';
 import { RATING_TIERS } from '@/game/types';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
-import { usePlayerStats } from '@/hooks/usePlayerStats';
+import { usePlayerStats, ModeRating } from '@/hooks/usePlayerStats';
 import { formatTime } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, Trophy, Target, Timer, Hash, Flame, BarChart3, Users } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trophy, Target, Timer, Hash, Flame, BarChart3, Users, Brain } from 'lucide-react';
 import { StreakCalendar } from '@/components/game/StreakCalendar';
 
 interface GameRecord {
@@ -211,6 +211,7 @@ export default function Stats() {
 
   const klondikeGames = useMemo(() => stats.games.filter((g: any) => !g.game_mode || g.game_mode === 'klondike'), [stats.games]);
   const freecellGames = useMemo(() => stats.games.filter((g: any) => g.game_mode === 'freecell'), [stats.games]);
+  const realmGames = useMemo(() => stats.games.filter((g: any) => g.game_mode === 'realm'), [stats.games]);
 
   if (stats.loading) {
     return (
@@ -240,11 +241,39 @@ export default function Stats() {
           </h1>
         </motion.div>
 
+        {/* Per-Mode IQ Breakdown */}
+        {stats.modeRatings.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
+            <Card>
+              <CardContent className="pt-4 pb-3 space-y-3">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium flex items-center gap-1.5">
+                  <Brain className="w-3.5 h-3.5" /> Per-Mode IQ
+                </p>
+                {stats.modeRatings.map((mr: ModeRating) => (
+                  <div key={mr.game_mode} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+                    <span className="text-sm font-medium">{mr.display_name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-sm">{mr.iq}</span>
+                      {mr.games_played === 0 && (
+                        <span className="text-xs text-muted-foreground">Unranked</span>
+                      )}
+                      {mr.games_played > 0 && (
+                        <span className="text-xs text-muted-foreground">{mr.games_played} games</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
         <Tabs defaultValue="all" className="w-full">
           <TabsList className="w-full">
-            <TabsTrigger value="all" className="flex-1">All Games</TabsTrigger>
+            <TabsTrigger value="all" className="flex-1">All</TabsTrigger>
             <TabsTrigger value="klondike" className="flex-1">Klondike</TabsTrigger>
             <TabsTrigger value="freecell" className="flex-1">FreeCell</TabsTrigger>
+            <TabsTrigger value="realm" className="flex-1">Realm</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all">
@@ -255,6 +284,9 @@ export default function Stats() {
           </TabsContent>
           <TabsContent value="freecell">
             <StatsContent games={freecellGames as GameRecord[]} stats={stats} />
+          </TabsContent>
+          <TabsContent value="realm">
+            <StatsContent games={realmGames as GameRecord[]} stats={stats} />
           </TabsContent>
         </Tabs>
       </div>

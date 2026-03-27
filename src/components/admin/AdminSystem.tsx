@@ -269,8 +269,50 @@ export function AdminSystem() {
           </Table>
         </CardContent>
       </Card>
+      {/* Pool Consumption */}
+      {poolConsumption.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Pool Consumption</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mode</TableHead>
+                  <TableHead>Difficulty</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Unplayed</TableHead>
+                  <TableHead className="text-right">Avg Attempts</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {poolConsumption.map((pc) => (
+                  <TableRow key={`${pc.mode}-${pc.difficulty}`}>
+                    <TableCell className="font-mono text-sm">{pc.mode}</TableCell>
+                    <TableCell>{pc.difficulty}</TableCell>
+                    <TableCell className="text-right font-mono">{pc.totalDeals}</TableCell>
+                    <TableCell className="text-right font-mono">{pc.unplayedDeals}</TableCell>
+                    <TableCell className="text-right font-mono">{pc.avgPoolAttempts}</TableCell>
+                    <TableCell>
+                      <Badge className={
+                        pc.unplayedDeals > 20
+                          ? 'bg-emerald-500/20 text-emerald-700 hover:bg-emerald-500/30'
+                          : pc.unplayedDeals >= 10
+                          ? 'bg-amber-500/20 text-amber-700 hover:bg-amber-500/30'
+                          : 'bg-destructive/20 text-destructive hover:bg-destructive/30'
+                      }>
+                        {pc.unplayedDeals > 20 ? 'OK' : pc.unplayedDeals >= 10 ? 'Low' : 'Critical'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Manual Actions */}
+
       <Card>
         <CardHeader><CardTitle className="text-base">Manual Actions</CardTitle></CardHeader>
         <CardContent>

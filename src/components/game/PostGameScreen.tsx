@@ -12,7 +12,7 @@ import { formatTimeRaw } from '@/lib/format';
 import { getDifficultyLabel } from '@/lib/difficulty';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { ScoreBreakdownData } from '@/hooks/useGamePersistence';
+import { ScoreBreakdownData, ModeIQData } from '@/hooks/useGamePersistence';
 
 interface PostGameScreenProps {
   gameState: KlondikeState;
@@ -39,11 +39,12 @@ interface PostGameScreenProps {
     milestoneReached: number | null;
   } | null;
   breakdown?: ScoreBreakdownData | null;
+  modeIQData?: ModeIQData | null;
 }
 
 export function PostGameScreen({
   gameState, currentRating, previousRating, ratingChange, onPlayAgain, onGoHome, elapsedSeconds,
-  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData, streakUpdate, breakdown,
+  gameMode = 'klondike', dealSeed, drawMode = 3, challengeData, streakUpdate, breakdown, modeIQData,
 }: PostGameScreenProps) {
   
   const { user, profile } = useAuth();
@@ -150,6 +151,24 @@ export function PostGameScreen({
           <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Puzzle IQ</p>
           <PuzzleIQBadge rating={currentRating} size="lg" />
           <RatingChange change={ratingChange} />
+          {modeIQData && (
+            <div className="space-y-1 pt-2">
+              <p className="text-sm text-muted-foreground">
+                <span className="capitalize">{modeIQData.gameMode}</span> IQ{' '}
+                <span className="font-mono font-semibold text-foreground">{modeIQData.modeIQ}</span>{' '}
+                <span className={`font-mono font-semibold ${modeIQData.modeIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}`}>
+                  ({modeIQData.modeIQDelta > 0 ? '+' : ''}{modeIQData.modeIQDelta})
+                </span>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Puzzle IQ{' '}
+                <span className="font-mono font-semibold text-foreground">{modeIQData.puzzleIQ}</span>{' '}
+                <span className={`font-mono font-semibold ${modeIQData.puzzleIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}`}>
+                  ({modeIQData.puzzleIQDelta > 0 ? '+' : ''}{modeIQData.puzzleIQDelta})
+                </span>
+              </p>
+            </div>
+          )}
           <TierProgressBar
             rating={currentRating}
             previousRating={previousRating}

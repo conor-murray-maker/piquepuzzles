@@ -17,7 +17,7 @@ export interface VerifiedDeal {
   drawMode: number;
 }
 
-/** DDS bracket based on Pique IQ */
+/** DDS bracket based on mode IQ */
 function getDdsBracket(rating: number): { min: number; max: number } {
   if (rating < 1100) return { min: 0, max: 45 };
   if (rating < 1300) return { min: 25, max: 65 };
@@ -89,20 +89,37 @@ export class DealPoolService {
     const minConf = getMinConfidence(gamesPlayedThisMode);
     const concentrationCap = getConcentrationCap(gamesPlayedThisMode);
 
+    console.log(`[DealPoolService] getNextDeal`, {
+      userId,
+      gameMode,
+      modeIQ,
+      iqSource: 'player_mode_ratings',
+      ddsBracket: bracket,
+      gamesPlayedThisMode,
+      allowedDiffs,
+      minConfidence: minConf,
+      concentrationCap,
+      playedDealCount: playedIds.size,
+    });
+
     // Step 1: Query eligible deals with concentration cap
-    const deal = await this.queryEligible(
+    const { deal: deal1, totalFound: found1, unplayedCount: unplayed1 } = await this.queryEligibleWithStats(
       gameMode, playedIds, bracket, allowedDiffs, minConf, concentrationCap
     );
-    if (deal) {
-      await this.markPlayed(userId, deal.id);
-      return dealRowToVerified(deal, 'served');
+    console.log(`[DealPoolService] Priority 1 (bracket+concentration):`, { totalFound: found1, unplayed: unplayed1, served: !!deal1 });
+    if (deal1) {
+      await this.markPlayed(userId, deal1.id);
+      return dealRowToVerified(deal1, 'served');
     }
 
     // Fallback 1: Expand to full eligible pool (remove concentration cap)
+    let found2 = 0, unplayed2 = 0;
     if (concentrationCap !== null) {
-      const expanded = await this.queryEligible(
+      const { deal: expanded, totalFound: f2, unplayedCount: u2 } = await this.queryEligibleWithStats(
         gameMode, playedIds, bracket, allowedDiffs, minConf, null
       );
+      found2 = f2; unplayed2 = u2;
+      console.log(`[DealPoolService] Priority 2 (bracket, no cap):`, { totalFound: found2, unplayed: unplayed2, served: !!expanded });
       if (expanded) {
         await this.markPlayed(userId, expanded.id);
         return dealRowToVerified(expanded, 'expanded');
@@ -110,25 +127,35 @@ export class DealPoolService {
     }
 
     // Fallback 2: Remove bracket preference — serve any unplayed deal for this mode
-    if (bracket !== null) {
-      const noBracket = await this.queryEligible(
-        gameMode, playedIds, null, allowedDiffs, minConf, null
-      );
-      if (noBracket) {
-        await this.markPlayed(userId, noBracket.id);
-        return dealRowToVerified(noBracket, 'expanded-no-bracket');
-      }
+    const { deal: noBracket, totalFound: found3, unplayedCount: unplayed3 } = await this.queryEligibleWithStats(
+      gameMode, playedIds, null, allowedDiffs, minConf, null
+    );
+    console.log(`[DealPoolService] Priority 3 (no bracket):`, { totalFound: found3, unplayed: unplayed3, served: !!noBracket });
+    if (noBracket) {
+      await this.markPlayed(userId, noBracket.id);
+      return dealRowToVerified(noBracket, 'expanded-no-bracket');
     }
 
-    // Fallback 3: Replay oldest played eligible deal
+    // Fallback 3: Remove difficulty + confidence filters — any unplayed deal for this mode
+    const { deal: anyDeal, totalFound: found4, unplayedCount: unplayed4 } = await this.queryEligibleWithStats(
+      gameMode, playedIds, null, null, 0, null
+    );
+    console.log(`[DealPoolService] Priority 4 (any unplayed):`, { totalFound: found4, unplayed: unplayed4, served: !!anyDeal });
+    if (anyDeal) {
+      await this.markPlayed(userId, anyDeal.id);
+      return dealRowToVerified(anyDeal, 'any-unplayed');
+    }
+
+    // Fallback 4: Replay oldest played eligible deal
     const replay = await this.getOldestPlayedDeal(userId, gameMode, null, allowedDiffs, minConf);
+    console.log(`[DealPoolService] Priority 5 (replay):`, { served: !!replay });
     if (replay) {
       await this.markPlayed(userId, replay.id);
       return dealRowToVerified(replay, 'replay');
     }
 
-    // Fallback 4: Generate on client
-    console.warn(`[DealPoolService] Fallback generation triggered for ${gameMode} — pool exhausted`);
+    // Fallback 5: Generate on client — should only trigger if pool is truly empty
+    console.warn(`[DealPoolService] Fallback generation triggered for ${gameMode} — pool exhausted (total deals: ${found4}, all played)`);
     const targetBracket = bracket ?? { min: 0, max: 45 };
     return this.generateAndInsertFallback(userId, gameMode, drawMode, targetBracket);
   }

@@ -13,6 +13,27 @@ const TIER_COLORS: Record<string, string> = {
   elite: 'hsl(280, 60%, 55%)',
 };
 
+const RANGE_MIN = 800;
+const RANGE_MAX = 2000;
+
+function FullRangeBar({ rating, className = '' }: { rating: number; className?: string }) {
+  const tier = getTier(rating);
+  const progress = Math.max(0, Math.min(100, ((rating - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100));
+  const tierColor = TIER_COLORS[tier.color] || TIER_COLORS.bronze;
+
+  return (
+    <div className={`h-1.5 rounded-full bg-secondary overflow-hidden ${className}`}>
+      <div
+        className="h-full rounded-full transition-all duration-500"
+        style={{
+          width: `${progress}%`,
+          background: `linear-gradient(90deg, hsl(var(--primary)) 0%, ${tierColor} 100%)`,
+        }}
+      />
+    </div>
+  );
+}
+
 function MiniProgressBar({ rating, className = '' }: { rating: number; className?: string }) {
   const tier = getTier(rating);
   const tierIndex = RATING_TIERS.findIndex(t => t.name === tier.name);
@@ -43,8 +64,6 @@ interface PiqueIQPanelProps {
 export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: PiqueIQPanelProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const tier = getTier(piqueIQ);
-  const tierIndex = RATING_TIERS.findIndex(t => t.name === tier.name);
-  const nextTier = RATING_TIERS[tierIndex + 1];
 
   return (
     <div className="stat-card overflow-hidden">
@@ -88,12 +107,15 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
               {tier.name}
             </span>
           </div>
-          <MiniProgressBar rating={piqueIQ} className="mt-2 w-full" />
-          {nextTier && (
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {nextTier.min - piqueIQ} points to {nextTier.name}
-            </p>
-          )}
+          <FullRangeBar rating={piqueIQ} className="mt-2 w-full" />
+          <div className="flex justify-end mt-1">
+            <span
+              className="text-[10px] font-semibold uppercase tracking-wider"
+              style={{ color: TIER_COLORS[tier.color] }}
+            >
+              {tier.name}
+            </span>
+          </div>
         </div>
         <motion.div
           animate={{ rotate: expanded ? 180 : 0 }}
@@ -138,6 +160,15 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
                               style={{ color: TIER_COLORS[modeTier.color] }}
                             >
                               {modeTier.name}
+                            </span>
+                          )}
+                          {mr.todayDelta !== 0 && (
+                            <span
+                              className={`text-[10px] font-mono font-semibold ${
+                                mr.todayDelta > 0 ? 'text-green-500' : 'text-red-500'
+                              }`}
+                            >
+                              {mr.todayDelta > 0 ? '+' : ''}{mr.todayDelta}
                             </span>
                           )}
                         </div>

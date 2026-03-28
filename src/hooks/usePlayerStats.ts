@@ -16,6 +16,7 @@ interface GameRecord {
   hints_used: number;
   undos_used: number;
   game_mode: string;
+  final_delta: number | null;
 }
 
 export interface ModeRating {
@@ -23,6 +24,7 @@ export interface ModeRating {
   display_name: string;
   iq: number;
   games_played: number;
+  todayDelta: number;
 }
 
 export function usePlayerStats() {
@@ -44,11 +46,10 @@ export function usePlayerStats() {
   });
 
   // Fetch per-mode ratings
-  const { data: modeRatings = [] } = useQuery({
+  const { data: rawModeRatings = [] } = useQuery({
     queryKey: ['player-mode-ratings', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      // Fetch game_modes and player_mode_ratings
       const [modesRes, ratingsRes] = await Promise.all([
         supabase.from('game_modes' as any).select('id, display_name, is_active').eq('is_active', true) as any,
         supabase.from('player_mode_ratings' as any).select('game_mode, iq, games_played').eq('user_id', user.id) as any,
@@ -62,7 +63,7 @@ export function usePlayerStats() {
         display_name: m.display_name,
         iq: ratingMap.get(m.id)?.iq ?? 1000,
         games_played: ratingMap.get(m.id)?.games_played ?? 0,
-      })) as ModeRating[];
+      }));
     },
     enabled: !!user,
     staleTime: 30000,
@@ -93,6 +94,23 @@ export function usePlayerStats() {
   const wins = games.filter(g => g.won);
   const gamesPlayed = games.length;
   const winRate = gamesPlayed > 0 ? Math.round((wins.length / gamesPlayed) * 100) : 0;
+
+  // Compute today's delta per mode from game_history
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayISO = todayStart.toISOString();
+  const todayDeltaByMode = new Map<string, number>();
+  for (const g of games) {
+    if (g.played_at >= todayISO && g.final_delta != null) {
+      const mode = g.game_mode || 'klondike';
+      todayDeltaByMode.set(mode, (todayDeltaByMode.get(mode) ?? 0) + g.final_delta);
+    }
+  }
+
+  const modeRatings: ModeRating[] = rawModeRatings.map(mr => ({
+    ...mr,
+    todayDelta: todayDeltaByMode.get(mr.game_mode) ?? 0,
+  }));
 
   return {
     puzzleIQ: rating,

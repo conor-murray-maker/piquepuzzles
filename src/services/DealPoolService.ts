@@ -281,7 +281,7 @@ export class DealPoolService {
         const seed = generateSeed();
         let deal;
         if (gameMode === 'realm') {
-          const sizes = bracket.max <= 35 ? [4, 5] :
+          const sizes = bracket.max <= 35 ? [5] :
                        bracket.max <= 65 ? [6] :
                        bracket.max <= 80 ? [7, 8] : [9, 10];
           const size = sizes[Math.floor(Math.random() * sizes.length)];

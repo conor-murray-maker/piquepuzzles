@@ -44,11 +44,12 @@ class RealmEngineImpl implements PuzzleEngine {
   getComplexityScore(minSolutionLength: number): number {
     // For Realm, DDS is computed directly in generation, not from solution length.
     // This is a fallback mapping from grid size.
-    if (minSolutionLength <= 6) return 22;
-    if (minSolutionLength <= 7) return 40;
-    if (minSolutionLength <= 8) return 55;
-    if (minSolutionLength <= 9) return 70;
-    return 87;
+    if (minSolutionLength <= 5) return 22;
+    if (minSolutionLength <= 6) return 40;
+    if (minSolutionLength <= 7) return 55;
+    if (minSolutionLength <= 8) return 70;
+    if (minSolutionLength <= 9) return 87;
+    return 95;
   }
 }
 

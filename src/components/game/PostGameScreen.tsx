@@ -177,6 +177,8 @@ export function PostGameScreen({
           difficulty={gameState.difficulty}
           actualTime={timeSeconds}
           actualMoves={gameState.moves}
+          gameMode={gameMode}
+          puzzleIQDelta={modeIQData?.puzzleIQDelta ?? null}
         />
 
         <div className="grid grid-cols-2 gap-3">
@@ -271,13 +273,15 @@ export function PostGameScreen({
 
 // --- Score Breakdown Card ---
 
-function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTime, actualMoves }: {
+function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTime, actualMoves, gameMode, puzzleIQDelta }: {
   won: boolean;
   breakdown?: ScoreBreakdownData | null;
   ratingChange: number;
   difficulty: string;
   actualTime: number;
   actualMoves: number;
+  gameMode: string;
+  puzzleIQDelta: number | null;
 }) {
   
   if (ratingChange === 0 && !breakdown) return null;
@@ -295,7 +299,7 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
         transition={{ delay: 0.4 }}
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
-          Puzzle IQ Lost
+          {`${gameMode.charAt(0).toUpperCase() + gameMode.slice(1)} IQ Lost`}
         </p>
         <BreakdownLine
           label={`${diffLabel} deal — not solved`}
@@ -308,6 +312,11 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
             {ratingChange}
           </span>
         </div>
+        {puzzleIQDelta !== null && (
+          <p className="text-xs text-muted-foreground pt-1">
+            Puzzle IQ impact {puzzleIQDelta > 0 ? '+' : ''}{puzzleIQDelta}
+          </p>
+        )}
       </motion.div>
     );
   }
@@ -385,6 +394,11 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
           {ratingChange > 0 ? '+' : ''}{ratingChange}
         </span>
       </div>
+      {puzzleIQDelta !== null && (
+        <p className="text-xs text-muted-foreground pt-1">
+          Puzzle IQ impact {puzzleIQDelta > 0 ? '+' : ''}{puzzleIQDelta}
+        </p>
+      )}
     </motion.div>
   );
 }

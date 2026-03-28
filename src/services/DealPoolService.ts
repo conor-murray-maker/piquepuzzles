@@ -173,6 +173,8 @@ export class DealPoolService {
     minConfidence: number,
     concentrationCap: number | null
   ): Promise<{ deal: any | null; totalFound: number; unplayedCount: number }> {
+    // Build filter description for logging
+    const filters: Record<string, any> = { game_mode: gameMode, orderBy: 'pool_attempts ASC' };
     try {
       let query = (supabase as any)
         .from('deals')
@@ -182,6 +184,8 @@ export class DealPoolService {
 
       if (bracket) {
         query = query.gte('dds_blended', bracket.min).lte('dds_blended', bracket.max);
+        filters.dds_blended_gte = bracket.min;
+        filters.dds_blended_lte = bracket.max;
       }
 
       if (allowedDiffs) {
@@ -192,16 +196,31 @@ export class DealPoolService {
           ddsMax = 55;
         }
         query = query.gte('dds_blended', ddsMin).lte('dds_blended', ddsMax);
+        filters.allowedDiffs_ddsMin = ddsMin;
+        filters.allowedDiffs_ddsMax = ddsMax;
       }
 
       if (minConfidence > 0) {
         query = query.gte('confidence', minConfidence);
+        filters.confidence_gte = minConfidence;
       }
 
       const fetchLimit = concentrationCap ? concentrationCap * 2 : 200;
       query = query.limit(fetchLimit);
+      filters.fetchLimit = fetchLimit;
+      filters.concentrationCap = concentrationCap;
 
-      const { data } = await query;
+      console.log(`[DealPoolService] QUERY BEFORE exec`, filters);
+
+      const { data, error } = await query;
+
+      console.log(`[DealPoolService] QUERY AFTER exec`, {
+        filters,
+        rowsReturned: data?.length ?? 0,
+        error: error ?? null,
+        firstRow: data?.[0] ? { id: data[0].id, dds_blended: data[0].dds_blended, game_mode: data[0].game_mode, confidence: data[0].confidence } : null,
+      });
+
       if (!data?.length) return { deal: null, totalFound: 0, unplayedCount: 0 };
 
       let candidates = data;
@@ -210,6 +229,16 @@ export class DealPoolService {
       }
 
       const unplayed = candidates.filter((d: any) => !playedIds.has(d.id));
+
+      console.log(`[DealPoolService] EXCLUSION`, {
+        candidateCount: candidates.length,
+        playedIdsCount: playedIds.size,
+        playedIdsJoinField: 'deal_id from user_played_deals matched against deals.id (UUID)',
+        unplayedCount: unplayed.length,
+        samplePlayedIds: [...playedIds].slice(0, 3),
+        sampleCandidateIds: candidates.slice(0, 3).map((d: any) => d.id),
+      });
+
       return {
         deal: unplayed.length > 0 ? unplayed[0] : null,
         totalFound: data.length,
@@ -223,12 +252,16 @@ export class DealPoolService {
 
   private static async getUserPlayedDealIds(userId: string): Promise<Set<string>> {
     try {
-      const { data } = await (supabase as any)
+      console.log(`[DealPoolService] getUserPlayedDealIds BEFORE`, { userId, table: 'user_played_deals', select: 'deal_id', filter: `user_id = ${userId}` });
+      const { data, error } = await (supabase as any)
         .from('user_played_deals')
         .select('deal_id')
         .eq('user_id', userId);
-      return new Set((data || []).map((d: any) => d.deal_id));
-    } catch {
+      const ids = new Set<string>((data || []).map((d: any) => d.deal_id as string));
+      console.log(`[DealPoolService] getUserPlayedDealIds AFTER`, { userId, count: ids.size, error: error ?? null, sampleIds: [...ids].slice(0, 5) });
+      return ids;
+    } catch (err) {
+      console.warn('[DealPoolService] getUserPlayedDealIds FAILED', err);
       return new Set();
     }
   }

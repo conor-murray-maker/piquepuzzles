@@ -78,11 +78,13 @@ export class DealPoolService {
     gameMode: GameMode,
     drawMode: number = 3,
     gamesPlayed: number = 999,
-    rating: number = 1000,
+    modeIQ: number = 1000,
     gamesPlayedThisMode: number = 999
   ): Promise<VerifiedDeal | null> {
     const playedIds = await this.getUserPlayedDealIds(userId);
-    const bracket = gamesPlayedThisMode >= 20 ? getDdsBracket(rating) : null;
+    // DDS bracket based on mode IQ (preference, not hard filter)
+    // First 3 games per mode: no bracket (Easy-only via allowedDiffs handles it)
+    const bracket = gamesPlayedThisMode >= 3 ? getDdsBracket(modeIQ) : null;
     const allowedDiffs = getAllowedDifficulties(gamesPlayedThisMode);
     const minConf = getMinConfidence(gamesPlayedThisMode);
     const concentrationCap = getConcentrationCap(gamesPlayedThisMode);
@@ -107,14 +109,25 @@ export class DealPoolService {
       }
     }
 
-    // Fallback 2: Replay oldest played eligible deal
-    const replay = await this.getOldestPlayedDeal(userId, gameMode, bracket, allowedDiffs, minConf);
+    // Fallback 2: Remove bracket preference — serve any unplayed deal for this mode
+    if (bracket !== null) {
+      const noBracket = await this.queryEligible(
+        gameMode, playedIds, null, allowedDiffs, minConf, null
+      );
+      if (noBracket) {
+        await this.markPlayed(userId, noBracket.id);
+        return dealRowToVerified(noBracket, 'expanded-no-bracket');
+      }
+    }
+
+    // Fallback 3: Replay oldest played eligible deal
+    const replay = await this.getOldestPlayedDeal(userId, gameMode, null, allowedDiffs, minConf);
     if (replay) {
       await this.markPlayed(userId, replay.id);
       return dealRowToVerified(replay, 'replay');
     }
 
-    // Fallback 3: Generate on client
+    // Fallback 4: Generate on client
     console.warn(`[DealPoolService] Fallback generation triggered for ${gameMode} — pool exhausted`);
     const targetBracket = bracket ?? { min: 0, max: 45 };
     return this.generateAndInsertFallback(userId, gameMode, drawMode, targetBracket);

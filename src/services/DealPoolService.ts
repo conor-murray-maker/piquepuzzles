@@ -252,12 +252,16 @@ export class DealPoolService {
 
   private static async getUserPlayedDealIds(userId: string): Promise<Set<string>> {
     try {
-      const { data } = await (supabase as any)
+      console.log(`[DealPoolService] getUserPlayedDealIds BEFORE`, { userId, table: 'user_played_deals', select: 'deal_id', filter: `user_id = ${userId}` });
+      const { data, error } = await (supabase as any)
         .from('user_played_deals')
         .select('deal_id')
         .eq('user_id', userId);
-      return new Set((data || []).map((d: any) => d.deal_id));
-    } catch {
+      const ids = new Set((data || []).map((d: any) => d.deal_id));
+      console.log(`[DealPoolService] getUserPlayedDealIds AFTER`, { userId, count: ids.size, error: error ?? null, sampleIds: [...ids].slice(0, 5) });
+      return ids;
+    } catch (err) {
+      console.warn('[DealPoolService] getUserPlayedDealIds FAILED', err);
       return new Set();
     }
   }

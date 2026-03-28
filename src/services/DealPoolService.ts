@@ -109,14 +109,25 @@ export class DealPoolService {
       }
     }
 
-    // Fallback 2: Replay oldest played eligible deal
-    const replay = await this.getOldestPlayedDeal(userId, gameMode, bracket, allowedDiffs, minConf);
+    // Fallback 2: Remove bracket preference — serve any unplayed deal for this mode
+    if (bracket !== null) {
+      const noBracket = await this.queryEligible(
+        gameMode, playedIds, null, allowedDiffs, minConf, null
+      );
+      if (noBracket) {
+        await this.markPlayed(userId, noBracket.id);
+        return dealRowToVerified(noBracket, 'expanded-no-bracket');
+      }
+    }
+
+    // Fallback 3: Replay oldest played eligible deal
+    const replay = await this.getOldestPlayedDeal(userId, gameMode, null, allowedDiffs, minConf);
     if (replay) {
       await this.markPlayed(userId, replay.id);
       return dealRowToVerified(replay, 'replay');
     }
 
-    // Fallback 3: Generate on client
+    // Fallback 4: Generate on client
     console.warn(`[DealPoolService] Fallback generation triggered for ${gameMode} — pool exhausted`);
     const targetBracket = bracket ?? { min: 0, max: 45 };
     return this.generateAndInsertFallback(userId, gameMode, drawMode, targetBracket);

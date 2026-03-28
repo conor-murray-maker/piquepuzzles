@@ -257,7 +257,7 @@ export class DealPoolService {
         .from('user_played_deals')
         .select('deal_id')
         .eq('user_id', userId);
-      const ids = new Set((data || []).map((d: any) => d.deal_id));
+      const ids = new Set<string>((data || []).map((d: any) => d.deal_id as string));
       console.log(`[DealPoolService] getUserPlayedDealIds AFTER`, { userId, count: ids.size, error: error ?? null, sampleIds: [...ids].slice(0, 5) });
       return ids;
     } catch (err) {

@@ -17,7 +17,7 @@ export interface VerifiedDeal {
   drawMode: number;
 }
 
-/** DDS bracket based on puzzle IQ */
+/** DDS bracket based on Pique IQ */
 function getDdsBracket(rating: number): { min: number; max: number } {
   if (rating < 1100) return { min: 0, max: 45 };
   if (rating < 1300) return { min: 25, max: 65 };

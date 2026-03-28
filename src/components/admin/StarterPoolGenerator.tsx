@@ -60,7 +60,7 @@ const TARGETS_BY_MODE: Record<string, Target[]> = {
     { gameMode: "freecell", engine: FreeCellEngine, simCount: 50, band: "medium", ddsMin: 26, ddsMax: 55, target: 50 },
   ],
   realm: [
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "easy", ddsMin: 0, ddsMax: 30, target: 50, gridSizes: [4, 5], skipSpatialSurprise: true },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "easy", ddsMin: 0, ddsMax: 30, target: 50, gridSizes: [5], skipSpatialSurprise: true },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "medium", ddsMin: 15, ddsMax: 55, target: 40, gridSizes: [6] },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "hard", ddsMin: 30, ddsMax: 80, target: 30, gridSizes: [7, 8] },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 60, ddsMax: 100, target: 20, gridSizes: [9, 10] },

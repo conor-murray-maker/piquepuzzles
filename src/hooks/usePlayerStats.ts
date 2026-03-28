@@ -95,6 +95,23 @@ export function usePlayerStats() {
   const gamesPlayed = games.length;
   const winRate = gamesPlayed > 0 ? Math.round((wins.length / gamesPlayed) * 100) : 0;
 
+  // Compute today's delta per mode from game_history
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayISO = todayStart.toISOString();
+  const todayDeltaByMode = new Map<string, number>();
+  for (const g of games) {
+    if (g.played_at >= todayISO && g.final_delta != null) {
+      const mode = g.game_mode || 'klondike';
+      todayDeltaByMode.set(mode, (todayDeltaByMode.get(mode) ?? 0) + g.final_delta);
+    }
+  }
+
+  const modeRatings: ModeRating[] = rawModeRatings.map(mr => ({
+    ...mr,
+    todayDelta: todayDeltaByMode.get(mr.game_mode) ?? 0,
+  }));
+
   return {
     puzzleIQ: rating,
     tier,

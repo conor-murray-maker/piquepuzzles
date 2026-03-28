@@ -16,6 +16,7 @@ interface GameRecord {
   hints_used: number;
   undos_used: number;
   game_mode: string;
+  final_delta: number | null;
 }
 
 export interface ModeRating {
@@ -23,6 +24,7 @@ export interface ModeRating {
   display_name: string;
   iq: number;
   games_played: number;
+  todayDelta: number;
 }
 
 export function usePlayerStats() {

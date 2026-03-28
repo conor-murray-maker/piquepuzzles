@@ -102,7 +102,7 @@ export function GameTooltips({ gamesPlayed, moveCount, hintJustUsed, gameWon }: 
       case TOOLTIP_KEYS.hints:
         return 'Using hints reduces your rating bonus';
       case TOOLTIP_KEYS.firstwin:
-        return '🎉 Your Puzzle IQ has been updated!';
+        return '🎉 Your Pique IQ has been updated!';
       default:
         return '';
     }

@@ -200,7 +200,7 @@ export function AdminUsers() {
           </DialogHeader>
           <p className="text-sm">
             {confirmAction?.type === "reset_rating"
-              ? `Reset Puzzle IQ to 1000 for ${confirmAction?.name}?`
+              ? `Reset Pique IQ to 1000 for ${confirmAction?.name}?`
               : `Grant 30 days Premium to ${confirmAction?.name}?`}
           </p>
           <DialogFooter>

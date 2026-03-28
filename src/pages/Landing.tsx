@@ -80,7 +80,7 @@ export default function Landing() {
         </motion.h1>
 
         <motion.p variants={item} className="text-muted-foreground text-base sm:text-lg leading-relaxed mb-8">
-          The puzzle platform that measures your skill. Every deal rated. Every move counted. Your Puzzle IQ grows with you.
+          The puzzle platform that measures your skill. Every deal rated. Every move counted. Your Pique IQ grows with you.
         </motion.p>
 
         <motion.div variants={item} className="space-y-3">
@@ -121,7 +121,7 @@ export default function Landing() {
             <p className="text-xl sm:text-2xl font-bold font-mono">
               <AnimatedCounter target={1247} />
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Avg Puzzle IQ</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg Pique IQ</p>
           </div>
           <div>
             <p className="text-xl sm:text-2xl font-bold font-mono">
@@ -165,7 +165,7 @@ export default function Landing() {
       <section className="px-4 py-8 border-t border-border bg-muted/20">
         <div className="max-w-md mx-auto">
           <h2 className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-4 text-center">
-            Puzzle IQ Tiers
+            Pique IQ Tiers
           </h2>
           <div className="flex items-center justify-center gap-1 mb-3">
             {TIERS.map((tier) => (
@@ -189,7 +189,7 @@ export default function Landing() {
             ))}
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            Your Puzzle IQ updates after every game. Beat harder deals, earn more points.
+            Your Pique IQ updates after every game. Beat harder deals, earn more points.
           </p>
         </div>
       </section>

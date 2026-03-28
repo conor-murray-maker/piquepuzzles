@@ -47,11 +47,11 @@ export function OnboardingCarousel({ userName, onComplete, firstDealDifficulty =
       </div>
     </div>,
 
-    // Step 2: Puzzle IQ explained
+    // Step 2: Pique IQ explained
     <div className="text-center space-y-5" key="iq">
       <div className="space-y-3">
         <BarChart3 className="w-8 h-8 text-primary mx-auto" />
-        <h2 className="text-xl font-bold">Your Puzzle IQ</h2>
+        <h2 className="text-xl font-bold">Your Pique IQ</h2>
       </div>
       <div className="py-3">
         <PuzzleIQBadge rating={1000} size="lg" />

@@ -2,17 +2,49 @@ import { useState, useCallback, useEffect } from 'react';
 import { haptic } from '@/lib/haptics';
 import { StreakMilestoneModal } from './StreakMilestoneModal';
 import { motion } from 'framer-motion';
-import { KlondikeState } from '@/game/types';
-import { PuzzleIQBadge, RatingChange } from './PuzzleIQBadge';
-import { TierProgressBar } from './TierProgressBar';
+import { KlondikeState, getTier, RATING_TIERS } from '@/game/types';
 import { Button } from '@/components/ui/button';
-import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, ArrowLeft, Share2 } from 'lucide-react';
+import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, ArrowLeft, Share2, Info } from 'lucide-react';
 import { ChallengeService } from '@/services/ChallengeService';
 import { formatTimeRaw } from '@/lib/format';
-import { getDifficultyLabel } from '@/lib/difficulty';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { ScoreBreakdownData, ModeIQData } from '@/hooks/useGamePersistence';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+const TIER_COLORS: Record<string, string> = {
+  bronze: 'hsl(25, 60%, 50%)',
+  silver: 'hsl(220, 10%, 66%)',
+  gold: 'hsl(45, 93%, 47%)',
+  platinum: 'hsl(200, 50%, 55%)',
+  elite: 'hsl(280, 60%, 55%)',
+};
+
+function MiniProgressBar({ rating }: { rating: number }) {
+  const tier = getTier(rating);
+  const tierIndex = RATING_TIERS.findIndex(t => t.name === tier.name);
+  const nextTier = RATING_TIERS[tierIndex + 1];
+  const progress = nextTier
+    ? ((rating - tier.min) / (nextTier.min - tier.min)) * 100
+    : Math.min(100, ((rating - tier.min) / 250) * 100);
+
+  return (
+    <div className="h-1.5 rounded-full bg-secondary overflow-hidden w-full mt-2">
+      <motion.div
+        className="h-full rounded-full"
+        style={{ backgroundColor: TIER_COLORS[tier.color] || TIER_COLORS.bronze }}
+        initial={{ width: 0 }}
+        animate={{ width: `${progress}%` }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+      />
+    </div>
+  );
+}
+
+function getModeLabel(gameMode: string): string {
+  if (gameMode === 'freecell') return 'FreeCell';
+  return gameMode.charAt(0).toUpperCase() + gameMode.slice(1);
+}
 
 interface PostGameScreenProps {
   gameState: KlondikeState;
@@ -56,7 +88,6 @@ export function PostGameScreen({
     else haptic.heavy();
   }, []);
   const timeSeconds = elapsedSeconds;
-
   const formatTime = formatTimeRaw;
 
   const handleChallenge = useCallback(async () => {
@@ -65,24 +96,14 @@ export function PostGameScreen({
     setSharing(true);
     try {
       const challengeId = await ChallengeService.createChallenge({
-        challengerId: user.id,
-        dealSeed,
-        gameMode,
-        drawMode,
-        difficulty: gameState.difficulty,
-        moves: gameState.moves,
-        timeSeconds,
-        rating: currentRating,
-        ratingChange,
-        won: gameState.isWon,
-        displayName: profile.display_name,
+        challengerId: user.id, dealSeed, gameMode, drawMode,
+        difficulty: gameState.difficulty, moves: gameState.moves,
+        timeSeconds, rating: currentRating, ratingChange,
+        won: gameState.isWon, displayName: profile.display_name,
       });
-
       if (!challengeId) throw new Error('No challenge ID returned');
-
       const url = `${window.location.origin}/challenge/${challengeId}`;
       const text = `I ${gameState.isWon ? 'solved' : 'attempted'} this ${gameState.difficulty} deal in ${formatTime(timeSeconds)} with ${gameState.moves} moves on Pique. Can you beat it? ${url}`;
-
       if (navigator.share) {
         await navigator.share({ title: 'Pique Challenge', text });
       } else {
@@ -108,6 +129,12 @@ export function PostGameScreen({
     );
   }
 
+  // Mode IQ values (fall back to composite if no mode data)
+  const displayModeIQ = modeIQData?.modeIQ ?? currentRating;
+  const displayModeIQDelta = modeIQData?.modeIQDelta ?? ratingChange;
+  const modeTier = getTier(displayModeIQ);
+  const modeLabel = getModeLabel(gameMode);
+
   return (
     <div
       className="bg-background overflow-y-auto overscroll-contain"
@@ -125,6 +152,7 @@ export function PostGameScreen({
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 25 }}
       >
+        {/* Header: result icon + difficulty */}
         <div className="text-center space-y-2">
           {gameState.isWon ? (
             <>
@@ -147,40 +175,53 @@ export function PostGameScreen({
           </span>
         </div>
 
-        <div className="text-center space-y-3 py-4 border-y border-border">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Puzzle IQ</p>
-          <PuzzleIQBadge rating={currentRating} size="lg" />
-          <RatingChange change={ratingChange} />
-          {modeIQData && (
-            <div className="pt-2">
-              <p className="text-sm text-muted-foreground">
-                <span className="capitalize">{modeIQData.gameMode}</span> IQ{' '}
-                <span className="font-mono font-semibold text-foreground">{modeIQData.modeIQ}</span>{' '}
-                <span className={`font-mono font-semibold ${modeIQData.modeIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}`}>
-                  ({modeIQData.modeIQDelta > 0 ? '+' : ''}{modeIQData.modeIQDelta})
-                </span>
-              </p>
-            </div>
-          )}
-          <TierProgressBar
-            rating={currentRating}
-            previousRating={previousRating}
-            ratingChange={ratingChange}
-          />
+        {/* Mode IQ display - primary focus */}
+        <div className="text-center space-y-2 py-4 border-y border-border">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+            {modeLabel} IQ
+          </p>
+          <div className="flex items-baseline justify-center gap-2">
+            <motion.span
+              className="text-5xl font-bold font-mono"
+              style={{ color: TIER_COLORS[modeTier.color] }}
+              key={displayModeIQ}
+              initial={{ scale: 1.1 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 300 }}
+            >
+              {displayModeIQ}
+            </motion.span>
+            <motion.span
+              className={`font-mono font-semibold text-lg ${displayModeIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}`}
+              initial={{ opacity: 0, y: displayModeIQDelta >= 0 ? 10 : -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              {displayModeIQDelta > 0 ? '+' : ''}{displayModeIQDelta}
+            </motion.span>
+          </div>
+          <p
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: TIER_COLORS[modeTier.color] }}
+          >
+            {modeTier.name}
+          </p>
+          <MiniProgressBar rating={displayModeIQ} />
         </div>
 
         {/* Score Breakdown Card */}
         <ScoreBreakdownCard
           won={gameState.isWon}
           breakdown={breakdown}
-          ratingChange={ratingChange}
+          ratingChange={displayModeIQDelta}
           difficulty={gameState.difficulty}
           actualTime={timeSeconds}
           actualMoves={gameState.moves}
           gameMode={gameMode}
-          puzzleIQDelta={modeIQData?.puzzleIQDelta ?? null}
+          piqueIQDelta={modeIQData?.puzzleIQDelta ?? null}
         />
 
+        {/* Game stats grid */}
         <div className="grid grid-cols-2 gap-3">
           <div className="stat-card flex items-center gap-2">
             <Timer className="w-4 h-4 text-muted-foreground" />
@@ -212,6 +253,7 @@ export function PostGameScreen({
           </div>
         </div>
 
+        {/* Challenge result */}
         {isChallenge && challengeData && (
           <motion.div
             className="bg-secondary/50 rounded-xl p-4 space-y-3"
@@ -227,11 +269,9 @@ export function PostGameScreen({
               <div></div>
               <div className="font-semibold text-muted-foreground">You</div>
               <div className="font-semibold text-muted-foreground">{challengeData.challengerName}</div>
-
               <div className="text-muted-foreground text-left">Time</div>
               <div className="font-mono font-semibold">{formatTime(timeSeconds)}</div>
               <div className="font-mono font-semibold">{formatTime(challengeData.challengerTime)}</div>
-
               <div className="text-muted-foreground text-left">Moves</div>
               <div className="font-mono font-semibold">{gameState.moves}</div>
               <div className="font-mono font-semibold">{challengeData.challengerMoves}</div>
@@ -244,6 +284,7 @@ export function PostGameScreen({
           </motion.div>
         )}
 
+        {/* Action buttons */}
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => { haptic.light(); onGoHome(); }} className="flex-1">
             <ArrowLeft className="w-4 h-4 mr-1" />
@@ -255,12 +296,7 @@ export function PostGameScreen({
         </div>
 
         {dealSeed !== undefined && (
-          <Button
-            variant="outline"
-            onClick={handleChallenge}
-            disabled={sharing}
-            className="w-full"
-          >
+          <Button variant="outline" onClick={handleChallenge} disabled={sharing} className="w-full">
             <Share2 className="w-4 h-4 mr-2" />
             Challenge a Friend
           </Button>
@@ -273,7 +309,7 @@ export function PostGameScreen({
 
 // --- Score Breakdown Card ---
 
-function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTime, actualMoves, gameMode, puzzleIQDelta }: {
+function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTime, actualMoves, gameMode, piqueIQDelta }: {
   won: boolean;
   breakdown?: ScoreBreakdownData | null;
   ratingChange: number;
@@ -281,16 +317,15 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
   actualTime: number;
   actualMoves: number;
   gameMode: string;
-  puzzleIQDelta: number | null;
+  piqueIQDelta: number | null;
 }) {
-  
   if (ratingChange === 0 && !breakdown) return null;
 
   const bd = breakdown;
   const diffLabel = difficulty || 'Medium';
+  const modeLabel = getModeLabel(gameMode);
 
   if (!won) {
-    // Loss breakdown — single line
     return (
       <motion.div
         className="w-full rounded-xl border border-border bg-card p-4 space-y-3"
@@ -299,24 +334,15 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
         transition={{ delay: 0.4 }}
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
-          {`${gameMode.charAt(0).toUpperCase() + gameMode.slice(1)} IQ Lost`}
+          {modeLabel} IQ Lost
         </p>
-        <BreakdownLine
-          label={`${diffLabel} deal — not solved`}
-          value={ratingChange}
-        />
+        <BreakdownLine label={`${diffLabel} deal — not solved`} value={ratingChange} />
         <div className="border-t border-border my-2" />
         <div className="flex justify-between items-center">
           <span className="font-bold text-foreground">Total</span>
-          <span className="font-bold text-lg text-destructive font-mono">
-            {ratingChange}
-          </span>
+          <span className="font-bold text-lg text-destructive font-mono">{ratingChange}</span>
         </div>
-        {puzzleIQDelta !== null && (
-          <p className="text-xs text-muted-foreground pt-1">
-            Puzzle IQ impact {puzzleIQDelta > 0 ? '+' : ''}{puzzleIQDelta}
-          </p>
-        )}
+        <PiqueIQImpactFooter delta={piqueIQDelta} />
       </motion.div>
     );
   }
@@ -338,16 +364,11 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
       transition={{ delay: 0.4 }}
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
-        {difficulty ? `${gameMode.charAt(0).toUpperCase() + gameMode.slice(1)} IQ Earned` : 'IQ Earned'}
+        {modeLabel} IQ Earned
       </p>
 
-      {/* Deal difficulty */}
-      <BreakdownLine
-        label={`${diffLabel} deal won`}
-        value={baseDelta}
-      />
+      <BreakdownLine label={`${diffLabel} deal won`} value={baseDelta} />
 
-      {/* Time line */}
       {timeBP >= 0 ? (
         <BreakdownLine
           label="Faster than expected"
@@ -362,7 +383,6 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
         />
       )}
 
-      {/* Moves line */}
       {moveBP >= 0 ? (
         <BreakdownLine
           label="Fewer moves than expected"
@@ -377,12 +397,8 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
         />
       )}
 
-      {/* Hints line */}
       {hintsUsed > 0 ? (
-        <BreakdownLine
-          label={`Hints used × ${hintsUsed}`}
-          value={-hintPP}
-        />
+        <BreakdownLine label={`Hints used × ${hintsUsed}`} value={-hintPP} />
       ) : (
         <BreakdownLine label="Hints" value={null} />
       )}
@@ -394,12 +410,31 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
           {ratingChange > 0 ? '+' : ''}{ratingChange}
         </span>
       </div>
-      {puzzleIQDelta !== null && (
-        <p className="text-xs text-muted-foreground pt-1">
-          Puzzle IQ impact {puzzleIQDelta > 0 ? '+' : ''}{puzzleIQDelta}
-        </p>
-      )}
+      <PiqueIQImpactFooter delta={piqueIQDelta} />
     </motion.div>
+  );
+}
+
+function PiqueIQImpactFooter({ delta }: { delta: number | null }) {
+  if (delta === null) return null;
+  return (
+    <div className="flex items-center justify-between pt-1">
+      <p className="text-xs text-muted-foreground">
+        Pique IQ impact {delta > 0 ? '+' : ''}{delta}
+      </p>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button className="text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+              <Info className="w-3.5 h-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[220px] text-xs">
+            Pique IQ = average of all mode IQs. Unplayed modes count as 1000.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
   );
 }
 
@@ -412,28 +447,18 @@ function BreakdownLine({ label, subLabel, value }: {
   let valueText = '—';
 
   if (value !== null) {
-    if (value > 0) {
-      valueColor = 'text-rating-up';
-      valueText = `+${value}`;
-    } else if (value < 0) {
-      valueColor = 'text-destructive';
-      valueText = `${value}`;
-    } else {
-      valueText = '0';
-    }
+    if (value > 0) { valueColor = 'text-rating-up'; valueText = `+${value}`; }
+    else if (value < 0) { valueColor = 'text-destructive'; valueText = `${value}`; }
+    else { valueText = '0'; }
   }
 
   return (
     <div className="flex justify-between items-start text-sm">
       <div className="space-y-0">
         <span className="text-foreground/80">{label}</span>
-        {subLabel && (
-          <p className="text-xs text-muted-foreground">{subLabel}</p>
-        )}
+        {subLabel && <p className="text-xs text-muted-foreground">{subLabel}</p>}
       </div>
-      <span className={`font-mono font-medium ${valueColor} flex-shrink-0 ml-4`}>
-        {valueText}
-      </span>
+      <span className={`font-mono font-medium ${valueColor} flex-shrink-0 ml-4`}>{valueText}</span>
     </div>
   );
 }

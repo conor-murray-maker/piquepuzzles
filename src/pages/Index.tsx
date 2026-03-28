@@ -1,8 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, Grid3X3, Crown } from 'lucide-react';
-import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
-import { TierProgressBar } from '@/components/game/TierProgressBar';
+import { PiqueIQPanel } from '@/components/game/PiqueIQPanel';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { OnboardingCarousel } from '@/components/onboarding/OnboardingCarousel';

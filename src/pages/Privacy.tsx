@@ -21,7 +21,7 @@ export default function Privacy() {
 
         <Section title="What we collect and why">
           <P><strong>Account information:</strong> When you sign in with Google, we receive your name and email address. We use this to create and manage your account, identify you across sessions, and contact you about your account if necessary.</P>
-          <P><strong>Game data:</strong> We record your game history, Puzzle IQ rating, win/loss record, move counts, time per game, hints used, and streak data. We use this to calculate your rating, show you your progress, and improve deal difficulty calibration across the player base.</P>
+          <P><strong>Game data:</strong> We record your game history, Pique IQ rating, win/loss record, move counts, time per game, hints used, and streak data. We use this to calculate your rating, show you your progress, and improve deal difficulty calibration across the player base.</P>
           <P><strong>Device and usage data:</strong> We collect basic usage events — games started, games completed, features used — to understand how the app is being used and improve it. We do not collect device identifiers or precise location.</P>
           <P><strong>Push notification tokens:</strong> If you grant notification permission, we store your device's push token to send you daily challenge reminders and streak alerts. You can revoke this at any time in your device settings.</P>
           <P><strong>Payment information:</strong> If you subscribe to Pique Premium, payments are processed by Stripe. We do not store your card details — Stripe handles all payment data under their own privacy policy.</P>

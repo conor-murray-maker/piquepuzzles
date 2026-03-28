@@ -60,7 +60,7 @@ export function AdminOverview() {
         <StatCard label="MAU" value={s.mau} icon={Users} />
         <StatCard label="Total Games" value={s.totalGames} icon={Gamepad2} />
         <StatCard label="Games Today" value={s.gamesToday} icon={Gamepad2} />
-        <StatCard label="Avg Puzzle IQ" value={s.avgRating} icon={Brain} />
+        <StatCard label="Avg Pique IQ" value={s.avgRating} icon={Brain} />
         <StatCard label={`Premium (${s.premiumPct}%)`} value={s.premiumCount} icon={Crown} />
         <StatCard label="Daily Completed Today" value={s.dailyCompleted} icon={CalendarCheck} />
         <StatCard label="Deal Pool Size" value={s.dealPoolSize} icon={Database} />

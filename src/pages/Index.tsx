@@ -1,8 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, Grid3X3, Crown } from 'lucide-react';
-import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
-import { TierProgressBar } from '@/components/game/TierProgressBar';
+import { PiqueIQPanel } from '@/components/game/PiqueIQPanel';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { OnboardingCarousel } from '@/components/onboarding/OnboardingCarousel';
@@ -117,20 +116,12 @@ export default function Index() {
             <motion.div variants={item} className="text-center space-y-3">
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Sharpen your mind.</h1>
               <p className="text-muted-foreground text-sm sm:text-base">
-                Premium puzzle games with a competitive edge. Track your Puzzle IQ across every game, every deal.
+                Premium puzzle games with a competitive edge. Track your Pique IQ across every game, every deal.
               </p>
             </motion.div>
 
-            <motion.div variants={item} className="stat-card text-center space-y-3 py-5 relative">
-              {stats.currentStreak >= 2 && (
-                <div className="absolute top-3 right-3 flex items-center gap-1 text-sm">
-                  <Flame className="w-4 h-4 text-destructive" />
-                  <span className="font-mono font-bold">{stats.currentStreak}</span>
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Your Puzzle IQ</p>
-              <PuzzleIQBadge rating={stats.puzzleIQ} size="lg" />
-              <TierProgressBar rating={stats.puzzleIQ} />
+            <motion.div variants={item}>
+              <PiqueIQPanel piqueIQ={stats.puzzleIQ} modeRatings={stats.modeRatings} />
             </motion.div>
 
             <motion.div variants={item} className="space-y-3">

@@ -20,7 +20,7 @@ export function GuestBanner() {
           <div className="bg-card border border-border rounded-xl px-4 py-3 max-w-md mx-auto flex items-center gap-3"
             style={{ boxShadow: 'var(--shadow-elevated)' }}>
             <span className="text-xs text-muted-foreground flex-1">
-              Sign in to save your Puzzle IQ and track your progress
+              Sign in to save your Pique IQ and track your progress
             </span>
             <button onClick={() => navigate('/auth')} className="text-xs text-primary font-medium whitespace-nowrap">
               Sign in

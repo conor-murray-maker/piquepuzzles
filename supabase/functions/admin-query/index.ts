@@ -1049,10 +1049,10 @@ Deno.serve(async (req) => {
         if (inactiveUsers > 0) alerts.push({ severity: "info", code: "INACTIVE_USERS", message: `${inactiveUsers} users inactive for 7+ days`, affectedCount: inactiveUsers, detectedAt: ts });
         if (starterPoolSize < 100) alerts.push({ severity: "info", code: "LOW_HIGH_CONFIDENCE", message: `Only ${starterPoolSize} deals with confidence ≥0.85 (target: 100+)`, affectedCount: starterPoolSize, detectedAt: ts });
 
-        // === SCORING INTEGRITY: check puzzle_iq mismatch ===
+        // === SCORING INTEGRITY: check Pique IQ mismatch ===
         let puzzleIQMismatchCount = 0;
         for (const p of profiles) {
-          // Calculate expected puzzle_iq from mode ratings
+          // Calculate expected Pique IQ from mode ratings
           const userRatings = modeRatingsByUser[p.id] || [];
           const activeModeIds = ['klondike', 'freecell', 'realm']; // known active modes
           let iqSum = 0;
@@ -1064,7 +1064,7 @@ Deno.serve(async (req) => {
           if (Math.abs(p.rating - expectedPIQ) > 1) puzzleIQMismatchCount++;
         }
         if (puzzleIQMismatchCount > 0) {
-          alerts.push({ severity: "warning", code: "PUZZLE_IQ_MISMATCH", message: `${puzzleIQMismatchCount} users have profiles.rating != calculate_puzzle_iq()`, affectedCount: puzzleIQMismatchCount, detectedAt: ts });
+          alerts.push({ severity: "warning", code: "PIQUE_IQ_MISMATCH", message: `${puzzleIQMismatchCount} users have profiles.rating != calculate_puzzle_iq()`, affectedCount: puzzleIQMismatchCount, detectedAt: ts });
         }
 
         // === AVG MODE IQ DELTA per game ===

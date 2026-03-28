@@ -2,8 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
-import { TierProgressBar } from '@/components/game/TierProgressBar';
+import { PiqueIQPanel } from '@/components/game/PiqueIQPanel';
 import { usePlayerStats, ModeRating } from '@/hooks/usePlayerStats';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +29,7 @@ export default function Profile() {
   }, [user, displayName, refreshProfile]);
 
   const handleShare = useCallback(async () => {
-    const text = `🧠 My Puzzle IQ: ${stats.puzzleIQ} (${stats.tier.name})\n🏆 ${stats.wins} wins | ${stats.winRate}% win rate\n🔥 Best streak: ${stats.bestStreak}\n\nPlay at piquepuzzles.lovable.app`;
+    const text = `🧠 My Pique IQ: ${stats.puzzleIQ} (${stats.tier.name})\n🏆 ${stats.wins} wins | ${stats.winRate}% win rate\n🔥 Best streak: ${stats.bestStreak}\n\nPlay at piquepuzzles.lovable.app`;
 
     if (navigator.share) {
       try {
@@ -103,13 +102,9 @@ export default function Profile() {
         {/* Shareable Stats Card */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <div ref={shareCardRef}>
-            <Card className="bg-gradient-to-br from-card to-secondary/30 overflow-hidden">
+          <Card className="bg-gradient-to-br from-card to-secondary/30 overflow-hidden">
               <CardContent className="pt-5 pb-4 space-y-4">
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Puzzle IQ</p>
-                  <PuzzleIQBadge rating={stats.puzzleIQ} size="lg" />
-                  <TierProgressBar rating={stats.puzzleIQ} />
-                </div>
+                <PiqueIQPanel piqueIQ={stats.puzzleIQ} modeRatings={stats.modeRatings} />
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="text-center">
@@ -178,35 +173,8 @@ export default function Profile() {
           </Card>
         </motion.div>
 
-        {/* Per-Mode IQ Breakdown */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
-          <Card>
-            <CardContent className="pt-4 pb-3 space-y-3">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium flex items-center gap-1.5">
-                <Brain className="w-3.5 h-3.5" /> Per-Mode IQ
-              </p>
-              {stats.modeRatings.map((mr: ModeRating) => (
-                <div key={mr.game_mode} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                  <div className="flex items-center gap-2">
-                    <Puzzle className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium">{mr.display_name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-mono font-bold">{mr.iq}</span>
-                    {mr.games_played === 0 ? (
-                      <span className="text-xs text-muted-foreground">Unranked</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">{mr.games_played} games</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </motion.div>
-
         {/* Games summary */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
           <Card>
             <CardContent className="pt-4 pb-3 space-y-3">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Games Played</p>

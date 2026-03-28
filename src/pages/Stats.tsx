@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { RATING_TIERS } from '@/game/types';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
+import { PiqueIQPanel } from '@/components/game/PiqueIQPanel';
 import { usePlayerStats, ModeRating } from '@/hooks/usePlayerStats';
 import { formatTime } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,7 +78,7 @@ function StatsContent({ games, stats }: {
           <CardContent className="pt-5 pb-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Puzzle IQ</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Pique IQ</p>
                 <PuzzleIQBadge rating={stats.puzzleIQ} size="lg" />
               </div>
               <div className="text-right space-y-1">
@@ -241,30 +242,10 @@ export default function Stats() {
           </h1>
         </motion.div>
 
-        {/* Per-Mode IQ Breakdown */}
+        {/* Pique IQ Panel */}
         {stats.modeRatings.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
-            <Card>
-              <CardContent className="pt-4 pb-3 space-y-3">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium flex items-center gap-1.5">
-                  <Brain className="w-3.5 h-3.5" /> Per-Mode IQ
-                </p>
-                {stats.modeRatings.map((mr: ModeRating) => (
-                  <div key={mr.game_mode} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
-                    <span className="text-sm font-medium">{mr.display_name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-sm">{mr.iq}</span>
-                      {mr.games_played === 0 && (
-                        <span className="text-xs text-muted-foreground">Unranked</span>
-                      )}
-                      {mr.games_played > 0 && (
-                        <span className="text-xs text-muted-foreground">{mr.games_played} games</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            <PiqueIQPanel piqueIQ={stats.puzzleIQ} modeRatings={stats.modeRatings} />
           </motion.div>
         )}
 

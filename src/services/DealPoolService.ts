@@ -162,16 +162,17 @@ export class DealPoolService {
 
   /**
    * Query eligible deals with concentration and eligibility filters.
-   * Returns lowest pool_attempts unplayed deal within the concentration set.
+   * Returns lowest pool_attempts unplayed deal within the concentration set,
+   * plus stats for diagnostic logging.
    */
-  private static async queryEligible(
+  private static async queryEligibleWithStats(
     gameMode: string,
     playedIds: Set<string>,
     bracket: { min: number; max: number } | null,
     allowedDiffs: string[] | null,
     minConfidence: number,
     concentrationCap: number | null
-  ): Promise<any | null> {
+  ): Promise<{ deal: any | null; totalFound: number; unplayedCount: number }> {
     try {
       let query = (supabase as any)
         .from('deals')
@@ -184,12 +185,10 @@ export class DealPoolService {
       }
 
       if (allowedDiffs) {
-        // Map difficulty labels to DDS ranges
         let ddsMin = 0, ddsMax = 100;
         if (allowedDiffs.length === 1 && allowedDiffs[0] === 'Easy') {
           ddsMax = 25;
         } else if (allowedDiffs.length === 2) {
-          // Easy + Medium
           ddsMax = 55;
         }
         query = query.gte('dds_blended', ddsMin).lte('dds_blended', ddsMax);
@@ -199,25 +198,26 @@ export class DealPoolService {
         query = query.gte('confidence', minConfidence);
       }
 
-      // Fetch more than concentration cap to allow filtering played
       const fetchLimit = concentrationCap ? concentrationCap * 2 : 200;
       query = query.limit(fetchLimit);
 
       const { data } = await query;
-      if (!data?.length) return null;
+      if (!data?.length) return { deal: null, totalFound: 0, unplayedCount: 0 };
 
-      // Apply concentration cap: only consider top N by pool_attempts
       let candidates = data;
       if (concentrationCap && candidates.length > concentrationCap) {
         candidates = candidates.slice(0, concentrationCap);
       }
 
-      // Filter out played deals
       const unplayed = candidates.filter((d: any) => !playedIds.has(d.id));
-      return unplayed.length > 0 ? unplayed[0] : null;
+      return {
+        deal: unplayed.length > 0 ? unplayed[0] : null,
+        totalFound: data.length,
+        unplayedCount: unplayed.length,
+      };
     } catch (err) {
       console.warn('Failed to query deal pool:', err);
-      return null;
+      return { deal: null, totalFound: 0, unplayedCount: 0 };
     }
   }
 

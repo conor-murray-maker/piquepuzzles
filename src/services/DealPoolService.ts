@@ -78,11 +78,13 @@ export class DealPoolService {
     gameMode: GameMode,
     drawMode: number = 3,
     gamesPlayed: number = 999,
-    rating: number = 1000,
+    modeIQ: number = 1000,
     gamesPlayedThisMode: number = 999
   ): Promise<VerifiedDeal | null> {
     const playedIds = await this.getUserPlayedDealIds(userId);
-    const bracket = gamesPlayedThisMode >= 20 ? getDdsBracket(rating) : null;
+    // DDS bracket based on mode IQ (preference, not hard filter)
+    // First 3 games per mode: no bracket (Easy-only via allowedDiffs handles it)
+    const bracket = gamesPlayedThisMode >= 3 ? getDdsBracket(modeIQ) : null;
     const allowedDiffs = getAllowedDifficulties(gamesPlayedThisMode);
     const minConf = getMinConfidence(gamesPlayedThisMode);
     const concentrationCap = getConcentrationCap(gamesPlayedThisMode);

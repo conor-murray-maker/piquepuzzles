@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { GameMode } from '@/game/types';
 import { DealPoolService, VerifiedDeal } from '@/services/DealPoolService';
 import { useGamesPlayedByMode } from '@/hooks/useGamesPlayedByMode';
@@ -15,7 +16,6 @@ export function useDealQueue() {
     drawMode: number = 3
   ): Promise<VerifiedDeal | null> => {
     if (!user) return null;
-    const rating = profile?.rating ?? 1000;
     const gamesPlayed = profile?.games_played ?? 0;
 
     // Use per-mode column from profile if available, fallback to game_history count
@@ -25,7 +25,21 @@ export function useDealQueue() {
       ? profilePerMode
       : await getGamesPlayed(gameMode);
 
-    return DealPoolService.getNextDeal(user.id, gameMode, drawMode, gamesPlayed, rating, gamesPlayedThisMode);
+    // Fetch mode-specific IQ from player_mode_ratings, NOT composite Pique IQ
+    let modeIQ = 1000;
+    try {
+      const { data } = await (supabase as any)
+        .from('player_mode_ratings')
+        .select('iq')
+        .eq('user_id', user.id)
+        .eq('game_mode', gameMode)
+        .single();
+      if (data?.iq != null) modeIQ = data.iq;
+    } catch {
+      // Default to 1000 if no rating exists yet
+    }
+
+    return DealPoolService.getNextDeal(user.id, gameMode, drawMode, gamesPlayed, modeIQ, gamesPlayedThisMode);
   }, [user, profile, getGamesPlayed]);
 
   return { popNextDeal };

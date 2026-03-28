@@ -46,11 +46,10 @@ export function usePlayerStats() {
   });
 
   // Fetch per-mode ratings
-  const { data: modeRatings = [] } = useQuery({
+  const { data: rawModeRatings = [] } = useQuery({
     queryKey: ['player-mode-ratings', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      // Fetch game_modes and player_mode_ratings
       const [modesRes, ratingsRes] = await Promise.all([
         supabase.from('game_modes' as any).select('id, display_name, is_active').eq('is_active', true) as any,
         supabase.from('player_mode_ratings' as any).select('game_mode, iq, games_played').eq('user_id', user.id) as any,
@@ -64,7 +63,7 @@ export function usePlayerStats() {
         display_name: m.display_name,
         iq: ratingMap.get(m.id)?.iq ?? 1000,
         games_played: ratingMap.get(m.id)?.games_played ?? 0,
-      })) as ModeRating[];
+      }));
     },
     enabled: !!user,
     staleTime: 30000,

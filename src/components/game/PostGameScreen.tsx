@@ -152,19 +152,12 @@ export function PostGameScreen({
           <PuzzleIQBadge rating={currentRating} size="lg" />
           <RatingChange change={ratingChange} />
           {modeIQData && (
-            <div className="space-y-1 pt-2">
+            <div className="pt-2">
               <p className="text-sm text-muted-foreground">
                 <span className="capitalize">{modeIQData.gameMode}</span> IQ{' '}
                 <span className="font-mono font-semibold text-foreground">{modeIQData.modeIQ}</span>{' '}
                 <span className={`font-mono font-semibold ${modeIQData.modeIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}`}>
                   ({modeIQData.modeIQDelta > 0 ? '+' : ''}{modeIQData.modeIQDelta})
-                </span>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Puzzle IQ{' '}
-                <span className="font-mono font-semibold text-foreground">{modeIQData.puzzleIQ}</span>{' '}
-                <span className={`font-mono font-semibold ${modeIQData.puzzleIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}`}>
-                  ({modeIQData.puzzleIQDelta > 0 ? '+' : ''}{modeIQData.puzzleIQDelta})
                 </span>
               </p>
             </div>
@@ -184,6 +177,8 @@ export function PostGameScreen({
           difficulty={gameState.difficulty}
           actualTime={timeSeconds}
           actualMoves={gameState.moves}
+          gameMode={gameMode}
+          puzzleIQDelta={modeIQData?.puzzleIQDelta ?? null}
         />
 
         <div className="grid grid-cols-2 gap-3">
@@ -278,13 +273,15 @@ export function PostGameScreen({
 
 // --- Score Breakdown Card ---
 
-function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTime, actualMoves }: {
+function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTime, actualMoves, gameMode, puzzleIQDelta }: {
   won: boolean;
   breakdown?: ScoreBreakdownData | null;
   ratingChange: number;
   difficulty: string;
   actualTime: number;
   actualMoves: number;
+  gameMode: string;
+  puzzleIQDelta: number | null;
 }) {
   
   if (ratingChange === 0 && !breakdown) return null;
@@ -302,7 +299,7 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
         transition={{ delay: 0.4 }}
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
-          Puzzle IQ Lost
+          {`${gameMode.charAt(0).toUpperCase() + gameMode.slice(1)} IQ Lost`}
         </p>
         <BreakdownLine
           label={`${diffLabel} deal — not solved`}
@@ -315,6 +312,11 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
             {ratingChange}
           </span>
         </div>
+        {puzzleIQDelta !== null && (
+          <p className="text-xs text-muted-foreground pt-1">
+            Puzzle IQ impact {puzzleIQDelta > 0 ? '+' : ''}{puzzleIQDelta}
+          </p>
+        )}
       </motion.div>
     );
   }
@@ -336,7 +338,7 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
       transition={{ delay: 0.4 }}
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
-        Puzzle IQ Earned
+        {difficulty ? `${gameMode.charAt(0).toUpperCase() + gameMode.slice(1)} IQ Earned` : 'IQ Earned'}
       </p>
 
       {/* Deal difficulty */}
@@ -392,6 +394,11 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
           {ratingChange > 0 ? '+' : ''}{ratingChange}
         </span>
       </div>
+      {puzzleIQDelta !== null && (
+        <p className="text-xs text-muted-foreground pt-1">
+          Puzzle IQ impact {puzzleIQDelta > 0 ? '+' : ''}{puzzleIQDelta}
+        </p>
+      )}
     </motion.div>
   );
 }

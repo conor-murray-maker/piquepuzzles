@@ -70,6 +70,8 @@ function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
 }
 
 export class DealPoolService {
+  private static inFlightKeys = new Set<string>();
+
   /**
    * Unified eligibility + concentration model for deal serving.
    */
@@ -80,6 +82,27 @@ export class DealPoolService {
     gamesPlayed: number = 999,
     modeIQ: number = 1000,
     gamesPlayedThisMode: number = 999
+  ): Promise<VerifiedDeal | null> {
+    const flightKey = `${userId}:${gameMode}`;
+    if (this.inFlightKeys.has(flightKey)) {
+      console.warn(`[DealPoolService] DUPLICATE CALL blocked for ${flightKey}`);
+      return null;
+    }
+    this.inFlightKeys.add(flightKey);
+    try {
+      return await this._getNextDealInner(userId, gameMode, drawMode, gamesPlayed, modeIQ, gamesPlayedThisMode);
+    } finally {
+      this.inFlightKeys.delete(flightKey);
+    }
+  }
+
+  private static async _getNextDealInner(
+    userId: string,
+    gameMode: GameMode,
+    drawMode: number,
+    gamesPlayed: number,
+    modeIQ: number,
+    gamesPlayedThisMode: number
   ): Promise<VerifiedDeal | null> {
     const playedIds = await this.getUserPlayedDealIds(userId);
     // DDS bracket based on mode IQ (preference, not hard filter)

@@ -48,17 +48,22 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     challengerRating: number;
   } | null>(null);
   const hasPopped = useRef(false);
+  const popInFlight = useRef(false);
 
   // Pop deal from pool on mount (only for regular games, not challenges/daily)
   useEffect(() => {
-    if (initialSeed !== undefined || hasPopped.current) {
-      setLoading(false);
+    if (initialSeed !== undefined || hasPopped.current || popInFlight.current) {
+      if (initialSeed !== undefined) setLoading(false);
       return;
     }
     hasPopped.current = true;
+    popInFlight.current = true;
     popNextDeal(gameMode, drawMode).then(deal => {
       if (deal) setQueuedDeal(deal);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => {}).finally(() => {
+      popInFlight.current = false;
+      setLoading(false);
+    });
   }, [gameMode, drawMode, initialSeed, popNextDeal]);
 
   // Fetch challenge data

@@ -27,17 +27,22 @@ export function useDealQueue() {
 
     // Fetch mode-specific IQ from player_mode_ratings, NOT composite Pique IQ
     let modeIQ = 1000;
-    try {
-      const { data } = await (supabase as any)
-        .from('player_mode_ratings')
-        .select('iq')
-        .eq('user_id', user.id)
-        .eq('game_mode', gameMode)
-        .single();
-      if (data?.iq != null) modeIQ = data.iq;
-    } catch {
-      // Default to 1000 if no rating exists yet
+    const { data: modeRating, error: modeError } = await (supabase as any)
+      .from('player_mode_ratings')
+      .select('iq')
+      .eq('user_id', user.id)
+      .eq('game_mode', gameMode)
+      .maybeSingle();
+    if (modeRating?.iq != null) {
+      modeIQ = modeRating.iq;
     }
+    console.log(`[useDealQueue] IQ lookup for ${gameMode}:`, {
+      source: 'player_mode_ratings',
+      modeIQ,
+      hadRow: !!modeRating,
+      compositeIQ: profile?.rating,
+      error: modeError ?? null,
+    });
 
     return DealPoolService.getNextDeal(user.id, gameMode, drawMode, gamesPlayed, modeIQ, gamesPlayedThisMode);
   }, [user, profile, getGamesPlayed]);

@@ -187,19 +187,30 @@ export function StarterPoolGenerator() {
           const candidateStart = performance.now();
           let deal;
           if (isRealm) {
-            deal = engine.generateDeal(seed, {
+            const genOpts: RealmGenOptions = {
               gridSize: realmGridSize,
               skipSpatialSurprise: realmSkipSurprise,
               timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
-            });
+            };
+            const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
+
+            if (useLargeGridStrategy && selectedStrategy === 'solution-first') {
+              // Solution-first only
+              const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+              deal = { seed, gameMode: 'realm' as const, data: puzzle };
+            } else if (useLargeGridStrategy && selectedStrategy === 'hybrid') {
+              // Try solution-first, fall back to legacy
+              let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+              if (!puzzle) {
+                puzzle = generateRealmPuzzle(seed, genOpts);
+              }
+              deal = { seed, gameMode: 'realm' as const, data: puzzle };
+            } else {
+              // Legacy for all sizes, or small grids
+              deal = engine.generateDeal(seed, genOpts);
+            }
           } else {
             deal = engine.generateDeal(seed);
-          }
-
-          // Check per-candidate timeout
-          if (timeoutMs > 0 && (performance.now() - candidateStart) > timeoutMs) {
-            timeoutDiscards++;
-            continue;
           }
 
           const verifyResult = engine.verifySolvable(deal, simCount);

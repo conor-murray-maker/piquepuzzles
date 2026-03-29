@@ -487,14 +487,13 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
     const { regionMap, regions } = regResult;
     console.log(`[Realm] S1 pass #${attempt + 1} (${(performance.now() - genStart).toFixed(0)}ms) sizes=[${regions.map(r => r.length).join(',')}]`);
 
-    // === Stage 2: Solution finding (does ANY valid placement exist?) ===
-    const solutions = findAllSolutions(regionMap, n, 2);
-    if (solutions.length === 0) { discardCounts.stage2++; continue; }
+    // === Stage 2+3: Solution finding + uniqueness (with timeout) ===
+    const solverResult = findAllSolutions(regionMap, n, 2);
+    if (solverResult === 'timeout') { discardCounts.timeout++; continue; }
+    if (solverResult.length === 0) { discardCounts.stage2++; continue; }
+    if (solverResult.length > 1) { discardCounts.stage3++; continue; }
 
-    // === Stage 3: Unique solution verification (MUST have exactly 1) ===
-    if (solutions.length > 1) { discardCounts.stage3++; continue; }
-
-    const solution = solutions[0];
+    const solution = solverResult[0];
 
     // === Stage 4: Spatial surprise scoring (skip for Easy/small grids) ===
     let surprise = 0;
@@ -515,7 +514,7 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
     const dds = calculateRealmDDS(n, deduction, sizeVariance);
     const regionColors = assignColors(n, rand);
 
-    console.log(`[Realm] Accepted ${n}x${n} puzzle (attempt ${attempt + 1}). Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} Timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}] surprise=${surprise.toFixed(2)}`);
+    console.log(`[Realm] Accepted ${n}x${n} puzzle via legacy (attempt ${attempt + 1}). DDS=${dds} surprise=${surprise.toFixed(2)} Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} Timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}]`);
 
     return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
   }

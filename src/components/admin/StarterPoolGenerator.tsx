@@ -322,7 +322,7 @@ export function StarterPoolGenerator() {
     toast({ title: `${selectedMode} pool seeded`, description: `${totalInserted} verified deals inserted` });
 
     setRunning(false);
-  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout]);
+  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout, selectedStrategy]);
 
   const allTargets = TARGETS_BY_MODE[selectedMode];
   const targets = selectedDifficulty === "all"

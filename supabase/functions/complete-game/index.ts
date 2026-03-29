@@ -353,7 +353,7 @@ Deno.serve(async (req) => {
           ? perfExpRow.avg_time_seconds : hardcodedTime;
         expectedTime = avgTime;
         const timeRatio = avgTime / Math.max(actualTime, 1);
-        realmTimeBonus = Math.pow(timeRatio, 1.8) - 1; // 0 at ratio=1, grows exponentially
+        realmTimeBonus = Math.pow(timeRatio, 1.3) - 1; // 0 at ratio=1, grows exponentially
         realmUndoPenalty = undosUsed; // raw count, applied later as fixed cost per undo
         hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
         // performanceModifier is not used for Realm ELO — we compute delta directly below

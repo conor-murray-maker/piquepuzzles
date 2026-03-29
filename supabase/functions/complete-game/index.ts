@@ -479,12 +479,19 @@ Deno.serve(async (req) => {
     if (isWin && perfExpRow) {
       const oldSC = perfExpRow.sample_count ?? 0;
       const newAvgT = (perfExpRow.avg_time_seconds * oldSC + actualTime) / (oldSC + 1);
-      const newAvgM = (perfExpRow.avg_moves * oldSC + actualMoves) / (oldSC + 1);
-      await supabaseAdmin.from('performance_expectations').upsert({
+      const upsertData: Record<string, unknown> = {
         game_mode: gameMode, dds_bucket: ddsBucket, iq_bucket: iqBucket,
-        avg_time_seconds: newAvgT, avg_moves: newAvgM,
+        avg_time_seconds: newAvgT,
         sample_count: oldSC + 1, updated_at: new Date().toISOString(),
-      }, { onConflict: 'game_mode,dds_bucket,iq_bucket' });
+      };
+      // For non-Realm modes, also update avg_moves
+      if (!isRealm) {
+        const newAvgM = (perfExpRow.avg_moves * oldSC + actualMoves) / (oldSC + 1);
+        upsertData.avg_moves = newAvgM;
+      }
+      await supabaseAdmin.from('performance_expectations').upsert(
+        upsertData, { onConflict: 'game_mode,dds_bucket,iq_bucket' },
+      );
     }
 
     // 11. Evaluate streak
@@ -528,13 +535,25 @@ Deno.serve(async (req) => {
     let timeBonusPoints = 0;
     let movesBonusPoints = 0;
     let hintPenaltyPoints = 0;
+    let undoPenaltyPoints = 0;
 
     if (isWin) {
-      timeBonusPoints = Math.round(baseDelta * (timeEfficiency - 1.0) * 0.4);
-      movesBonusPoints = Math.round(baseDelta * (moveEfficiency - 1.0) * 0.4);
-      hintPenaltyPoints = Math.round(baseDelta * (1 - hintPenalty));
+      if (isRealm) {
+        const baseCompletion = Math.round(baseDelta * 0.4);
+        timeBonusPoints = Math.round(baseCompletion * realmTimeBonus);
+        undoPenaltyPoints = Math.round(baseCompletion * 0.3) * realmUndoPenalty;
+        hintPenaltyPoints = Math.round(baseCompletion * (1 - hintPenalty));
+      } else {
+        timeBonusPoints = Math.round(baseDelta * (timeEfficiency - 1.0) * 0.4);
+        movesBonusPoints = Math.round(baseDelta * (moveEfficiency - 1.0) * 0.4);
+        hintPenaltyPoints = Math.round(baseDelta * (1 - hintPenalty));
+      }
     }
-    const baseDeltaDisplay = isWin ? (finalDelta - timeBonusPoints - movesBonusPoints + hintPenaltyPoints) : finalDelta;
+    const baseDeltaDisplay = isWin
+      ? (isRealm
+        ? Math.round(baseDelta * 0.4)
+        : (finalDelta - timeBonusPoints - movesBonusPoints + hintPenaltyPoints))
+      : finalDelta;
 
     // 15. Return result with mode IQ and puzzle IQ
     return new Response(JSON.stringify({

@@ -51,8 +51,10 @@ export class DDSService {
 
   static ddsToLabel(dds: number): string {
     if (dds < 26) return 'Easy';
-    if (dds < 56) return 'Medium';
-    if (dds < 81) return 'Hard';
-    return 'Expert';
+    if (dds < 51) return 'Medium';
+    if (dds < 76) return 'Hard';
+    if (dds < 101) return 'Expert';
+    if (dds < 131) return 'Master';
+    return 'Grandmaster';
   }
 }

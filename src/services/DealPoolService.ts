@@ -17,30 +17,18 @@ export interface VerifiedDeal {
   drawMode: number;
 }
 
-/** DDS bracket for card games (klondike, freecell) */
-function getCardDdsBracket(rating: number): { min: number; max: number } {
-  if (rating < 1100) return { min: 0, max: 45 };
-  if (rating < 1300) return { min: 25, max: 65 };
-  if (rating < 1500) return { min: 45, max: 80 };
-  if (rating < 1700) return { min: 60, max: 95 };
-  if (rating < 2000) return { min: 75, max: 100 };
-  return { min: 85, max: 100 };
-}
-
-/** DDS bracket for Realm — wider ranges, higher ceiling */
-function getRealmDdsBracket(rating: number): { min: number; max: number } {
+/** Unified DDS bracket for all game modes */
+function getDdsBracket(rating: number, _gameMode: string): { min: number; max: number } {
   if (rating < 1100) return { min: 0, max: 40 };
   if (rating < 1300) return { min: 25, max: 55 };
   if (rating < 1500) return { min: 45, max: 70 };
   if (rating < 1700) return { min: 60, max: 85 };
   if (rating < 2000) return { min: 75, max: 100 };
-  return { min: 90, max: 150 };
+  if (rating < 2500) return { min: 90, max: 130 };
+  return { min: 115, max: 150 };
 }
 
-/** Get DDS bracket for any game mode */
-function getDdsBracket(rating: number, gameMode: string): { min: number; max: number } {
-  return gameMode === 'realm' ? getRealmDdsBracket(rating) : getCardDdsBracket(rating);
-}
+/** Removed — getDdsBracket now handles all modes */
 
 /** Concentration set size based on games played in this mode */
 function getConcentrationCap(gamesPlayedThisMode: number): number | null {
@@ -66,9 +54,11 @@ function getMinConfidence(gamesPlayedThisMode: number): number {
 
 function ddsToLabel(dds: number): string {
   if (dds < 26) return 'Easy';
-  if (dds < 56) return 'Medium';
-  if (dds < 81) return 'Hard';
-  return 'Expert';
+  if (dds < 51) return 'Medium';
+  if (dds < 76) return 'Hard';
+  if (dds < 101) return 'Expert';
+  if (dds < 131) return 'Master';
+  return 'Grandmaster';
 }
 
 function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
@@ -395,7 +385,9 @@ export class DealPoolService {
         if (gameMode === 'realm') {
           const sizes = bracket.max <= 35 ? [5] :
                        bracket.max <= 65 ? [6] :
-                       bracket.max <= 80 ? [7, 8] : [9, 10];
+                       bracket.max <= 85 ? [7, 8] :
+                       bracket.max <= 100 ? [9, 10] :
+                       bracket.max <= 130 ? [10, 11] : [11, 12];
           const size = sizes[Math.floor(Math.random() * sizes.length)];
           deal = engine.generateDeal(seed, { gridSize: size, skipSpatialSurprise: size <= 5 });
         } else {

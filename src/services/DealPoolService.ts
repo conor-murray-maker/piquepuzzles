@@ -17,12 +17,29 @@ export interface VerifiedDeal {
   drawMode: number;
 }
 
-/** DDS bracket based on mode IQ */
-function getDdsBracket(rating: number): { min: number; max: number } {
+/** DDS bracket for card games (klondike, freecell) */
+function getCardDdsBracket(rating: number): { min: number; max: number } {
   if (rating < 1100) return { min: 0, max: 45 };
   if (rating < 1300) return { min: 25, max: 65 };
   if (rating < 1500) return { min: 45, max: 80 };
-  return { min: 60, max: 100 };
+  if (rating < 1700) return { min: 60, max: 95 };
+  if (rating < 2000) return { min: 75, max: 100 };
+  return { min: 85, max: 100 };
+}
+
+/** DDS bracket for Realm — wider ranges, higher ceiling */
+function getRealmDdsBracket(rating: number): { min: number; max: number } {
+  if (rating < 1100) return { min: 0, max: 40 };
+  if (rating < 1300) return { min: 25, max: 55 };
+  if (rating < 1500) return { min: 45, max: 70 };
+  if (rating < 1700) return { min: 60, max: 85 };
+  if (rating < 2000) return { min: 75, max: 100 };
+  return { min: 90, max: 150 };
+}
+
+/** Get DDS bracket for any game mode */
+function getDdsBracket(rating: number, gameMode: string): { min: number; max: number } {
+  return gameMode === 'realm' ? getRealmDdsBracket(rating) : getCardDdsBracket(rating);
 }
 
 /** Concentration set size based on games played in this mode */

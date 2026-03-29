@@ -51,7 +51,7 @@ export class PerformanceService {
   ): number {
     const baseCompletion = Math.round(baseDelta * 0.4);
     const timeRatio = avgTime / Math.max(actualTime, 1);
-    const timeBonus = Math.round(20 * (Math.pow(timeRatio, 1.8) - 1));
+    const timeBonus = Math.round(20 * (Math.pow(timeRatio, 1.3) - 1));
     const undoPenalty = 2 * undosUsed;
     const hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
     const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenalty));

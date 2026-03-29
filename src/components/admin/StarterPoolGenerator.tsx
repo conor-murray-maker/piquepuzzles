@@ -405,6 +405,7 @@ export function StarterPoolGenerator() {
             </Select>
           )}
 
+          <Button onClick={run} disabled={running} className="gap-2">
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
             {running ? "Generating..." : "Generate"}
           </Button>

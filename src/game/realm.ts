@@ -515,21 +515,21 @@ function generateGameId(): string {
   return `realm-${Date.now()}-${++gameIdCounter}`;
 }
 
-export function createRealmGame(seed?: number): RealmState {
+export function createRealmGame(seed?: number, gridSize?: number): RealmState {
   const actualSeed = seed ?? generateSeed();
-  const deal = generateRealmPuzzle(actualSeed);
+  const deal = generateRealmPuzzle(actualSeed, gridSize ? { gridSize } : undefined);
 
   if (!deal) {
-    return createFallbackRealmGame(actualSeed);
+    return createFallbackRealmGame(actualSeed, gridSize);
   }
 
   return createRealmStateFromDeal(deal, actualSeed);
 }
 
-function createFallbackRealmGame(seed: number): RealmState {
+function createFallbackRealmGame(seed: number, gridSize?: number): RealmState {
   for (let offset = 1; offset <= 200; offset++) {
     const retrySeed = seed + offset;
-    const deal = generateRealmPuzzle(retrySeed);
+    const deal = generateRealmPuzzle(retrySeed, gridSize ? { gridSize } : undefined);
     if (deal) {
       console.warn(`[Realm] Recovered generation with retry seed ${retrySeed}`);
       return createRealmStateFromDeal(deal, retrySeed);

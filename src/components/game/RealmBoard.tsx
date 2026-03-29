@@ -55,6 +55,7 @@ interface RealmBoardProps {
   onGiveUp?: (state: RealmState, elapsedSeconds: number) => void;
   initialSeed?: number;
   dealUuid?: string;
+  gridSize?: number;
 }
 
 const DRAG_HOLD_MS = 150;
@@ -81,15 +82,15 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
   );
 }
 
-export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: RealmBoardProps) {
+export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize }: RealmBoardProps) {
   const [state, setState] = useState<RealmState>(() => {
     if (initialSeed !== undefined) {
-      const fresh = createRealmGame(initialSeed);
+      const fresh = createRealmGame(initialSeed, gridSize);
       return { ...fresh, dealUuid };
     }
     const saved = loadFromStorage();
     if (saved) return saved.state;
-    const fresh = createRealmGame();
+    const fresh = createRealmGame(undefined, gridSize);
     return { ...fresh, dealUuid };
   });
   const [history, setHistory] = useState<RealmState[]>(() => {

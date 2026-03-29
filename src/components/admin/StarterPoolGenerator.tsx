@@ -102,6 +102,7 @@ export function StarterPoolGenerator() {
   const [selectedMode, setSelectedMode] = useState<string>("klondike");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
   const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
+  const [selectedStrategy, setSelectedStrategy] = useState<GenerationStrategy>("hybrid");
   const [running, setRunning] = useState(false);
   const [candidatesTried, setCandidatesTried] = useState(0);
   const [starterFound, setStarterFound] = useState(0);

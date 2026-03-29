@@ -378,26 +378,40 @@ Deno.serve(async (req) => {
     const outcome = isWin ? 1 : 0;
     const baseDelta = Math.round(K * (outcome - expected));
 
-    let finalDelta = Math.round(baseDelta * performanceModifier);
+    let finalDelta: number;
 
-    // Part 4: Daily challenge floor
-    if (isDaily) {
-      let bracketMin = 0;
-      if (modeIQ < 1100) bracketMin = 0;
-      else if (modeIQ < 1300) bracketMin = 25;
-      else if (modeIQ < 1500) bracketMin = 45;
-      else bracketMin = 60;
+    if (isRealm && isWin) {
+      // Realm scoring: base completion (reduced to 40%) + exponential time bonus − undo penalty
+      const baseCompletion = Math.round(baseDelta * 0.4);
+      const timeBonusPts = Math.round(baseCompletion * realmTimeBonus);
+      const undoPenaltyPts = Math.round(baseCompletion * 0.3) * realmUndoPenalty;
+      const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenalty));
+      finalDelta = baseCompletion + timeBonusPts - undoPenaltyPts - hintPenaltyPts;
+      // Cap protection: clamp to [-20, +60]
+      finalDelta = Math.max(-20, Math.min(60, finalDelta));
+      // Win floor
+      finalDelta = Math.max(1, finalDelta);
+    } else {
+      finalDelta = Math.round(baseDelta * performanceModifier);
 
-      if (dds < bracketMin) {
-        // Player is above the deal's difficulty
-        if (isWin) finalDelta = Math.max(0, finalDelta);
-        else finalDelta = -1;
+      // Part 4: Daily challenge floor
+      if (isDaily) {
+        let bracketMin = 0;
+        if (modeIQ < 1100) bracketMin = 0;
+        else if (modeIQ < 1300) bracketMin = 25;
+        else if (modeIQ < 1500) bracketMin = 45;
+        else bracketMin = 60;
+
+        if (dds < bracketMin) {
+          if (isWin) finalDelta = Math.max(0, finalDelta);
+          else finalDelta = -1;
+        }
       }
-    }
 
-    // Win floor and loss ceiling
-    if (isWin) finalDelta = Math.max(1, finalDelta);
-    else finalDelta = Math.max(-20, finalDelta);
+      // Win floor and loss ceiling
+      if (isWin) finalDelta = Math.max(1, finalDelta);
+      else finalDelta = Math.max(-20, finalDelta);
+    }
 
     const newModeIQ = Math.max(0, modeIQ + finalDelta);
 

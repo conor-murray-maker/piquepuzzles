@@ -14,10 +14,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 const TIER_COLORS: Record<string, string> = {
   bronze: 'hsl(25, 60%, 50%)',
-  silver: 'hsl(220, 10%, 66%)',
-  gold: 'hsl(45, 93%, 47%)',
-  platinum: 'hsl(200, 50%, 55%)',
-  elite: 'hsl(280, 60%, 55%)',
+  silver: 'hsl(225, 3%, 67%)',
+  gold: 'hsl(42, 100%, 50%)',
+  platinum: 'hsl(214, 58%, 57%)',
+  elite: 'hsl(270, 58%, 47%)',
+  master: 'hsl(4, 66%, 48%)',
+  grandmaster: 'hsl(45, 100%, 50%)',
 };
 
 function MiniProgressBar({ rating }: { rating: number }) {
@@ -169,7 +171,9 @@ export function PostGameScreen({
             gameState.difficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
             gameState.difficulty === 'Medium' ? 'bg-gold/20 text-gold' :
             gameState.difficulty === 'Hard' ? 'bg-destructive/20 text-destructive' :
-            'bg-elite/20 text-elite'
+            gameState.difficulty === 'Expert' ? 'bg-elite/20 text-elite' :
+            gameState.difficulty === 'Master' ? 'bg-master/20 text-master' :
+            'bg-grandmaster/20 text-grandmaster font-bold'
           }`}>
             {gameState.difficulty} Deal
           </span>

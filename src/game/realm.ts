@@ -73,7 +73,7 @@ interface RegionGenResult {
 }
 
 function generateRegions(n: number, rand: () => number): RegionGenResult | null {
-  console.log('GENERATION PATH');
+  
   const regionMap: number[][] = Array.from({ length: n }, () => Array(n).fill(-1));
   const regions: number[][] = Array.from({ length: n }, () => []);
 

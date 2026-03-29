@@ -69,6 +69,7 @@ function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
   };
 }
 
+export class DealPoolService {
   private static inFlightKeys = new Set<string>();
 
   /**

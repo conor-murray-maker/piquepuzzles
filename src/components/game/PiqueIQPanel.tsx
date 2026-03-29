@@ -4,6 +4,7 @@ import { ChevronDown, Info } from 'lucide-react';
 import { getTier, RATING_TIERS } from '@/game/types';
 import { ModeRating } from '@/hooks/usePlayerStats';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TierProgressBar } from '@/components/game/TierProgressBar';
 
 const TIER_COLORS: Record<string, string> = {
   bronze: 'hsl(25, 60%, 50%)',
@@ -12,27 +13,6 @@ const TIER_COLORS: Record<string, string> = {
   platinum: 'hsl(200, 50%, 55%)',
   elite: 'hsl(280, 60%, 55%)',
 };
-
-const RANGE_MIN = 800;
-const RANGE_MAX = 2000;
-
-function FullRangeBar({ rating, className = '' }: { rating: number; className?: string }) {
-  const tier = getTier(rating);
-  const progress = Math.max(0, Math.min(100, ((rating - RANGE_MIN) / (RANGE_MAX - RANGE_MIN)) * 100));
-  const tierColor = TIER_COLORS[tier.color] || TIER_COLORS.bronze;
-
-  return (
-    <div className={`h-1.5 rounded-full bg-secondary overflow-hidden ${className}`}>
-      <div
-        className="h-full rounded-full transition-all duration-500"
-        style={{
-          width: `${progress}%`,
-          background: `linear-gradient(90deg, hsl(var(--primary)) 0%, ${tierColor} 100%)`,
-        }}
-      />
-    </div>
-  );
-}
 
 function MiniProgressBar({ rating, className = '' }: { rating: number; className?: string }) {
   const tier = getTier(rating);
@@ -93,34 +73,20 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
               </Tooltip>
             </TooltipProvider>
           </div>
-          <div className="flex items-baseline gap-2.5">
+          <div className="flex items-baseline gap-2.5 mb-2">
             <span
               className="text-3xl font-bold font-mono"
               style={{ color: TIER_COLORS[tier.color] }}
             >
               {piqueIQ}
             </span>
-            <span
-              className="text-xs font-semibold uppercase tracking-wider"
-              style={{ color: TIER_COLORS[tier.color] }}
-            >
-              {tier.name}
-            </span>
           </div>
-          <FullRangeBar rating={piqueIQ} className="mt-2 w-full" />
-          <div className="flex justify-end mt-1">
-            <span
-              className="text-[10px] font-semibold uppercase tracking-wider"
-              style={{ color: TIER_COLORS[tier.color] }}
-            >
-              {tier.name}
-            </span>
-          </div>
+          <TierProgressBar rating={piqueIQ} />
         </div>
         <motion.div
           animate={{ rotate: expanded ? 180 : 0 }}
           transition={{ duration: 0.2 }}
-          className="flex-shrink-0"
+          className="flex-shrink-0 self-start mt-1"
         >
           <ChevronDown className="w-4 h-4 text-muted-foreground" />
         </motion.div>

@@ -454,6 +454,7 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
     n = forcedSize;
   } else {
     const sizeWeights = [4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+    n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
   }
 
   const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0, timeout: 0 };

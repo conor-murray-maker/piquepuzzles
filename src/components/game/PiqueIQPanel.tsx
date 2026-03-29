@@ -6,23 +6,27 @@ import { ModeRating } from '@/hooks/usePlayerStats';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
 
-const TIER_COLORS: Record<string, string> = {
-  bronze: 'hsl(25, 60%, 50%)',
-  silver: 'hsl(225, 3%, 67%)',
-  gold: 'hsl(42, 100%, 50%)',
-  platinum: 'hsl(214, 58%, 57%)',
-  elite: 'hsl(270, 58%, 47%)',
-  master: 'hsl(4, 66%, 48%)',
-  grandmaster: 'hsl(45, 100%, 50%)',
+const TIER_HEX: Record<string, string> = {
+  bronze: '#CD7F32',
+  silver: '#A8A9AD',
+  gold: '#FFB800',
+  platinum: '#4A90D9',
+  elite: '#7B2FBE',
+  master: '#C0392B',
+  grandmaster: '#FFD700',
 };
+
+/** Within-tier progress: 0–100% of the current tier only */
+function withinTierProgress(rating: number): number {
+  const tier = getTier(rating);
+  const range = tier.max - tier.min + 1;
+  return Math.min(100, Math.max(0, ((rating - tier.min) / range) * 100));
+}
 
 function MiniProgressBar({ rating, className = '' }: { rating: number; className?: string }) {
   const tier = getTier(rating);
-  const tierIndex = RATING_TIERS.findIndex(t => t.name === tier.name);
-  const nextTier = RATING_TIERS[tierIndex + 1];
-  const progress = nextTier
-    ? ((rating - tier.min) / (nextTier.min - tier.min)) * 100
-    : Math.min(100, ((rating - tier.min) / 250) * 100);
+  const progress = withinTierProgress(rating);
+  const isGM = tier.color === 'grandmaster';
 
   return (
     <div className={`h-1.5 rounded-full bg-secondary overflow-hidden ${className}`}>
@@ -30,7 +34,8 @@ function MiniProgressBar({ rating, className = '' }: { rating: number; className
         className="h-full rounded-full transition-all duration-500"
         style={{
           width: `${progress}%`,
-          backgroundColor: TIER_COLORS[tier.color] || TIER_COLORS.bronze,
+          backgroundColor: TIER_HEX[tier.color] || TIER_HEX.bronze,
+          ...(isGM ? { boxShadow: `0 0 4px ${TIER_HEX.grandmaster}80` } : {}),
         }}
       />
     </div>
@@ -46,6 +51,7 @@ interface PiqueIQPanelProps {
 export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: PiqueIQPanelProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const tier = getTier(piqueIQ);
+  const isGM = tier.color === 'grandmaster';
 
   return (
     <div className="stat-card overflow-hidden">
@@ -77,8 +83,11 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
           </div>
           <div className="flex items-baseline gap-2.5 mb-2">
             <span
-              className="text-3xl font-bold font-mono"
-              style={{ color: TIER_COLORS[tier.color] }}
+              className={`text-3xl font-bold font-mono ${isGM ? 'font-extrabold' : ''}`}
+              style={{
+                color: TIER_HEX[tier.color],
+                ...(isGM ? { textShadow: `0 0 8px ${TIER_HEX.grandmaster}60` } : {}),
+              }}
             >
               {piqueIQ}
             </span>
@@ -108,6 +117,7 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
               {modeRatings.map((mr) => {
                 const modeTier = getTier(mr.iq);
                 const isUnranked = mr.games_played === 0;
+                const modeIsGM = modeTier.color === 'grandmaster';
                 return (
                   <div key={mr.game_mode} className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
@@ -115,8 +125,13 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
                         <span className="text-sm font-medium">{mr.display_name}</span>
                         <div className="flex items-center gap-1.5">
                           <span
-                            className={`font-mono font-bold text-sm ${isUnranked ? 'text-muted-foreground' : ''}`}
-                            style={!isUnranked ? { color: TIER_COLORS[modeTier.color] } : undefined}
+                            className={`font-mono font-bold text-sm ${isUnranked ? 'text-muted-foreground' : ''} ${
+                              modeIsGM && !isUnranked ? 'font-extrabold' : ''
+                            }`}
+                            style={!isUnranked ? {
+                              color: TIER_HEX[modeTier.color],
+                              ...(modeIsGM ? { textShadow: `0 0 6px ${TIER_HEX.grandmaster}60` } : {}),
+                            } : undefined}
                           >
                             {mr.iq}
                           </span>
@@ -124,8 +139,13 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
                             <span className="text-[10px] text-muted-foreground">Unranked</span>
                           ) : (
                             <span
-                              className="text-[10px] font-medium uppercase tracking-wider"
-                              style={{ color: TIER_COLORS[modeTier.color] }}
+                              className={`text-[10px] font-medium uppercase tracking-wider ${
+                                modeIsGM ? 'font-extrabold' : ''
+                              }`}
+                              style={{
+                                color: TIER_HEX[modeTier.color],
+                                ...(modeIsGM ? { textShadow: `0 0 4px ${TIER_HEX.grandmaster}60` } : {}),
+                              }}
                             >
                               {modeTier.name}
                             </span>

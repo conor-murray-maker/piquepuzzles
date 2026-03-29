@@ -523,7 +523,257 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
   return null;
 }
 
-// ==================== Game State Creation ====================
+// ==================== Solution-First Generation ====================
+
+export type GenerationStrategy = 'solution-first' | 'legacy' | 'hybrid';
+
+/**
+ * Place N non-attacking crowns on an NxN grid (one per row, one per column,
+ * no two adjacent including diagonals). Returns null if placement fails.
+ */
+function placeNonAttackingCrowns(n: number, rand: () => number): [number, number][] | null {
+  const placement: [number, number][] = [];
+  const usedCols = new Set<number>();
+
+  function isAdjacentToExisting(row: number, col: number): boolean {
+    for (const [pr, pc] of placement) {
+      if (Math.abs(pr - row) <= 1 && Math.abs(pc - col) <= 1) return true;
+    }
+    return false;
+  }
+
+  function solve(row: number): boolean {
+    if (row === n) return true;
+
+    // Shuffle column order for variety
+    const cols = Array.from({ length: n }, (_, i) => i);
+    for (let i = cols.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [cols[i], cols[j]] = [cols[j], cols[i]];
+    }
+
+    for (const col of cols) {
+      if (usedCols.has(col)) continue;
+      if (isAdjacentToExisting(row, col)) continue;
+
+      placement.push([row, col]);
+      usedCols.add(col);
+      if (solve(row + 1)) return true;
+      placement.pop();
+      usedCols.delete(col);
+    }
+    return false;
+  }
+
+  if (!solve(0)) return null;
+  return placement;
+}
+
+/**
+ * Grow N contiguous regions from crown positions outward using flood-fill.
+ * Each region is guaranteed to contain its crown cell.
+ */
+function growRegionsFromCrowns(
+  crowns: [number, number][],
+  n: number,
+  rand: () => number
+): RegionGenResult | null {
+  const regionMap: number[][] = Array.from({ length: n }, () => Array(n).fill(-1));
+  const regions: number[][] = Array.from({ length: n }, () => []);
+
+  // Seed each region at its crown position
+  for (let i = 0; i < n; i++) {
+    const [r, c] = crowns[i];
+    regionMap[r][c] = i;
+    regions[i].push(r * n + c);
+  }
+
+  // Flood-fill round-robin expansion with compact bias
+  let unfilled = n * n - n;
+  let safetyCounter = 0;
+  const maxSafety = n * n * 20;
+
+  while (unfilled > 0 && safetyCounter < maxSafety) {
+    safetyCounter++;
+    let anyGrew = false;
+
+    // Randomize region growth order each round for balanced sizes
+    const order = Array.from({ length: n }, (_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+
+    for (const regionId of order) {
+      const candidates: { r: number; c: number; weight: number }[] = [];
+      const seen = new Set<string>();
+
+      for (const idx of regions[regionId]) {
+        const cr = Math.floor(idx / n);
+        const cc = idx % n;
+        for (const [dr, dc] of DIRS) {
+          const nr = cr + dr;
+          const nc = cc + dc;
+          const key = `${nr},${nc}`;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === -1 && !seen.has(key)) {
+            seen.add(key);
+            let neighboursInRegion = 0;
+            for (const [dr2, dc2] of DIRS) {
+              const nr2 = nr + dr2;
+              const nc2 = nc + dc2;
+              if (nr2 >= 0 && nr2 < n && nc2 >= 0 && nc2 < n && regionMap[nr2][nc2] === regionId) {
+                neighboursInRegion++;
+              }
+            }
+            candidates.push({ r: nr, c: nc, weight: neighboursInRegion + 1 });
+          }
+        }
+      }
+      if (candidates.length === 0) continue;
+
+      const totalWeight = candidates.reduce((s, c) => s + c.weight, 0);
+      let pick = rand() * totalWeight;
+      for (const { r, c, weight } of candidates) {
+        pick -= weight;
+        if (pick <= 0) {
+          regionMap[r][c] = regionId;
+          regions[regionId].push(r * n + c);
+          unfilled--;
+          anyGrew = true;
+          break;
+        }
+      }
+    }
+    if (!anyGrew) break;
+  }
+
+  // Assign any remaining unfilled cells to nearest region
+  if (unfilled > 0) {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (regionMap[r][c] !== -1) continue;
+        for (const [dr, dc] of DIRS) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] !== -1) {
+            regionMap[r][c] = regionMap[nr][nc];
+            regions[regionMap[nr][nc]].push(r * n + c);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Validate: contiguous regions of reasonable size
+  for (let ri = 0; ri < n; ri++) {
+    if (regions[ri].length < 3 || regions[ri].length > n * 2) return null;
+
+    const cellSet = new Set(regions[ri]);
+    const visited = new Set<number>();
+    const queue = [regions[ri][0]];
+    visited.add(regions[ri][0]);
+    while (queue.length > 0) {
+      const idx = queue.shift()!;
+      const cr = Math.floor(idx / n);
+      const cc = idx % n;
+      for (const [dr, dc] of DIRS) {
+        const nr = cr + dr;
+        const nc = cc + dc;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n) {
+          const nIdx = nr * n + nc;
+          if (cellSet.has(nIdx) && !visited.has(nIdx)) {
+            visited.add(nIdx);
+            queue.push(nIdx);
+          }
+        }
+      }
+    }
+    if (visited.size !== regions[ri].length) return null;
+  }
+
+  return { regionMap, regions };
+}
+
+/**
+ * Solution-first Realm generator: place crowns first, then grow regions.
+ * Dramatically improves throughput for large grids (10+).
+ */
+export function generateRealmPuzzleSolutionFirst(seed: number, options?: RealmGenOptions): RealmDeal | null {
+  const rand = seededRandom(seed);
+  const forcedSize = options?.gridSize;
+  const skipSurprise = options?.skipSpatialSurprise ?? false;
+  const timeoutMs = options?.timeoutMs;
+
+  let n: number;
+  if (forcedSize) {
+    n = forcedSize;
+  } else {
+    const sizeWeights = [4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+    n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
+  }
+
+  const discardCounts = { crown: 0, region: 0, uniqueness: 0, deduction: 0, surprise: 0, timeout: 0 };
+  const genStart = performance.now();
+
+  for (let attempt = 0; attempt < 2000; attempt++) {
+    if (timeoutMs && (performance.now() - genStart) > timeoutMs) {
+      discardCounts.timeout++;
+      break;
+    }
+
+    // === Stage A: Place N non-attacking crowns ===
+    const crowns = placeNonAttackingCrowns(n, rand);
+    if (!crowns) { discardCounts.crown++; continue; }
+
+    // === Stage B: Grow regions from crown positions ===
+    const regResult = growRegionsFromCrowns(crowns, n, rand);
+    if (!regResult) { discardCounts.region++; continue; }
+
+    const { regionMap, regions } = regResult;
+
+    // === Stage C: Verify uniqueness — the placed crowns should be the ONLY solution ===
+    const solverResult = findAllSolutions(regionMap, n, 2);
+    if (solverResult === 'timeout') { discardCounts.timeout++; continue; }
+    if (solverResult.length !== 1) { discardCounts.uniqueness++; continue; }
+
+    const solution = solverResult[0];
+
+    // === Stage D: Deduction chain — must be fully solvable without guessing ===
+    const deduction = solveByDeduction(regionMap, n);
+    if (!deduction.solvable) {
+      discardCounts.deduction++;
+      console.log(`[Realm] Rejected ${n}x${n} puzzle — unique solution but deduction chain requires guessing (forced=${deduction.forcedSteps}/${n})`);
+      continue;
+    }
+
+    // === Stage E: Spatial surprise scoring ===
+    let surprise = 0;
+    if (!skipSurprise) {
+      surprise = spatialSurpriseScore(solution, n);
+      const maxVariance = (n * n - 1) / 12;
+      const surpriseThreshold = maxVariance * 0.4;
+      if (surprise < surpriseThreshold) { discardCounts.surprise++; continue; }
+    }
+
+    // All stages passed — compute DDS
+    const sizes = regions.map(r => r.length);
+    const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+    const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
+
+    const dds = calculateRealmDDS(n, deduction, sizeVariance);
+    const regionColors = assignColors(n, rand);
+
+    console.log(`[Realm] Accepted ${n}x${n} puzzle via solution-first (attempt ${attempt + 1}). DDS=${dds} surprise=${surprise.toFixed(2)} Discards: crown=${discardCounts.crown} region=${discardCounts.region} uniq=${discardCounts.uniqueness} deduction=${discardCounts.deduction} surprise=${discardCounts.surprise} timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}]`);
+
+    return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
+  }
+
+  console.warn(`[Realm] Solution-first failed for ${n}x${n}. Discards: crown=${discardCounts.crown} region=${discardCounts.region} uniq=${discardCounts.uniqueness} deduction=${discardCounts.deduction} surprise=${discardCounts.surprise} timeout=${discardCounts.timeout}`);
+  return null;
+}
+
+
 
 let gameIdCounter = 0;
 function generateGameId(): string {

@@ -387,10 +387,8 @@ Deno.serve(async (req) => {
       const undoPenaltyPts = Math.round(baseCompletion * 0.3) * realmUndoPenalty;
       const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenalty));
       finalDelta = baseCompletion + timeBonusPts - undoPenaltyPts - hintPenaltyPts;
-      // Cap protection: clamp to [-20, +60]
-      finalDelta = Math.max(-20, Math.min(60, finalDelta));
-      // Win floor
-      finalDelta = Math.max(1, finalDelta);
+      // Floor only — no upper cap; net negative is allowed
+      finalDelta = Math.max(-20, finalDelta);
     } else {
       finalDelta = Math.round(baseDelta * performanceModifier);
 

@@ -57,7 +57,7 @@ export class PerformanceService {
     const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenalty));
 
     const raw = baseCompletion + timeBonus - undoPenalty - hintPenaltyPts;
-    // Cap protection: clamp to [-20, +60], then apply win floor
-    return Math.max(1, clamp(raw, -20, 60));
+    // Floor only — no upper cap; net negative is allowed
+    return Math.max(-20, raw);
   }
 }

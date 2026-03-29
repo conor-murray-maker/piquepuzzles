@@ -205,11 +205,17 @@ function validateRegions(_regions: number[][], _n: number, _regionMap: number[][
 
 // ==================== Solution Finding ====================
 
-function findAllSolutions(regionMap: number[][], n: number, maxSolutions: number = 3): [number, number][][] {
+/** Sentinel return value when solver times out */
+const SOLVER_TIMEOUT_SENTINEL: [number, number][][] | 'timeout' = 'timeout';
+
+function findAllSolutions(regionMap: number[][], n: number, maxSolutions: number = 3, timeoutMs: number = 200): [number, number][][] | 'timeout' {
   const solutions: [number, number][][] = [];
   const placement: [number, number][] = [];
   const usedCols = new Set<number>();
   const usedRegions = new Set<number>();
+  const startTime = Date.now();
+  let timedOut = false;
+  let checks = 0;
 
   function isAdjacentToExisting(row: number, col: number): boolean {
     for (const [pr, pc] of placement) {
@@ -219,13 +225,19 @@ function findAllSolutions(regionMap: number[][], n: number, maxSolutions: number
   }
 
   function solve(row: number): void {
-    if (solutions.length >= maxSolutions) return;
+    if (timedOut || solutions.length >= maxSolutions) return;
+    // Check timeout every 500 recursive calls to avoid excessive Date.now() overhead
+    if (++checks % 500 === 0 && (Date.now() - startTime) > timeoutMs) {
+      timedOut = true;
+      return;
+    }
     if (row === n) {
       solutions.push([...placement.map(([r, c]) => [r, c] as [number, number])]);
       return;
     }
 
     for (let col = 0; col < n; col++) {
+      if (timedOut) return;
       if (usedCols.has(col)) continue;
       const region = regionMap[row][col];
       if (usedRegions.has(region)) continue;
@@ -242,6 +254,7 @@ function findAllSolutions(regionMap: number[][], n: number, maxSolutions: number
   }
 
   solve(0);
+  if (timedOut) return 'timeout';
   return solutions;
 }
 

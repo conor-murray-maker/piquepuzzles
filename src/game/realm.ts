@@ -29,7 +29,7 @@ export interface RealmState {
   maxErrors: number;
   dealId: string;
   dealUuid?: string;
-  difficulty: 'Easy' | 'Medium' | 'Hard' | 'Expert';
+  difficulty: string;
   difficultyScore: number;
   seed?: number;
   minMoves?: number;
@@ -40,7 +40,7 @@ export interface RealmState {
   gameId: string;
 }
 
-// Maximally perceptually distinct palette (10 colours)
+// Maximally perceptually distinct palette (12 colours for up to 12x12)
 const REALM_COLORS = [
   '#E8735A', // coral
   '#2A9D8F', // teal
@@ -52,6 +52,8 @@ const REALM_COLORS = [
   '#F4A261', // orange
   '#2D6A4F', // forest
   '#8E9AAF', // slate
+  '#D4A373', // tan
+  '#00B4D8', // cyan
 ];
 
 // Seeded PRNG
@@ -374,7 +376,8 @@ function assignColors(n: number, rand: () => number): string[] {
 
 function calculateRealmDDS(n: number, deduction: DeductionResult, regionSizeVariance: number): number {
   const sizeRanges: Record<number, [number, number]> = {
-    4: [5, 15], 5: [10, 25], 6: [15, 30], 7: [30, 50], 8: [45, 65], 9: [60, 80], 10: [75, 100],
+    4: [5, 15], 5: [10, 25], 6: [15, 30], 7: [30, 50], 8: [45, 65],
+    9: [60, 80], 10: [75, 100], 11: [100, 130], 12: [120, 150],
   };
   const [baseMin, baseMax] = sizeRanges[n] || [50, 70];
   let dds = (baseMin + baseMax) / 2;
@@ -382,7 +385,7 @@ function calculateRealmDDS(n: number, deduction: DeductionResult, regionSizeVari
   dds += chainMod;
   const varianceMod = Math.min(10, regionSizeVariance * 2);
   dds += varianceMod;
-  return Math.max(0, Math.min(100, Math.round(dds)));
+  return Math.max(0, Math.min(150, Math.round(dds)));
 }
 
 // ==================== Main Generation ====================
@@ -450,8 +453,7 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
   if (forcedSize) {
     n = forcedSize;
   } else {
-    const sizeWeights = [4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10];
-    n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
+    const sizeWeights = [4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10, 10, 11, 11, 12];
   }
 
   const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0, timeout: 0 };
@@ -539,11 +541,13 @@ function createFallbackRealmGame(seed: number, gridSize?: number): RealmState {
   throw new Error('Realm generation failed after exhausting recovery attempts');
 }
 
-function ddsToRealmDifficulty(dds: number): 'Easy' | 'Medium' | 'Hard' | 'Expert' {
+function ddsToRealmDifficulty(dds: number): string {
   if (dds < 26) return 'Easy';
-  if (dds < 56) return 'Medium';
-  if (dds < 81) return 'Hard';
-  return 'Expert';
+  if (dds < 51) return 'Medium';
+  if (dds < 76) return 'Hard';
+  if (dds < 101) return 'Expert';
+  if (dds < 131) return 'Master';
+  return 'Grandmaster';
 }
 
 // ==================== Constraint-Based Win Check ====================

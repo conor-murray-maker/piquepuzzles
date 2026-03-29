@@ -256,6 +256,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
         onGiveUp={handleGiveUp as any}
         initialSeed={effectiveSeed}
         dealUuid={effectiveDealUuid}
+        gridSize={queuedDeal?.minMoves}
       />
     );
   }

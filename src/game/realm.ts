@@ -515,9 +515,9 @@ function generateGameId(): string {
   return `realm-${Date.now()}-${++gameIdCounter}`;
 }
 
-export function createRealmGame(seed?: number): RealmState {
+export function createRealmGame(seed?: number, gridSize?: number): RealmState {
   const actualSeed = seed ?? generateSeed();
-  const deal = generateRealmPuzzle(actualSeed);
+  const deal = generateRealmPuzzle(actualSeed, gridSize ? { gridSize } : undefined);
 
   if (!deal) {
     return createFallbackRealmGame(actualSeed);

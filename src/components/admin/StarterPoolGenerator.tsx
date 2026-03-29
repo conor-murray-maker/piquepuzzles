@@ -10,6 +10,7 @@ import { FreeCellEngine } from "@/engines/FreeCellEngine";
 import { RealmEngine } from "@/engines/RealmEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
+import { generateRealmPuzzleSolutionFirst, generateRealmPuzzle, type GenerationStrategy, type RealmGenOptions } from "@/game/realm";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
 import { Database, Loader2, CheckCircle, XCircle } from "lucide-react";
 
@@ -89,12 +90,19 @@ const TIMEOUT_OPTIONS = [
   { value: "10000", label: "10s" },
 ];
 
+const STRATEGY_OPTIONS: { value: GenerationStrategy; label: string; description: string }[] = [
+  { value: "hybrid", label: "Hybrid (default)", description: "Solution-first for ≥10, legacy fallback" },
+  { value: "solution-first", label: "Solution-first", description: "Crown-first for ≥10, legacy for <10" },
+  { value: "legacy", label: "Legacy", description: "Original random-region approach for all sizes" },
+];
+
 export function StarterPoolGenerator() {
   const action = useAdminAction();
   const { toast } = useToast();
   const [selectedMode, setSelectedMode] = useState<string>("klondike");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
   const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
+  const [selectedStrategy, setSelectedStrategy] = useState<GenerationStrategy>("hybrid");
   const [running, setRunning] = useState(false);
   const [candidatesTried, setCandidatesTried] = useState(0);
   const [starterFound, setStarterFound] = useState(0);
@@ -139,6 +147,7 @@ export function StarterPoolGenerator() {
 
     const isRealm = selectedMode === "realm";
     addStatus(`Starting ${selectedMode} deal generation (${selectedDifficulty})...`);
+    addStatus(`Strategy: ${isRealm ? selectedStrategy : 'n/a (card game)'}`);
     addStatus(`Targets: ${targets.map(t => `${t.target} ${t.band}${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}`).join(", ")} (${totalTarget} total)`);
     if (timeoutMs > 0) addStatus(`Timeout per candidate: ${timeoutMs}ms`);
 
@@ -178,19 +187,30 @@ export function StarterPoolGenerator() {
           const candidateStart = performance.now();
           let deal;
           if (isRealm) {
-            deal = engine.generateDeal(seed, {
+            const genOpts: RealmGenOptions = {
               gridSize: realmGridSize,
               skipSpatialSurprise: realmSkipSurprise,
               timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
-            });
+            };
+            const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
+
+            if (useLargeGridStrategy && selectedStrategy === 'solution-first') {
+              // Solution-first only
+              const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+              deal = { seed, gameMode: 'realm' as const, data: puzzle };
+            } else if (useLargeGridStrategy && selectedStrategy === 'hybrid') {
+              // Try solution-first, fall back to legacy
+              let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+              if (!puzzle) {
+                puzzle = generateRealmPuzzle(seed, genOpts);
+              }
+              deal = { seed, gameMode: 'realm' as const, data: puzzle };
+            } else {
+              // Legacy for all sizes, or small grids
+              deal = engine.generateDeal(seed, genOpts);
+            }
           } else {
             deal = engine.generateDeal(seed);
-          }
-
-          // Check per-candidate timeout
-          if (timeoutMs > 0 && (performance.now() - candidateStart) > timeoutMs) {
-            timeoutDiscards++;
-            continue;
           }
 
           const verifyResult = engine.verifySolvable(deal, simCount);
@@ -302,7 +322,7 @@ export function StarterPoolGenerator() {
     toast({ title: `${selectedMode} pool seeded`, description: `${totalInserted} verified deals inserted` });
 
     setRunning(false);
-  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout]);
+  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout, selectedStrategy]);
 
   const allTargets = TARGETS_BY_MODE[selectedMode];
   const targets = selectedDifficulty === "all"
@@ -371,6 +391,19 @@ export function StarterPoolGenerator() {
               ))}
             </SelectContent>
           </Select>
+
+          {selectedMode === "realm" && (
+            <Select value={selectedStrategy} onValueChange={(v) => setSelectedStrategy(v as GenerationStrategy)} disabled={running}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Strategy" />
+              </SelectTrigger>
+              <SelectContent>
+                {STRATEGY_OPTIONS.map(s => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           <Button onClick={run} disabled={running} className="gap-2">
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}

@@ -49,7 +49,9 @@ class RealmEngineImpl implements PuzzleEngine {
     if (minSolutionLength <= 7) return 55;
     if (minSolutionLength <= 8) return 70;
     if (minSolutionLength <= 9) return 87;
-    return 95;
+    if (minSolutionLength <= 10) return 95;
+    if (minSolutionLength <= 11) return 115;
+    return 135;
   }
 }
 

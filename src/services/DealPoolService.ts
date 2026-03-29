@@ -17,12 +17,29 @@ export interface VerifiedDeal {
   drawMode: number;
 }
 
-/** DDS bracket based on mode IQ */
-function getDdsBracket(rating: number): { min: number; max: number } {
+/** DDS bracket for card games (klondike, freecell) */
+function getCardDdsBracket(rating: number): { min: number; max: number } {
   if (rating < 1100) return { min: 0, max: 45 };
   if (rating < 1300) return { min: 25, max: 65 };
   if (rating < 1500) return { min: 45, max: 80 };
-  return { min: 60, max: 100 };
+  if (rating < 1700) return { min: 60, max: 95 };
+  if (rating < 2000) return { min: 75, max: 100 };
+  return { min: 85, max: 100 };
+}
+
+/** DDS bracket for Realm — wider ranges, higher ceiling */
+function getRealmDdsBracket(rating: number): { min: number; max: number } {
+  if (rating < 1100) return { min: 0, max: 40 };
+  if (rating < 1300) return { min: 25, max: 55 };
+  if (rating < 1500) return { min: 45, max: 70 };
+  if (rating < 1700) return { min: 60, max: 85 };
+  if (rating < 2000) return { min: 75, max: 100 };
+  return { min: 90, max: 150 };
+}
+
+/** Get DDS bracket for any game mode */
+function getDdsBracket(rating: number, gameMode: string): { min: number; max: number } {
+  return gameMode === 'realm' ? getRealmDdsBracket(rating) : getCardDdsBracket(rating);
 }
 
 /** Concentration set size based on games played in this mode */
@@ -107,7 +124,10 @@ export class DealPoolService {
     const playedIds = await this.getUserPlayedDealIds(userId);
     // DDS bracket based on mode IQ (preference, not hard filter)
     // First 3 games per mode: no bracket (Easy-only via allowedDiffs handles it)
-    const bracket = gamesPlayedThisMode >= 3 ? getDdsBracket(modeIQ) : null;
+    const bracket = gamesPlayedThisMode >= 3 ? getDdsBracket(modeIQ, gameMode) : null;
+    const isRealm = gameMode === 'realm';
+    // For Realm, enforce a DDS floor even in fallbacks — never serve below the bracket minimum
+    const ddsFloor = isRealm && bracket ? bracket.min : null;
     const allowedDiffs = getAllowedDifficulties(gamesPlayedThisMode);
     const minConf = getMinConfidence(gamesPlayedThisMode);
     const concentrationCap = getConcentrationCap(gamesPlayedThisMode);
@@ -118,6 +138,7 @@ export class DealPoolService {
       modeIQ,
       iqSource: 'player_mode_ratings',
       ddsBracket: bracket,
+      ddsFloor,
       gamesPlayedThisMode,
       allowedDiffs,
       minConfidence: minConf,
@@ -150,24 +171,31 @@ export class DealPoolService {
       }
     }
 
-    // Fallback 2: Remove bracket preference — serve any unplayed deal for this mode
+    // Fallback 2: Remove bracket ceiling but keep floor — serve any deal above the DDS floor
+    const floorBracket = ddsFloor !== null ? { min: ddsFloor, max: 9999 } : null;
     const { deal: noBracket, totalFound: found3, unplayedCount: unplayed3 } = await this.queryEligibleWithStats(
-      gameMode, playedIds, null, allowedDiffs, minConf, null
+      gameMode, playedIds, floorBracket, allowedDiffs, minConf, null
     );
-    console.log(`[DealPoolService] Priority 3 (no bracket):`, { totalFound: found3, unplayed: unplayed3, served: !!noBracket });
+    console.log(`[DealPoolService] Priority 3 (floor only, no ceiling):`, { ddsFloor, totalFound: found3, unplayed: unplayed3, served: !!noBracket });
     if (noBracket) {
       await this.markPlayed(userId, noBracket.id);
       return dealRowToVerified(noBracket, 'expanded-no-bracket');
     }
 
-    // Fallback 3: Remove difficulty + confidence filters — any unplayed deal for this mode
+    // Fallback 3: Remove difficulty + confidence filters but keep DDS floor for Realm
     const { deal: anyDeal, totalFound: found4, unplayedCount: unplayed4 } = await this.queryEligibleWithStats(
-      gameMode, playedIds, null, null, 0, null
+      gameMode, playedIds, floorBracket, null, 0, null
     );
-    console.log(`[DealPoolService] Priority 4 (any unplayed):`, { totalFound: found4, unplayed: unplayed4, served: !!anyDeal });
+    console.log(`[DealPoolService] Priority 4 (any unplayed, floor enforced):`, { ddsFloor, totalFound: found4, unplayed: unplayed4, served: !!anyDeal });
     if (anyDeal) {
       await this.markPlayed(userId, anyDeal.id);
       return dealRowToVerified(anyDeal, 'any-unplayed');
+    }
+
+    // For Realm: if nothing above the floor exists, return null (no undershooting)
+    if (isRealm && ddsFloor !== null) {
+      console.warn(`[DealPoolService] No Realm deals available above DDS floor ${ddsFloor} — refusing to undershoot`);
+      return null;
     }
 
     // Fallback 4: Replay oldest played eligible deal

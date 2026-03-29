@@ -1407,35 +1407,87 @@ Deno.serve(async (req) => {
         // Clear and re-seed performance_expectations
         await adminClient.from("performance_expectations").delete().neq("game_mode", "___none___");
         // Re-seed with hardcoded values (same as migration)
-        const peSeeds = [
-          // Klondike
-          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
-            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
-              game_mode: 'klondike', dds_bucket: dds, iq_bucket: iq,
-              avg_time_seconds: [120,100,80,70, 240,200,170,140, 360,300,250,210, 480,400,340,280, 540,450,380,320][di*4+ii],
-              avg_moves: [95,85,75,65, 120,105,95,85, 150,135,120,110, 180,160,145,130, 200,180,160,145][di*4+ii],
-              sample_count: 0,
-            }))
-          ),
-          // FreeCell
-          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
-            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
-              game_mode: 'freecell', dds_bucket: dds, iq_bucket: iq,
-              avg_time_seconds: [150,120,100,85, 210,180,150,120, 300,250,210,175, 390,330,280,230, 450,380,320,270][di*4+ii],
-              avg_moves: [75,65,55,50, 100,85,75,65, 130,115,100,90, 160,140,125,110, 180,160,140,125][di*4+ii],
-              sample_count: 0,
-            }))
-          ),
-          // Realm
-          ...['0-25','26-50','51-75','76-100','101+'].flatMap((dds, di) =>
-            ['800-1100','1100-1300','1300-1500','1500+'].map((iq, ii) => ({
-              game_mode: 'realm', dds_bucket: dds, iq_bucket: iq,
-              avg_time_seconds: [20,15,12,10, 45,35,28,22, 75,60,48,38, 120,95,78,62, 180,145,115,90][di*4+ii],
-              avg_moves: [8,7,6,5, 18,15,13,11, 28,24,20,17, 40,34,28,24, 55,46,38,32][di*4+ii],
-              sample_count: 0,
-            }))
-          ),
+        const DDS_BUCKETS = ['0-25','26-50','51-75','76-100','101-130','131-150'];
+        const IQ_BUCKETS = ['<1100','1100-1300','1300-1500','1500-1700','1700-2000','2000-2500','2500+'];
+        const peSeeds: any[] = [];
+
+        // Klondike priors: 6 DDS × 7 IQ
+        const klonTimes = [
+          120,100,80,70,55,40,30,
+          240,200,170,140,110,80,60,
+          360,300,250,210,170,120,90,
+          480,400,340,280,220,160,120,
+          600,500,420,350,280,200,150,
+          720,600,500,420,340,240,180,
         ];
+        const klonMoves = [
+          95,85,75,65,55,45,40,
+          120,105,95,85,75,60,50,
+          150,135,120,110,95,80,65,
+          180,160,145,130,115,95,80,
+          210,185,165,150,130,110,90,
+          240,210,190,170,150,125,105,
+        ];
+        for (let di = 0; di < 6; di++) {
+          for (let ii = 0; ii < 7; ii++) {
+            peSeeds.push({
+              game_mode: 'klondike', dds_bucket: DDS_BUCKETS[di], iq_bucket: IQ_BUCKETS[ii],
+              avg_time_seconds: klonTimes[di * 7 + ii], avg_moves: klonMoves[di * 7 + ii], sample_count: 0,
+            });
+          }
+        }
+
+        // FreeCell priors
+        const fcTimes = [
+          150,120,100,85,65,50,35,
+          210,180,150,120,95,70,50,
+          300,250,210,175,140,100,75,
+          390,330,280,230,185,130,95,
+          480,400,340,280,220,160,120,
+          570,480,400,330,270,190,140,
+        ];
+        const fcMoves = [
+          75,65,55,50,42,35,30,
+          100,85,75,65,55,45,38,
+          130,115,100,90,75,60,50,
+          160,140,125,110,95,75,60,
+          190,165,145,130,110,90,72,
+          220,190,170,150,130,105,85,
+        ];
+        for (let di = 0; di < 6; di++) {
+          for (let ii = 0; ii < 7; ii++) {
+            peSeeds.push({
+              game_mode: 'freecell', dds_bucket: DDS_BUCKETS[di], iq_bucket: IQ_BUCKETS[ii],
+              avg_time_seconds: fcTimes[di * 7 + ii], avg_moves: fcMoves[di * 7 + ii], sample_count: 0,
+            });
+          }
+        }
+
+        // Realm priors (from spec)
+        const realmTimes = [
+          45,30,20,14,10,5,3,
+          120,75,45,30,20,9,5,
+          240,150,90,60,40,18,10,
+          420,270,160,100,65,28,15,
+          700,480,300,180,110,40,22,
+          900,600,400,240,150,55,30,
+        ];
+        const realmMoves = [
+          8,7,6,5,4,3,2,
+          18,15,13,11,9,6,4,
+          28,24,20,17,14,10,7,
+          40,34,28,24,20,14,10,
+          55,46,38,32,26,18,13,
+          65,55,46,38,32,22,16,
+        ];
+        for (let di = 0; di < 6; di++) {
+          for (let ii = 0; ii < 7; ii++) {
+            peSeeds.push({
+              game_mode: 'realm', dds_bucket: DDS_BUCKETS[di], iq_bucket: IQ_BUCKETS[ii],
+              avg_time_seconds: realmTimes[di * 7 + ii], avg_moves: realmMoves[di * 7 + ii], sample_count: 0,
+            });
+          }
+        }
         for (let i = 0; i < peSeeds.length; i += 500) {
           await adminClient.from("performance_expectations").insert(peSeeds.slice(i, i + 500));
         }

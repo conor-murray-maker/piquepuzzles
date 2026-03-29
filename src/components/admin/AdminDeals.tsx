@@ -94,6 +94,7 @@ export function AdminDeals() {
                 }} />
                 <Scatter data={scatterData.filter(d => d.game_mode === "klondike")} fill="hsl(var(--primary))" name="Klondike" />
                 <Scatter data={scatterData.filter(d => d.game_mode === "freecell")} fill="hsl(142, 71%, 45%)" name="FreeCell" />
+                <Scatter data={scatterData.filter(d => d.game_mode === "realm")} fill="hsl(25, 95%, 53%)" name="Realm" />
               </ScatterChart>
             </ResponsiveContainer>
           </div>

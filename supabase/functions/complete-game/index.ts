@@ -326,9 +326,24 @@ Deno.serve(async (req) => {
     let realmUndoPenalty = 0;
     const isRealm = gameMode === 'realm';
 
-    // Hardcoded fallbacks (same seed data values)
-    const hardcodedTime = perfExpRow?.avg_time_seconds ?? (isRealm ? 120 : 200);
-    const hardcodedMoves = perfExpRow?.avg_moves ?? 100;
+    // Hardcoded fallbacks — Realm uses IQ-bucketed priors
+    const REALM_PRIORS: Record<string, Record<string, { time: number; moves: number }>> = {
+      '0-25':  { '800-1100': { time: 45, moves: 12 }, '1100-1300': { time: 30, moves: 10 }, '1300-1500': { time: 20, moves: 8 }, '1500+': { time: 12, moves: 6 } },
+      '26-50': { '800-1100': { time: 120, moves: 22 }, '1100-1300': { time: 75, moves: 18 }, '1300-1500': { time: 45, moves: 14 }, '1500+': { time: 22, moves: 10 } },
+      '51-75': { '800-1100': { time: 240, moves: 35 }, '1100-1300': { time: 150, moves: 28 }, '1300-1500': { time: 90, moves: 22 }, '1500+': { time: 50, moves: 16 } },
+      '76-100': { '800-1100': { time: 420, moves: 55 }, '1100-1300': { time: 270, moves: 42 }, '1300-1500': { time: 160, moves: 32 }, '1500+': { time: 90, moves: 22 } },
+      '101+':  { '800-1100': { time: 600, moves: 75 }, '1100-1300': { time: 420, moves: 58 }, '1300-1500': { time: 270, moves: 44 }, '1500+': { time: 150, moves: 30 } },
+    };
+    let hardcodedTime: number;
+    let hardcodedMoves: number;
+    if (isRealm) {
+      const realmPrior = REALM_PRIORS[ddsBucket]?.[iqBucket] ?? { time: 120, moves: 22 };
+      hardcodedTime = realmPrior.time;
+      hardcodedMoves = realmPrior.moves;
+    } else {
+      hardcodedTime = perfExpRow?.avg_time_seconds ?? 200;
+      hardcodedMoves = perfExpRow?.avg_moves ?? 100;
+    }
     const sampleCount = perfExpRow?.sample_count ?? 0;
 
     if (isWin) {
@@ -381,10 +396,10 @@ Deno.serve(async (req) => {
     let finalDelta: number;
 
     if (isRealm && isWin) {
-      // Realm scoring: base completion (reduced to 40%) + exponential time bonus − undo penalty
+      // Realm scoring: base completion (40% of ELO delta) + fixed-reference time bonus − flat undo penalty
       const baseCompletion = Math.round(baseDelta * 0.4);
-      const timeBonusPts = Math.round(baseCompletion * realmTimeBonus);
-      const undoPenaltyPts = Math.round(baseCompletion * 0.3) * realmUndoPenalty;
+      const timeBonusPts = Math.round(20 * realmTimeBonus);
+      const undoPenaltyPts = 2 * realmUndoPenalty;
       const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenalty));
       finalDelta = baseCompletion + timeBonusPts - undoPenaltyPts - hintPenaltyPts;
       // Floor only — no upper cap; net negative is allowed
@@ -538,8 +553,8 @@ Deno.serve(async (req) => {
     if (isWin) {
       if (isRealm) {
         const baseCompletion = Math.round(baseDelta * 0.4);
-        timeBonusPoints = Math.round(baseCompletion * realmTimeBonus);
-        undoPenaltyPoints = Math.round(baseCompletion * 0.3) * realmUndoPenalty;
+        timeBonusPoints = Math.round(20 * realmTimeBonus);
+        undoPenaltyPoints = 2 * realmUndoPenalty;
         hintPenaltyPoints = Math.round(baseCompletion * (1 - hintPenalty));
       } else {
         timeBonusPoints = Math.round(baseDelta * (timeEfficiency - 1.0) * 0.4);

@@ -313,7 +313,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Realm
     haptic.medium();
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
-    setState(prev);
+    setState({ ...prev, undosUsed: (prev.undosUsed ?? 0) + 1 });
   }, [history, winAnimating]);
 
   const handleHint = useCallback(() => {

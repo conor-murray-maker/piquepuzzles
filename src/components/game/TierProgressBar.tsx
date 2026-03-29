@@ -2,35 +2,43 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { RATING_TIERS, getTier } from '@/game/types';
 import { useState, useEffect } from 'react';
 
-const TIER_COLORS: Record<string, [string, string]> = {
-  bronze: ['hsl(25, 60%, 50%)', 'hsl(25, 60%, 65%)'],
-  silver: ['hsl(225, 3%, 67%)', 'hsl(225, 3%, 82%)'],
-  gold: ['hsl(42, 100%, 50%)', 'hsl(42, 100%, 70%)'],
-  platinum: ['hsl(214, 58%, 57%)', 'hsl(214, 58%, 72%)'],
-  elite: ['hsl(270, 58%, 47%)', 'hsl(270, 58%, 62%)'],
-  master: ['hsl(4, 66%, 48%)', 'hsl(4, 66%, 63%)'],
-  grandmaster: ['hsl(45, 100%, 50%)', 'hsl(45, 100%, 70%)'],
+const TIER_HEX: Record<string, string> = {
+  bronze: '#CD7F32',
+  silver: '#A8A9AD',
+  gold: '#FFB800',
+  platinum: '#4A90D9',
+  elite: '#7B2FBE',
+  master: '#C0392B',
+  grandmaster: '#FFD700',
 };
 
-const TIER_TEXT_COLORS: Record<string, string> = {
-  bronze: 'hsl(25, 60%, 50%)',
-  silver: 'hsl(225, 3%, 67%)',
-  gold: 'hsl(42, 100%, 50%)',
-  platinum: 'hsl(214, 58%, 57%)',
-  elite: 'hsl(270, 58%, 47%)',
-  master: 'hsl(4, 66%, 48%)',
-  grandmaster: 'hsl(45, 100%, 50%)',
+const TIER_GRADIENT: Record<string, [string, string]> = {
+  bronze: ['#CD7F32', '#D4954E'],
+  silver: ['#A8A9AD', '#C0C1C5'],
+  gold: ['#FFB800', '#FFCC44'],
+  platinum: ['#4A90D9', '#6CAAE8'],
+  elite: ['#7B2FBE', '#9B5FD4'],
+  master: ['#C0392B', '#D35447'],
+  grandmaster: ['#FFD700', '#FFE44D'],
+};
+
+/** Short labels for narrow viewports */
+const TIER_SHORT: Record<string, string> = {
+  Bronze: 'BRZ',
+  Silver: 'SLV',
+  Gold: 'GLD',
+  Platinum: 'PLT',
+  Elite: 'ELT',
+  Master: 'MST',
+  Grandmaster: 'GM',
 };
 
 function computeProgress(rating: number): number {
   const tier = getTier(rating);
   const tierIndex = RATING_TIERS.findIndex(t => t.name === tier.name);
   const tierWidth = 100 / RATING_TIERS.length;
-  const nextTier = RATING_TIERS[tierIndex + 1];
-  const progressInTier = nextTier
-    ? ((rating - tier.min) / (nextTier.min - tier.min)) * 100
-    : Math.min(100, ((rating - tier.min) / 250) * 100);
-  return tierIndex * tierWidth + (progressInTier / 100) * tierWidth;
+  const progressInTier = (rating - tier.min) / (tier.max - tier.min + 1);
+  return tierIndex * tierWidth + Math.min(progressInTier, 1) * tierWidth;
 }
 
 interface TierProgressBarProps {
@@ -49,7 +57,7 @@ export function TierProgressBar({ rating, previousRating, ratingChange }: TierPr
   const isIncrease = ratingChange !== undefined && ratingChange > 0;
   const isDecrease = ratingChange !== undefined && ratingChange < 0;
 
-  const gradient = TIER_COLORS[tier.color] || TIER_COLORS.bronze;
+  const gradient = TIER_GRADIENT[tier.color] || TIER_GRADIENT.bronze;
 
   const [showChange, setShowChange] = useState(false);
   const [showGlow, setShowGlow] = useState(false);
@@ -69,29 +77,37 @@ export function TierProgressBar({ rating, previousRating, ratingChange }: TierPr
   }, [ratingChange, isIncrease]);
 
   return (
-    <div className="w-full space-y-1.5">
-      {/* Tier labels */}
+    <div className="w-full space-y-1">
+      {/* Tier labels — responsive: abbreviate on small screens */}
       <div className="flex">
-        {RATING_TIERS.map((t, i) => (
-          <div key={t.name} className="flex-1 text-center">
-            <motion.span
-              className="text-[10px] font-semibold uppercase tracking-wider"
-              style={{
-                color: i === tierIndex
-                  ? TIER_TEXT_COLORS[t.color]
-                  : 'hsl(var(--muted-foreground) / 0.3)',
-              }}
-              animate={
-                i === tierIndex && isIncrease
-                  ? { scale: [1, 1.15, 1] }
-                  : {}
-              }
-              transition={{ duration: 0.4, delay: 0.6 }}
-            >
-              {t.name}
-            </motion.span>
-          </div>
-        ))}
+        {RATING_TIERS.map((t, i) => {
+          const isActive = i === tierIndex;
+          const isGM = t.color === 'grandmaster';
+          return (
+            <div key={t.name} className="flex-1 text-center min-w-0 px-[1px]">
+              <motion.span
+                className={`text-[8px] sm:text-[9px] font-semibold uppercase leading-none block truncate ${
+                  isGM && isActive ? 'font-extrabold' : ''
+                }`}
+                style={{
+                  color: isActive
+                    ? TIER_HEX[t.color]
+                    : 'hsl(var(--muted-foreground) / 0.3)',
+                  ...(isGM && isActive ? { textShadow: `0 0 6px ${TIER_HEX.grandmaster}80` } : {}),
+                }}
+                animate={
+                  isActive && isIncrease
+                    ? { scale: [1, 1.15, 1] }
+                    : {}
+                }
+                transition={{ duration: 0.4, delay: 0.6 }}
+              >
+                <span className="hidden sm:inline">{t.name}</span>
+                <span className="sm:hidden">{TIER_SHORT[t.name] || t.name}</span>
+              </motion.span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Progress bar */}
@@ -104,7 +120,7 @@ export function TierProgressBar({ rating, previousRating, ratingChange }: TierPr
               className="flex-1"
               style={{
                 borderRight: i < RATING_TIERS.length - 1
-                  ? '1px solid hsl(var(--background) / 0.3)'
+                  ? '1.5px solid hsl(var(--background) / 0.4)'
                   : 'none',
               }}
             />
@@ -150,7 +166,7 @@ export function TierProgressBar({ rating, previousRating, ratingChange }: TierPr
           {showChange && ratingChange !== undefined && ratingChange !== 0 && (
             <motion.span
               className="absolute left-1/2 -translate-x-1/2 font-mono font-bold text-sm"
-              style={{ color: isIncrease ? TIER_TEXT_COLORS[tier.color] : 'hsl(var(--muted-foreground))' }}
+              style={{ color: isIncrease ? TIER_HEX[tier.color] : 'hsl(var(--muted-foreground))' }}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: -4 }}
               exit={{ opacity: 0, y: -12 }}

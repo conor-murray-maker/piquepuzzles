@@ -12,6 +12,10 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export class PerformanceService {
+  /**
+   * Compute performance modifier for card games (klondike, freecell).
+   * For Realm, use computeRealmDelta instead.
+   */
   static computeModifier(signals: PerformanceSignals, benchmarks: DealBenchmarks): number {
     const hasPoolData = benchmarks.poolAttempts >= 10;
 
@@ -32,5 +36,28 @@ export class PerformanceService {
       0.5,
       1.5
     );
+  }
+
+  /**
+   * Realm-specific scoring: exponential time curve, no moves, undo penalty, +60 cap.
+   * Returns the final clamped delta (not a modifier).
+   */
+  static computeRealmDelta(
+    baseDelta: number,
+    actualTime: number,
+    avgTime: number,
+    undosUsed: number,
+    hintsUsed: number,
+  ): number {
+    const baseCompletion = Math.round(baseDelta * 0.4);
+    const timeRatio = avgTime / Math.max(actualTime, 1);
+    const timeBonus = Math.round(baseCompletion * (Math.pow(timeRatio, 1.8) - 1));
+    const undoPenalty = Math.round(baseCompletion * 0.3) * undosUsed;
+    const hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
+    const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenalty));
+
+    const raw = baseCompletion + timeBonus - undoPenalty - hintPenaltyPts;
+    // Cap protection: clamp to [-20, +60], then apply win floor
+    return Math.max(1, clamp(raw, -20, 60));
   }
 }

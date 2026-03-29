@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
         const deals = allDeals;
         const byTier: Record<string, number> = {};
         const byMode: Record<string, number> = {};
-        const byBand: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0, Expert: 0 };
+        const byBand: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0, Expert: 0, Master: 0, Grandmaster: 0 };
         let totalConf = 0;
         let solverOnly = 0, blending = 0, empirical = 0;
         const confHistogram = Array(10).fill(0);
@@ -380,10 +380,12 @@ Deno.serve(async (req) => {
           else if (d.pool_attempts < 100) blending++;
           else empirical++;
           const dds = d.dds_blended;
-          if (dds < 35) byBand.Easy++;
-          else if (dds < 58) byBand.Medium++;
-          else if (dds < 78) byBand.Hard++;
-          else byBand.Expert++;
+          if (dds < 26) byBand.Easy++;
+          else if (dds < 51) byBand.Medium++;
+          else if (dds < 76) byBand.Hard++;
+          else if (dds < 101) byBand.Expert++;
+          else if (dds < 131) byBand.Master++;
+          else byBand.Grandmaster++;
         }
 
         return json({
@@ -614,10 +616,12 @@ Deno.serve(async (req) => {
         // Check how many zero-attempt deals exist per game mode per difficulty band
         const gameModes = ['klondike', 'freecell', 'realm'];
         const bands = [
-          { label: 'Easy', min: 0, max: 35 },
-          { label: 'Medium', min: 26, max: 65 },
-          { label: 'Hard', min: 50, max: 80 },
-          { label: 'Expert', min: 65, max: 100 },
+          { label: 'Easy', min: 0, max: 25 },
+          { label: 'Medium', min: 26, max: 50 },
+          { label: 'Hard', min: 51, max: 75 },
+          { label: 'Expert', min: 76, max: 100 },
+          { label: 'Master', min: 101, max: 130 },
+          { label: 'Grandmaster', min: 131, max: 150 },
         ];
         const lowPools: Array<{ mode: string; difficulty: string; remaining: number; severity: string }> = [];
 
@@ -710,12 +714,12 @@ Deno.serve(async (req) => {
 
         // Deal pool
         const byTier: Record<string, number> = { starter: 0, organic: 0, daily_challenge: 0 };
-        const byMode: Record<string, number> = { klondike: 0, freecell: 0 };
-        const byDiff: Record<string, number> = { easy: 0, medium: 0, hard: 0, expert: 0 };
+        const byMode: Record<string, number> = { klondike: 0, freecell: 0, realm: 0 };
+        const byDiff: Record<string, number> = { easy: 0, medium: 0, hard: 0, expert: 0, master: 0, grandmaster: 0 };
         let totalConf = 0, totalInitial = 0, totalBlended = 0, totalDrift = 0;
         let solverOnly = 0, blending = 0, empiricalOnly = 0;
         let dealsWithZeroMinMoves = 0, totalSimCount = 0;
-        const confByMode: Record<string, { sum: number; count: number }> = { klondike: { sum: 0, count: 0 }, freecell: { sum: 0, count: 0 } };
+        const confByMode: Record<string, { sum: number; count: number }> = { klondike: { sum: 0, count: 0 }, freecell: { sum: 0, count: 0 }, realm: { sum: 0, count: 0 } };
 
         for (const d of allDeals) {
           byTier[d.tier] = (byTier[d.tier] || 0) + 1;
@@ -732,10 +736,12 @@ Deno.serve(async (req) => {
           const mode = d.game_mode as string;
           if (confByMode[mode]) { confByMode[mode].sum += d.confidence; confByMode[mode].count++; }
           const dds = d.dds_blended;
-          if (dds <= 25) byDiff.easy++;
-          else if (dds <= 55) byDiff.medium++;
-          else if (dds <= 80) byDiff.hard++;
-          else byDiff.expert++;
+          if (dds < 26) byDiff.easy++;
+          else if (dds < 51) byDiff.medium++;
+          else if (dds < 76) byDiff.hard++;
+          else if (dds < 101) byDiff.expert++;
+          else if (dds < 131) byDiff.master++;
+          else byDiff.grandmaster++;
         }
         const n = allDeals.length || 1;
         const totalDeals = allDeals.length;
@@ -797,12 +803,10 @@ Deno.serve(async (req) => {
           : 1.0;
 
         // === DEAL GENERATION HEALTH ===
-        const diffDistActual = {
-          easy: totalDeals ? `${(byDiff.easy / totalDeals * 100).toFixed(1)}%` : "0%",
-          medium: totalDeals ? `${(byDiff.medium / totalDeals * 100).toFixed(1)}%` : "0%",
-          hard: totalDeals ? `${(byDiff.hard / totalDeals * 100).toFixed(1)}%` : "0%",
-          expert: totalDeals ? `${(byDiff.expert / totalDeals * 100).toFixed(1)}%` : "0%",
-        };
+        const diffDistActual: Record<string, string> = {};
+        for (const [k, v] of Object.entries(byDiff)) {
+          diffDistActual[k] = totalDeals ? `${(v / totalDeals * 100).toFixed(1)}%` : "0%";
+        }
         const distHealthy = byDiff.easy >= totalDeals * 0.1 && byDiff.medium >= totalDeals * 0.15;
 
         // === PLAYER COHORTS ===
@@ -951,9 +955,9 @@ Deno.serve(async (req) => {
 
         // Derive grid size from seed pattern in deals (seed encodes grid size for realm)
         // DDS bands map to grid sizes: Easy=4-5, Medium=6, Hard=7-8, Expert=9-10
-        const realmDiffDist: Record<string, number> = { easy: 0, medium: 0, hard: 0, expert: 0 };
-        const realmTimeByDiff: Record<string, { sum: number; count: number }> = { easy: { sum: 0, count: 0 }, medium: { sum: 0, count: 0 }, hard: { sum: 0, count: 0 }, expert: { sum: 0, count: 0 } };
-        const realmMovesByDiff: Record<string, { sum: number; count: number }> = { easy: { sum: 0, count: 0 }, medium: { sum: 0, count: 0 }, hard: { sum: 0, count: 0 }, expert: { sum: 0, count: 0 } };
+        const realmDiffDist: Record<string, number> = { easy: 0, medium: 0, hard: 0, expert: 0, master: 0, grandmaster: 0 };
+        const realmTimeByDiff: Record<string, { sum: number; count: number }> = { easy: { sum: 0, count: 0 }, medium: { sum: 0, count: 0 }, hard: { sum: 0, count: 0 }, expert: { sum: 0, count: 0 }, master: { sum: 0, count: 0 }, grandmaster: { sum: 0, count: 0 } };
+        const realmMovesByDiff: Record<string, { sum: number; count: number }> = { easy: { sum: 0, count: 0 }, medium: { sum: 0, count: 0 }, hard: { sum: 0, count: 0 }, expert: { sum: 0, count: 0 }, master: { sum: 0, count: 0 }, grandmaster: { sum: 0, count: 0 } };
 
         for (const g of realmGames) {
           const diff = (g.difficulty || 'medium').toLowerCase();
@@ -985,10 +989,12 @@ Deno.serve(async (req) => {
         }
 
         const diffBands = [
-          { label: 'Easy', min: 0, max: 35 },
-          { label: 'Medium', min: 26, max: 65 },
-          { label: 'Hard', min: 50, max: 80 },
-          { label: 'Expert', min: 65, max: 100 },
+          { label: 'Easy', min: 0, max: 25 },
+          { label: 'Medium', min: 26, max: 50 },
+          { label: 'Hard', min: 51, max: 75 },
+          { label: 'Expert', min: 76, max: 100 },
+          { label: 'Master', min: 101, max: 130 },
+          { label: 'Grandmaster', min: 131, max: 150 },
         ];
         const poolConsumption: Array<any> = [];
         for (const mode of gameModes) {

@@ -1219,8 +1219,9 @@ Deno.serve(async (req) => {
             avgConfidenceByMode: {
               klondike: confByMode.klondike.count > 0 ? +(confByMode.klondike.sum / confByMode.klondike.count).toFixed(3) : 0,
               freecell: confByMode.freecell.count > 0 ? +(confByMode.freecell.sum / confByMode.freecell.count).toFixed(3) : 0,
+              realm: confByMode.realm.count > 0 ? +(confByMode.realm.sum / confByMode.realm.count).toFixed(3) : 0,
             },
-            difficultyDistributionTarget: { easy: "25%", medium: "30%", hard: "30%", expert: "15%" },
+            difficultyDistributionTarget: { easy: "20%", medium: "25%", hard: "25%", expert: "15%", master: "10%", grandmaster: "5%" },
             difficultyDistributionActual: diffDistActual,
             distributionHealthy: distHealthy,
           },

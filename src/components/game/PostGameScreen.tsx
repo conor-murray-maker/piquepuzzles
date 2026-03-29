@@ -355,8 +355,8 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
   const hintsUsed = bd?.hintsUsed ?? 0;
   const avgTime = bd?.dealAvgTime ?? null;
   const avgMoves = bd?.dealAvgMoves ?? null;
-  const undoPP = (bd as any)?.undoPenaltyPoints ?? 0;
-  const undosUsed = (gameMode === 'realm') ? (bd as any)?.undosUsed ?? 0 : 0;
+  const undoPP = bd?.undoPenaltyPoints ?? 0;
+  const undosUsed = bd?.undosUsed ?? 0;
   const isRealm = gameMode === 'realm';
 
   return (

@@ -136,9 +136,9 @@ export function computeHealthStats(deals: DealRow[]) {
 export type HistogramBucket = { range: string; count: number; pct: number; avgConfidence: number };
 
 export function buildDdsHistogram(deals: DealRow[]): HistogramBucket[] {
-  const buckets: { count: number; totalConf: number }[] = Array.from({ length: 20 }, () => ({ count: 0, totalConf: 0 }));
+  const buckets: { count: number; totalConf: number }[] = Array.from({ length: 30 }, () => ({ count: 0, totalConf: 0 }));
   for (const d of deals) {
-    const idx = Math.min(19, Math.floor(d.dds_blended / 5));
+    const idx = Math.min(29, Math.floor(d.dds_blended / 5));
     buckets[idx].count++;
     buckets[idx].totalConf += d.confidence;
   }
@@ -148,7 +148,7 @@ export function buildDdsHistogram(deals: DealRow[]): HistogramBucket[] {
     count: b.count,
     pct: (b.count / total) * 100,
     avgConfidence: b.count > 0 ? b.totalConf / b.count : 0,
-  }));
+  })).filter(b => b.count > 0 || parseInt(b.range) <= 100);
 }
 
 export function buildConfidenceHistogram(deals: DealRow[]): HistogramBucket[] {

@@ -322,33 +322,53 @@ Deno.serve(async (req) => {
     let hintPenalty = 1.0;
     let expectedTime = 0;
     let expectedMoves = 0;
+    let realmTimeBonus = 0;
+    let realmUndoPenalty = 0;
+    const isRealm = gameMode === 'realm';
 
     // Hardcoded fallbacks (same seed data values)
-    const hardcodedTime = perfExpRow?.avg_time_seconds ?? 200;
+    const hardcodedTime = perfExpRow?.avg_time_seconds ?? (isRealm ? 120 : 200);
     const hardcodedMoves = perfExpRow?.avg_moves ?? 100;
     const sampleCount = perfExpRow?.sample_count ?? 0;
 
     if (isWin) {
-      if (sampleCount >= 30) {
-        const empiricalWeight = Math.min(1.0, (sampleCount - 30) / 70);
-        // At sample_count < 30 use hardcoded; at >= 100 use empirical exclusively
-        // But since we only enter this branch when >= 30, blend:
-        expectedTime = hardcodedTime * (1 - empiricalWeight) + (perfExpRow?.avg_time_seconds ?? hardcodedTime) * empiricalWeight;
-        expectedMoves = hardcodedMoves * (1 - empiricalWeight) + (perfExpRow?.avg_moves ?? hardcodedMoves) * empiricalWeight;
+      if (isRealm) {
+        // Realm-specific: exponential time curve, no moves component
+        const avgTime = (sampleCount >= 30 && perfExpRow?.avg_time_seconds)
+          ? perfExpRow.avg_time_seconds : hardcodedTime;
+        expectedTime = avgTime;
+        const timeRatio = avgTime / Math.max(actualTime, 1);
+        realmTimeBonus = Math.pow(timeRatio, 1.8) - 1; // 0 at ratio=1, grows exponentially
+        realmUndoPenalty = undosUsed; // raw count, applied later as fixed cost per undo
+        hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
+        // performanceModifier is not used for Realm ELO — we compute delta directly below
+        performanceModifier = 1.0;
+
+        console.log('[complete-game] Realm perf calc:', {
+          avgTime, actualTime, timeRatio, realmTimeBonus, undosUsed,
+          hintPenalty, sampleCount,
+        });
       } else {
-        expectedTime = hardcodedTime;
-        expectedMoves = hardcodedMoves;
+        // Card games: existing time+moves blended modifier
+        if (sampleCount >= 30) {
+          const empiricalWeight = Math.min(1.0, (sampleCount - 30) / 70);
+          expectedTime = hardcodedTime * (1 - empiricalWeight) + (perfExpRow?.avg_time_seconds ?? hardcodedTime) * empiricalWeight;
+          expectedMoves = hardcodedMoves * (1 - empiricalWeight) + (perfExpRow?.avg_moves ?? hardcodedMoves) * empiricalWeight;
+        } else {
+          expectedTime = hardcodedTime;
+          expectedMoves = hardcodedMoves;
+        }
+
+        timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 1)));
+        moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 1)));
+        hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
+        performanceModifier = Math.max(0.5, Math.min(1.5, (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty));
+
+        console.log('[complete-game] perf calc:', {
+          expectedTime, actualTime, timeEfficiency, expectedMoves, actualMoves,
+          moveEfficiency, hintPenalty, performanceModifier, sampleCount,
+        });
       }
-
-      timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 1)));
-      moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 1)));
-      hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
-      performanceModifier = Math.max(0.5, Math.min(1.5, (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty));
-
-      console.log('[complete-game] perf calc:', {
-        expectedTime, actualTime, timeEfficiency, expectedMoves, actualMoves,
-        moveEfficiency, hintPenalty, performanceModifier, sampleCount,
-      });
     }
 
     // 6. ELO calculation using mode IQ

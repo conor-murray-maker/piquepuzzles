@@ -187,7 +187,9 @@ function StatsContent({ games, stats }: {
                       game.difficulty === 'Easy' ? 'bg-rating-up/15 text-rating-up' :
                       game.difficulty === 'Medium' ? 'bg-gold/15 text-gold' :
                       game.difficulty === 'Hard' ? 'bg-destructive/15 text-destructive' :
-                      'bg-elite/15 text-elite'
+                      game.difficulty === 'Expert' ? 'bg-elite/15 text-elite' :
+                      game.difficulty === 'Master' ? 'bg-master/15 text-master' :
+                      'bg-grandmaster/15 text-grandmaster font-bold'
                     }`}>{game.difficulty}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">

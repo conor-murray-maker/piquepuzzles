@@ -41,11 +41,13 @@
     --game-bg: 160 20% 95%;
     --card-red: 0 72% 51%;
     --card-black: 220 20% 10%;
-    --gold: 45 93% 47%;
-    --silver: 220 10% 66%;
+    --gold: 42 100% 50%;
+    --silver: 225 3% 67%;
     --bronze: 25 60% 50%;
-    --platinum: 200 50% 55%;
-    --elite: 280 60% 55%;
+    --platinum: 214 58% 57%;
+    --elite: 270 58% 47%;
+    --master: 4 66% 48%;
+    --grandmaster: 45 100% 50%;
     --rating-up: 145 63% 42%;
     --rating-down: 0 72% 51%;
 
@@ -97,11 +99,13 @@
     --game-bg: 224 22% 8%;
     --card-red: 0 72% 58%;
     --card-black: 220 14% 85%;
-    --gold: 45 93% 55%;
-    --silver: 220 10% 66%;
+    --gold: 42 100% 55%;
+    --silver: 225 3% 72%;
     --bronze: 25 60% 55%;
-    --platinum: 200 50% 60%;
-    --elite: 280 60% 60%;
+    --platinum: 214 58% 62%;
+    --elite: 270 58% 52%;
+    --master: 4 66% 53%;
+    --grandmaster: 45 100% 55%;
 
     --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.2);
     --shadow-card-hover: 0 4px 12px -2px rgb(0 0 0 / 0.3);
@@ -156,6 +160,12 @@
   }
   .tier-badge-elite {
     @apply text-elite;
+  }
+  .tier-badge-master {
+    @apply text-master;
+  }
+  .tier-badge-grandmaster {
+    @apply text-grandmaster;
   }
 
   .game-surface {

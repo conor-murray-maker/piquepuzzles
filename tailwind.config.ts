@@ -66,6 +66,8 @@ export default {
         bronze: "hsl(var(--bronze))",
         platinum: "hsl(var(--platinum))",
         elite: "hsl(var(--elite))",
+        master: "hsl(var(--master))",
+        grandmaster: "hsl(var(--grandmaster))",
         "rating-up": "hsl(var(--rating-up))",
         "rating-down": "hsl(var(--rating-down))",
         sidebar: {

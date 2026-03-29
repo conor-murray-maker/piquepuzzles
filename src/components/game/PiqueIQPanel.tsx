@@ -8,10 +8,12 @@ import { TierProgressBar } from '@/components/game/TierProgressBar';
 
 const TIER_COLORS: Record<string, string> = {
   bronze: 'hsl(25, 60%, 50%)',
-  silver: 'hsl(220, 10%, 66%)',
-  gold: 'hsl(45, 93%, 47%)',
-  platinum: 'hsl(200, 50%, 55%)',
-  elite: 'hsl(280, 60%, 55%)',
+  silver: 'hsl(225, 3%, 67%)',
+  gold: 'hsl(42, 100%, 50%)',
+  platinum: 'hsl(214, 58%, 57%)',
+  elite: 'hsl(270, 58%, 47%)',
+  master: 'hsl(4, 66%, 48%)',
+  grandmaster: 'hsl(45, 100%, 50%)',
 };
 
 function MiniProgressBar({ rating, className = '' }: { rating: number; className?: string }) {

@@ -10,7 +10,7 @@ export interface Card {
 
 export type GameMode = 'klondike' | 'freecell' | 'realm';
 export type DrawMode = 1 | 3;
-export type Difficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert';
+export type Difficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert' | 'Master' | 'Grandmaster';
 
 export interface FreeCellState {
   tableau: Card[][];        // 8 columns
@@ -23,7 +23,7 @@ export interface FreeCellState {
   isWon: boolean;
   dealId: string;
   dealUuid?: string;
-  difficulty: Difficulty;
+  difficulty: string;
   difficultyScore: number;
   seed?: number;
   minMoves?: number;
@@ -42,7 +42,7 @@ export interface KlondikeState {
   isWon: boolean;
   dealId: string;
   dealUuid?: string;
-  difficulty: Difficulty;
+  difficulty: string;
   difficultyScore: number;
   seed?: number;
   minMoves?: number;
@@ -64,11 +64,13 @@ export interface RatingTier {
 }
 
 export const RATING_TIERS: RatingTier[] = [
-  { name: 'Bronze', min: 0, max: 999, color: 'bronze' },
-  { name: 'Silver', min: 1000, max: 1249, color: 'silver' },
-  { name: 'Gold', min: 1250, max: 1499, color: 'gold' },
-  { name: 'Platinum', min: 1500, max: 1749, color: 'platinum' },
-  { name: 'Elite', min: 1750, max: 9999, color: 'elite' },
+  { name: 'Bronze', min: 0, max: 1099, color: 'bronze' },
+  { name: 'Silver', min: 1100, max: 1299, color: 'silver' },
+  { name: 'Gold', min: 1300, max: 1499, color: 'gold' },
+  { name: 'Platinum', min: 1500, max: 1699, color: 'platinum' },
+  { name: 'Elite', min: 1700, max: 1999, color: 'elite' },
+  { name: 'Master', min: 2000, max: 2499, color: 'master' },
+  { name: 'Grandmaster', min: 2500, max: 9999, color: 'grandmaster' },
 ];
 
 export function getTier(rating: number): RatingTier {

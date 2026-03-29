@@ -4,18 +4,22 @@ import { useState, useEffect } from 'react';
 
 const TIER_COLORS: Record<string, [string, string]> = {
   bronze: ['hsl(25, 60%, 50%)', 'hsl(25, 60%, 65%)'],
-  silver: ['hsl(220, 10%, 66%)', 'hsl(220, 10%, 88%)'],
-  gold: ['hsl(45, 93%, 47%)', 'hsl(45, 93%, 75%)'],
-  platinum: ['hsl(200, 50%, 55%)', 'hsl(200, 50%, 72%)'],
-  elite: ['hsl(280, 60%, 55%)', 'hsl(280, 60%, 72%)'],
+  silver: ['hsl(225, 3%, 67%)', 'hsl(225, 3%, 82%)'],
+  gold: ['hsl(42, 100%, 50%)', 'hsl(42, 100%, 70%)'],
+  platinum: ['hsl(214, 58%, 57%)', 'hsl(214, 58%, 72%)'],
+  elite: ['hsl(270, 58%, 47%)', 'hsl(270, 58%, 62%)'],
+  master: ['hsl(4, 66%, 48%)', 'hsl(4, 66%, 63%)'],
+  grandmaster: ['hsl(45, 100%, 50%)', 'hsl(45, 100%, 70%)'],
 };
 
 const TIER_TEXT_COLORS: Record<string, string> = {
   bronze: 'hsl(25, 60%, 50%)',
-  silver: 'hsl(220, 10%, 66%)',
-  gold: 'hsl(45, 93%, 47%)',
-  platinum: 'hsl(200, 50%, 55%)',
-  elite: 'hsl(280, 60%, 55%)',
+  silver: 'hsl(225, 3%, 67%)',
+  gold: 'hsl(42, 100%, 50%)',
+  platinum: 'hsl(214, 58%, 57%)',
+  elite: 'hsl(270, 58%, 47%)',
+  master: 'hsl(4, 66%, 48%)',
+  grandmaster: 'hsl(45, 100%, 50%)',
 };
 
 function computeProgress(rating: number): number {

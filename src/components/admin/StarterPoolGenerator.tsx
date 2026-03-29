@@ -10,6 +10,7 @@ import { FreeCellEngine } from "@/engines/FreeCellEngine";
 import { RealmEngine } from "@/engines/RealmEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
+import { generateRealmPuzzleSolutionFirst, generateRealmPuzzle, type GenerationStrategy, type RealmGenOptions } from "@/game/realm";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
 import { Database, Loader2, CheckCircle, XCircle } from "lucide-react";
 

@@ -131,6 +131,7 @@ export class DealPoolService {
     );
     console.log(`[DealPoolService] Priority 1 (bracket+concentration):`, { totalFound: found1, unplayed: unplayed1, served: !!deal1 });
     if (deal1) {
+      console.log('[DealPoolService] Serving from pool, Priority 1');
       await this.markPlayed(userId, deal1.id);
       return dealRowToVerified(deal1, 'served');
     }

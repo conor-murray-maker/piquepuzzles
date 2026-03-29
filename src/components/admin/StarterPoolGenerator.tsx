@@ -392,7 +392,19 @@ export function StarterPoolGenerator() {
             </SelectContent>
           </Select>
 
-          <Button onClick={run} disabled={running} className="gap-2">
+          {selectedMode === "realm" && (
+            <Select value={selectedStrategy} onValueChange={(v) => setSelectedStrategy(v as GenerationStrategy)} disabled={running}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Strategy" />
+              </SelectTrigger>
+              <SelectContent>
+                {STRATEGY_OPTIONS.map(s => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
             {running ? "Generating..." : "Generate"}
           </Button>

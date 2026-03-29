@@ -12,7 +12,9 @@ export interface ScoreBreakdownData {
   timeBonusPoints: number;
   movesBonusPoints: number;
   hintPenaltyPoints: number;
+  undoPenaltyPoints: number;
   hintsUsed: number;
+  undosUsed: number;
 }
 
 export interface ModeIQData {
@@ -95,7 +97,9 @@ export function useGamePersistence() {
           timeBonusPoints: r.timeBonusPoints ?? 0,
           movesBonusPoints: r.movesBonusPoints ?? 0,
           hintPenaltyPoints: r.hintPenaltyPoints ?? 0,
+          undoPenaltyPoints: r.undoPenaltyPoints ?? 0,
           hintsUsed: r.hintsUsed ?? 0,
+          undosUsed: r.undosUsed ?? 0,
         },
         modeIQData: r.modeIQ != null ? {
           modeIQ: r.modeIQ,

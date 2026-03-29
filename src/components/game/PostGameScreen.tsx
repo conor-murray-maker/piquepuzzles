@@ -355,6 +355,9 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
   const hintsUsed = bd?.hintsUsed ?? 0;
   const avgTime = bd?.dealAvgTime ?? null;
   const avgMoves = bd?.dealAvgMoves ?? null;
+  const undoPP = bd?.undoPenaltyPoints ?? 0;
+  const undosUsed = bd?.undosUsed ?? 0;
+  const isRealm = gameMode === 'realm';
 
   return (
     <motion.div
@@ -383,18 +386,30 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
         />
       )}
 
-      {moveBP >= 0 ? (
-        <BreakdownLine
-          label="Fewer moves than expected"
-          subLabel={avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined}
-          value={moveBP}
-        />
-      ) : (
-        <BreakdownLine
-          label="More moves than expected"
-          subLabel={avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined}
-          value={moveBP}
-        />
+      {/* Moves row: only for non-Realm modes */}
+      {!isRealm && (
+        moveBP >= 0 ? (
+          <BreakdownLine
+            label="Fewer moves than expected"
+            subLabel={avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined}
+            value={moveBP}
+          />
+        ) : (
+          <BreakdownLine
+            label="More moves than expected"
+            subLabel={avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined}
+            value={moveBP}
+          />
+        )
+      )}
+
+      {/* Undos row: only for Realm */}
+      {isRealm && (
+        undoPP > 0 ? (
+          <BreakdownLine label={`Undos used × ${undosUsed}`} value={-undoPP} />
+        ) : (
+          <BreakdownLine label="Undos" value={null} />
+        )
       )}
 
       {hintsUsed > 0 ? (

@@ -19,10 +19,12 @@ export interface DealRow {
 }
 
 function getDifficultyBand(dds: number): string {
-  if (dds < 35) return "easy";
-  if (dds < 58) return "medium";
-  if (dds < 78) return "hard";
-  return "expert";
+  if (dds < 26) return "easy";
+  if (dds < 51) return "medium";
+  if (dds < 76) return "hard";
+  if (dds < 101) return "expert";
+  if (dds < 131) return "master";
+  return "grandmaster";
 }
 
 function getDdsSource(poolAttempts: number): string {
@@ -90,7 +92,7 @@ export function computeSummaryStats(deals: DealRow[]) {
 
 export function computeHealthStats(deals: DealRow[]) {
   const byConfBand: Record<string, number> = { High: 0, Medium: 0, Low: 0 };
-  const byBand: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0, Expert: 0 };
+  const byBand: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0, Expert: 0, Master: 0, Grandmaster: 0 };
   let solverOnly = 0, blending = 0, empirical = 0, totalConf = 0;
   const confHistogram = Array(10).fill(0);
 
@@ -108,10 +110,12 @@ export function computeHealthStats(deals: DealRow[]) {
     else byConfBand.Low++;
 
     const dds = d.dds_blended;
-    if (dds < 35) byBand.Easy++;
-    else if (dds < 58) byBand.Medium++;
-    else if (dds < 78) byBand.Hard++;
-    else byBand.Expert++;
+    if (dds < 26) byBand.Easy++;
+    else if (dds < 51) byBand.Medium++;
+    else if (dds < 76) byBand.Hard++;
+    else if (dds < 101) byBand.Expert++;
+    else if (dds < 131) byBand.Master++;
+    else byBand.Grandmaster++;
   }
 
   return {

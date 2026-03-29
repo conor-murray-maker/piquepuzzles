@@ -35,6 +35,8 @@ export function DealFilters({ filters, onChange }: Props) {
         { value: "medium", label: "Medium" },
         { value: "hard", label: "Hard" },
         { value: "expert", label: "Expert" },
+        { value: "master", label: "Master" },
+        { value: "grandmaster", label: "Grandmaster" },
       ]} />
       <FilterSelect label="Confidence" value={filters.confidence} onChange={v => set("confidence", v)} options={[
         { value: "all", label: "All Confidence" },

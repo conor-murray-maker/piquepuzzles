@@ -112,7 +112,11 @@ export default function Challenge() {
                   ? 'bg-gold/20 text-gold'
                   : challenge.difficulty === 'Hard'
                   ? 'bg-destructive/20 text-destructive'
-                  : 'bg-elite/20 text-elite'
+                  : challenge.difficulty === 'Expert'
+                  ? 'bg-elite/20 text-elite'
+                  : challenge.difficulty === 'Master'
+                  ? 'bg-master/20 text-master'
+                  : 'bg-grandmaster/20 text-grandmaster font-bold'
               }`}
             >
               {challenge.difficulty} Deal

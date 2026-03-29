@@ -219,7 +219,11 @@ export default function Daily() {
                     ? 'bg-gold/20 text-gold'
                     : ddsToLabel(challenge.deals?.dds_blended ?? 50) === 'Hard'
                     ? 'bg-destructive/20 text-destructive'
-                    : 'bg-elite/20 text-elite'
+                    : ddsToLabel(challenge.deals?.dds_blended ?? 50) === 'Expert'
+                    ? 'bg-elite/20 text-elite'
+                    : ddsToLabel(challenge.deals?.dds_blended ?? 50) === 'Master'
+                    ? 'bg-master/20 text-master'
+                    : 'bg-grandmaster/20 text-grandmaster font-bold'
                 }`}>
                   {ddsToLabel(challenge.deals?.dds_blended ?? 50)}
                 </span>

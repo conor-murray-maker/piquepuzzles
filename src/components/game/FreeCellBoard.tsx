@@ -620,7 +620,9 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
             state.difficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
             state.difficulty === 'Medium' ? 'bg-gold/20 text-gold' :
             state.difficulty === 'Hard' ? 'bg-destructive/20 text-destructive' :
-            'bg-elite/20 text-elite'
+            state.difficulty === 'Expert' ? 'bg-elite/20 text-elite' :
+            state.difficulty === 'Master' ? 'bg-master/20 text-master' :
+            'bg-grandmaster/20 text-grandmaster font-bold'
           }`}>{state.difficulty}</span>
         </div>
         <div className="flex items-center gap-1">

@@ -147,6 +147,7 @@ export function StarterPoolGenerator() {
 
     const isRealm = selectedMode === "realm";
     addStatus(`Starting ${selectedMode} deal generation (${selectedDifficulty})...`);
+    addStatus(`Strategy: ${isRealm ? selectedStrategy : 'n/a (card game)'}`);
     addStatus(`Targets: ${targets.map(t => `${t.target} ${t.band}${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}`).join(", ")} (${totalTarget} total)`);
     if (timeoutMs > 0) addStatus(`Timeout per candidate: ${timeoutMs}ms`);
 

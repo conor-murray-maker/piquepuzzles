@@ -322,33 +322,53 @@ Deno.serve(async (req) => {
     let hintPenalty = 1.0;
     let expectedTime = 0;
     let expectedMoves = 0;
+    let realmTimeBonus = 0;
+    let realmUndoPenalty = 0;
+    const isRealm = gameMode === 'realm';
 
     // Hardcoded fallbacks (same seed data values)
-    const hardcodedTime = perfExpRow?.avg_time_seconds ?? 200;
+    const hardcodedTime = perfExpRow?.avg_time_seconds ?? (isRealm ? 120 : 200);
     const hardcodedMoves = perfExpRow?.avg_moves ?? 100;
     const sampleCount = perfExpRow?.sample_count ?? 0;
 
     if (isWin) {
-      if (sampleCount >= 30) {
-        const empiricalWeight = Math.min(1.0, (sampleCount - 30) / 70);
-        // At sample_count < 30 use hardcoded; at >= 100 use empirical exclusively
-        // But since we only enter this branch when >= 30, blend:
-        expectedTime = hardcodedTime * (1 - empiricalWeight) + (perfExpRow?.avg_time_seconds ?? hardcodedTime) * empiricalWeight;
-        expectedMoves = hardcodedMoves * (1 - empiricalWeight) + (perfExpRow?.avg_moves ?? hardcodedMoves) * empiricalWeight;
+      if (isRealm) {
+        // Realm-specific: exponential time curve, no moves component
+        const avgTime = (sampleCount >= 30 && perfExpRow?.avg_time_seconds)
+          ? perfExpRow.avg_time_seconds : hardcodedTime;
+        expectedTime = avgTime;
+        const timeRatio = avgTime / Math.max(actualTime, 1);
+        realmTimeBonus = Math.pow(timeRatio, 1.8) - 1; // 0 at ratio=1, grows exponentially
+        realmUndoPenalty = undosUsed; // raw count, applied later as fixed cost per undo
+        hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
+        // performanceModifier is not used for Realm ELO — we compute delta directly below
+        performanceModifier = 1.0;
+
+        console.log('[complete-game] Realm perf calc:', {
+          avgTime, actualTime, timeRatio, realmTimeBonus, undosUsed,
+          hintPenalty, sampleCount,
+        });
       } else {
-        expectedTime = hardcodedTime;
-        expectedMoves = hardcodedMoves;
+        // Card games: existing time+moves blended modifier
+        if (sampleCount >= 30) {
+          const empiricalWeight = Math.min(1.0, (sampleCount - 30) / 70);
+          expectedTime = hardcodedTime * (1 - empiricalWeight) + (perfExpRow?.avg_time_seconds ?? hardcodedTime) * empiricalWeight;
+          expectedMoves = hardcodedMoves * (1 - empiricalWeight) + (perfExpRow?.avg_moves ?? hardcodedMoves) * empiricalWeight;
+        } else {
+          expectedTime = hardcodedTime;
+          expectedMoves = hardcodedMoves;
+        }
+
+        timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 1)));
+        moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 1)));
+        hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
+        performanceModifier = Math.max(0.5, Math.min(1.5, (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty));
+
+        console.log('[complete-game] perf calc:', {
+          expectedTime, actualTime, timeEfficiency, expectedMoves, actualMoves,
+          moveEfficiency, hintPenalty, performanceModifier, sampleCount,
+        });
       }
-
-      timeEfficiency = Math.max(0.5, Math.min(1.5, expectedTime / Math.max(actualTime, 1)));
-      moveEfficiency = Math.max(0.5, Math.min(1.5, expectedMoves / Math.max(actualMoves, 1)));
-      hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
-      performanceModifier = Math.max(0.5, Math.min(1.5, (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty));
-
-      console.log('[complete-game] perf calc:', {
-        expectedTime, actualTime, timeEfficiency, expectedMoves, actualMoves,
-        moveEfficiency, hintPenalty, performanceModifier, sampleCount,
-      });
     }
 
     // 6. ELO calculation using mode IQ
@@ -358,26 +378,40 @@ Deno.serve(async (req) => {
     const outcome = isWin ? 1 : 0;
     const baseDelta = Math.round(K * (outcome - expected));
 
-    let finalDelta = Math.round(baseDelta * performanceModifier);
+    let finalDelta: number;
 
-    // Part 4: Daily challenge floor
-    if (isDaily) {
-      let bracketMin = 0;
-      if (modeIQ < 1100) bracketMin = 0;
-      else if (modeIQ < 1300) bracketMin = 25;
-      else if (modeIQ < 1500) bracketMin = 45;
-      else bracketMin = 60;
+    if (isRealm && isWin) {
+      // Realm scoring: base completion (reduced to 40%) + exponential time bonus − undo penalty
+      const baseCompletion = Math.round(baseDelta * 0.4);
+      const timeBonusPts = Math.round(baseCompletion * realmTimeBonus);
+      const undoPenaltyPts = Math.round(baseCompletion * 0.3) * realmUndoPenalty;
+      const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenalty));
+      finalDelta = baseCompletion + timeBonusPts - undoPenaltyPts - hintPenaltyPts;
+      // Cap protection: clamp to [-20, +60]
+      finalDelta = Math.max(-20, Math.min(60, finalDelta));
+      // Win floor
+      finalDelta = Math.max(1, finalDelta);
+    } else {
+      finalDelta = Math.round(baseDelta * performanceModifier);
 
-      if (dds < bracketMin) {
-        // Player is above the deal's difficulty
-        if (isWin) finalDelta = Math.max(0, finalDelta);
-        else finalDelta = -1;
+      // Part 4: Daily challenge floor
+      if (isDaily) {
+        let bracketMin = 0;
+        if (modeIQ < 1100) bracketMin = 0;
+        else if (modeIQ < 1300) bracketMin = 25;
+        else if (modeIQ < 1500) bracketMin = 45;
+        else bracketMin = 60;
+
+        if (dds < bracketMin) {
+          if (isWin) finalDelta = Math.max(0, finalDelta);
+          else finalDelta = -1;
+        }
       }
-    }
 
-    // Win floor and loss ceiling
-    if (isWin) finalDelta = Math.max(1, finalDelta);
-    else finalDelta = Math.max(-20, finalDelta);
+      // Win floor and loss ceiling
+      if (isWin) finalDelta = Math.max(1, finalDelta);
+      else finalDelta = Math.max(-20, finalDelta);
+    }
 
     const newModeIQ = Math.max(0, modeIQ + finalDelta);
 
@@ -445,12 +479,19 @@ Deno.serve(async (req) => {
     if (isWin && perfExpRow) {
       const oldSC = perfExpRow.sample_count ?? 0;
       const newAvgT = (perfExpRow.avg_time_seconds * oldSC + actualTime) / (oldSC + 1);
-      const newAvgM = (perfExpRow.avg_moves * oldSC + actualMoves) / (oldSC + 1);
-      await supabaseAdmin.from('performance_expectations').upsert({
+      const upsertData: Record<string, unknown> = {
         game_mode: gameMode, dds_bucket: ddsBucket, iq_bucket: iqBucket,
-        avg_time_seconds: newAvgT, avg_moves: newAvgM,
+        avg_time_seconds: newAvgT,
         sample_count: oldSC + 1, updated_at: new Date().toISOString(),
-      }, { onConflict: 'game_mode,dds_bucket,iq_bucket' });
+      };
+      // For non-Realm modes, also update avg_moves
+      if (!isRealm) {
+        const newAvgM = (perfExpRow.avg_moves * oldSC + actualMoves) / (oldSC + 1);
+        upsertData.avg_moves = newAvgM;
+      }
+      await supabaseAdmin.from('performance_expectations').upsert(
+        upsertData, { onConflict: 'game_mode,dds_bucket,iq_bucket' },
+      );
     }
 
     // 11. Evaluate streak
@@ -494,13 +535,25 @@ Deno.serve(async (req) => {
     let timeBonusPoints = 0;
     let movesBonusPoints = 0;
     let hintPenaltyPoints = 0;
+    let undoPenaltyPoints = 0;
 
     if (isWin) {
-      timeBonusPoints = Math.round(baseDelta * (timeEfficiency - 1.0) * 0.4);
-      movesBonusPoints = Math.round(baseDelta * (moveEfficiency - 1.0) * 0.4);
-      hintPenaltyPoints = Math.round(baseDelta * (1 - hintPenalty));
+      if (isRealm) {
+        const baseCompletion = Math.round(baseDelta * 0.4);
+        timeBonusPoints = Math.round(baseCompletion * realmTimeBonus);
+        undoPenaltyPoints = Math.round(baseCompletion * 0.3) * realmUndoPenalty;
+        hintPenaltyPoints = Math.round(baseCompletion * (1 - hintPenalty));
+      } else {
+        timeBonusPoints = Math.round(baseDelta * (timeEfficiency - 1.0) * 0.4);
+        movesBonusPoints = Math.round(baseDelta * (moveEfficiency - 1.0) * 0.4);
+        hintPenaltyPoints = Math.round(baseDelta * (1 - hintPenalty));
+      }
     }
-    const baseDeltaDisplay = isWin ? (finalDelta - timeBonusPoints - movesBonusPoints + hintPenaltyPoints) : finalDelta;
+    const baseDeltaDisplay = isWin
+      ? (isRealm
+        ? Math.round(baseDelta * 0.4)
+        : (finalDelta - timeBonusPoints - movesBonusPoints + hintPenaltyPoints))
+      : finalDelta;
 
     // 15. Return result with mode IQ and puzzle IQ
     return new Response(JSON.stringify({
@@ -513,7 +566,7 @@ Deno.serve(async (req) => {
       dealDDS: dds,
       dealAvgTime: expectedTime > 0 ? expectedTime : null,
       dealAvgMoves: expectedMoves > 0 ? expectedMoves : null,
-      timeBonusPoints, movesBonusPoints, hintPenaltyPoints, hintsUsed,
+      timeBonusPoints, movesBonusPoints, hintPenaltyPoints, undoPenaltyPoints, hintsUsed,
       // New: mode-specific IQ data
       modeIQ: newModeIQ,
       previousModeIQ: modeIQ,

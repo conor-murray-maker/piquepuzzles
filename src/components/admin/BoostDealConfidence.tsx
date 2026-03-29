@@ -52,10 +52,12 @@ function applyPathDiversityModifier(baseDds: number, pathDiversityScore: number)
 }
 
 function getDifficultyTier(dds: number): string {
-  if (dds <= 25) return "Easy";
-  if (dds <= 55) return "Medium";
-  if (dds <= 80) return "Hard";
-  return "Expert";
+  if (dds < 26) return "Easy";
+  if (dds < 51) return "Medium";
+  if (dds < 76) return "Hard";
+  if (dds < 101) return "Expert";
+  if (dds < 131) return "Master";
+  return "Grandmaster";
 }
 
 interface PathDiversityWarning {

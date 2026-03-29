@@ -1459,8 +1459,8 @@ Deno.serve(async (req) => {
         }
 
         // Helper functions inline
-        const getDdsBucket = (d: number) => d <= 25 ? '0-25' : d <= 50 ? '26-50' : d <= 75 ? '51-75' : d <= 100 ? '76-100' : '101+';
-        const getIqBucket = (iq: number) => iq < 1100 ? '800-1100' : iq < 1300 ? '1100-1300' : iq < 1500 ? '1300-1500' : '1500+';
+        const getDdsBucket = (d: number) => d <= 25 ? '0-25' : d <= 50 ? '26-50' : d <= 75 ? '51-75' : d <= 100 ? '76-100' : d <= 130 ? '101-130' : '131-150';
+        const getIqBucket = (iq: number) => iq < 1100 ? '<1100' : iq < 1300 ? '1100-1300' : iq < 1500 ? '1300-1500' : iq < 1700 ? '1500-1700' : iq < 2000 ? '1700-2000' : iq < 2500 ? '2000-2500' : '2500+';
 
         for (const g of allHistory) {
           const key = getKey(g.user_id, g.game_mode);

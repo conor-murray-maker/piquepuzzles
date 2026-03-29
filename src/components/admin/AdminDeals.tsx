@@ -77,9 +77,9 @@ export function AdminDeals() {
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="dds_initial" name="Initial DDS" type="number" domain={[0, 100]} />
-                <YAxis dataKey="dds_blended" name="Blended DDS" type="number" domain={[0, 100]} />
-                <ReferenceLine segment={[{ x: 0, y: 0 }, { x: 100, y: 100 }]} stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" />
+                <XAxis dataKey="dds_initial" name="Initial DDS" type="number" domain={[0, 150]} />
+                <YAxis dataKey="dds_blended" name="Blended DDS" type="number" domain={[0, 150]} />
+                <ReferenceLine segment={[{ x: 0, y: 0 }, { x: 150, y: 150 }]} stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" />
                 <RechartsTooltip content={({ payload }) => {
                   if (!payload?.length) return null;
                   const d = payload[0].payload;

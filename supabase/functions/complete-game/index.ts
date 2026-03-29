@@ -338,8 +338,8 @@ Deno.serve(async (req) => {
     let hardcodedMoves: number;
     if (isRealm) {
       const realmPrior = REALM_PRIORS[ddsBucket]?.[iqBucket] ?? { time: 120, moves: 22 };
-      hardcodedTime = perfExpRow?.avg_time_seconds ?? realmPrior.time;
-      hardcodedMoves = perfExpRow?.avg_moves ?? realmPrior.moves;
+      hardcodedTime = realmPrior.time;
+      hardcodedMoves = realmPrior.moves;
     } else {
       hardcodedTime = perfExpRow?.avg_time_seconds ?? 200;
       hardcodedMoves = perfExpRow?.avg_moves ?? 100;

@@ -90,6 +90,12 @@ const TIMEOUT_OPTIONS = [
   { value: "10000", label: "10s" },
 ];
 
+const STRATEGY_OPTIONS: { value: GenerationStrategy; label: string; description: string }[] = [
+  { value: "hybrid", label: "Hybrid (default)", description: "Solution-first for ≥10, legacy fallback" },
+  { value: "solution-first", label: "Solution-first", description: "Crown-first for ≥10, legacy for <10" },
+  { value: "legacy", label: "Legacy", description: "Original random-region approach for all sizes" },
+];
+
 export function StarterPoolGenerator() {
   const action = useAdminAction();
   const { toast } = useToast();

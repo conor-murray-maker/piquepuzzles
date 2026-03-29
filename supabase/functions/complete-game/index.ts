@@ -566,7 +566,7 @@ Deno.serve(async (req) => {
       dealDDS: dds,
       dealAvgTime: expectedTime > 0 ? expectedTime : null,
       dealAvgMoves: expectedMoves > 0 ? expectedMoves : null,
-      timeBonusPoints, movesBonusPoints, hintPenaltyPoints, undoPenaltyPoints, hintsUsed,
+      timeBonusPoints, movesBonusPoints, hintPenaltyPoints, undoPenaltyPoints, hintsUsed, undosUsed,
       // New: mode-specific IQ data
       modeIQ: newModeIQ,
       previousModeIQ: modeIQ,

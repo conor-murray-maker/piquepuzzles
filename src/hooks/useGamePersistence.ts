@@ -12,7 +12,9 @@ export interface ScoreBreakdownData {
   timeBonusPoints: number;
   movesBonusPoints: number;
   hintPenaltyPoints: number;
+  undoPenaltyPoints: number;
   hintsUsed: number;
+  undosUsed: number;
 }
 
 export interface ModeIQData {

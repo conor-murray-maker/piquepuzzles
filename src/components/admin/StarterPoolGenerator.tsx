@@ -64,6 +64,8 @@ const TARGETS_BY_MODE: Record<string, Target[]> = {
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "medium", ddsMin: 15, ddsMax: 55, target: 40, gridSizes: [6] },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "hard", ddsMin: 30, ddsMax: 80, target: 30, gridSizes: [7, 8] },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 60, ddsMax: 100, target: 20, gridSizes: [9, 10] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "master", ddsMin: 100, ddsMax: 130, target: 15, gridSizes: [10, 11] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "grandmaster", ddsMin: 120, ddsMax: 150, target: 10, gridSizes: [11, 12] },
   ],
 };
 
@@ -75,6 +77,8 @@ const DIFFICULTY_OPTIONS = [
   { value: "medium", label: "Medium only" },
   { value: "hard", label: "Hard only" },
   { value: "expert", label: "Expert only" },
+  { value: "master", label: "Master only" },
+  { value: "grandmaster", label: "Grandmaster only" },
 ];
 
 const TIMEOUT_OPTIONS = [
@@ -313,7 +317,7 @@ export function StarterPoolGenerator() {
 
   const modeDescription = () => {
     if (selectedMode === "realm") {
-      if (selectedDifficulty === "all") return "Realm: 50 Easy (4-5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9-10×).";
+      if (selectedDifficulty === "all") return "Realm: 50 Easy (5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9-10×), 15 Master (10-11×), 10 Grandmaster (11-12×).";
       const t = targets[0];
       if (!t) return "";
       return `Realm ${t.band}: ${t.target} deals${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}. Confidence=1.0 (unique solution).`;

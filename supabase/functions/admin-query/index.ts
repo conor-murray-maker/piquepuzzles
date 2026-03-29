@@ -180,11 +180,24 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Fetch mode ratings for listed users
+        const { data: modeRatings } = await adminClient
+          .from("player_mode_ratings")
+          .select("user_id, game_mode, iq, games_played")
+          .in("user_id", userIds);
+
+        const modeRatingMap: Record<string, any[]> = {};
+        for (const mr of modeRatings || []) {
+          if (!modeRatingMap[mr.user_id]) modeRatingMap[mr.user_id] = [];
+          modeRatingMap[mr.user_id].push(mr);
+        }
+
         return json({
           users: (data || []).map((u: any) => ({
             ...u,
             email: emailMap[u.id] || "",
             win_rate: u.games_played > 0 ? Math.round((u.games_won / u.games_played) * 100) : 0,
+            mode_ratings: modeRatingMap[u.id] || [],
           })),
           total: count || 0,
         });
@@ -194,34 +207,116 @@ Deno.serve(async (req) => {
         const userId = params?.userId;
         if (!userId) return json({ error: "Missing userId" }, 400);
 
-        const { data: games } = await adminClient
-          .from("game_history")
-          .select("*")
-          .eq("user_id", userId)
-          .order("played_at", { ascending: false })
-          .limit(20);
+        const [gamesRes, streaksRes, modeWinsRes, iqHistoryRes] = await Promise.all([
+          adminClient
+            .from("game_history")
+            .select("*")
+            .eq("user_id", userId)
+            .order("played_at", { ascending: false })
+            .limit(50),
+          adminClient
+            .from("streak_history")
+            .select("*")
+            .eq("user_id", userId)
+            .order("date", { ascending: false })
+            .limit(30),
+          // Per-mode win counts
+          adminClient
+            .from("game_history")
+            .select("game_mode, won")
+            .eq("user_id", userId),
+          // IQ history for sparklines (last 20 per mode)
+          adminClient
+            .from("game_history")
+            .select("game_mode, rating_after, played_at")
+            .eq("user_id", userId)
+            .order("played_at", { ascending: false })
+            .limit(200),
+        ]);
 
-        const { data: streaks } = await adminClient
-          .from("streak_history")
-          .select("*")
-          .eq("user_id", userId)
-          .order("date", { ascending: false })
-          .limit(30);
+        const games = gamesRes.data || [];
+        const allModeGames = modeWinsRes.data || [];
 
-        return json({ games: games || [], streaks: streaks || [] });
+        // Calculate per-mode win rates
+        const modeStats: Record<string, { played: number; won: number }> = {};
+        for (const g of allModeGames) {
+          if (!modeStats[g.game_mode]) modeStats[g.game_mode] = { played: 0, won: 0 };
+          modeStats[g.game_mode].played++;
+          if (g.won) modeStats[g.game_mode].won++;
+        }
+
+        // Build IQ sparkline data (last 20 per mode, chronological)
+        const iqHistory: Record<string, number[]> = {};
+        const historyByMode: Record<string, any[]> = {};
+        for (const g of (iqHistoryRes.data || [])) {
+          if (!historyByMode[g.game_mode]) historyByMode[g.game_mode] = [];
+          historyByMode[g.game_mode].push(g);
+        }
+        for (const [mode, entries] of Object.entries(historyByMode)) {
+          iqHistory[mode] = entries.slice(0, 20).reverse().map((e: any) => e.rating_after);
+        }
+
+        // Enrich games with DDS from deals table
+        const dealUuids = games.filter((g: any) => g.deal_uuid).map((g: any) => g.deal_uuid);
+        let ddsMap: Record<string, number> = {};
+        if (dealUuids.length > 0) {
+          const { data: dealData } = await adminClient
+            .from("deals")
+            .select("id, dds_blended")
+            .in("id", dealUuids);
+          for (const d of dealData || []) {
+            ddsMap[d.id] = Math.round(d.dds_blended);
+          }
+        }
+
+        const enrichedGames = games.map((g: any) => ({
+          ...g,
+          dds: g.deal_uuid ? (ddsMap[g.deal_uuid] ?? null) : null,
+        }));
+
+        return json({
+          games: enrichedGames,
+          streaks: streaksRes.data || [],
+          modeStats,
+          iqHistory,
+        });
       }
 
       case "user_action": {
-        const { userId: uid, actionType } = params || {};
+        const { userId: uid, actionType, resetMode } = params || {};
         if (!uid) return json({ error: "Missing userId" }, 400);
 
         if (actionType === "reset_rating") {
-          const { error } = await adminClient
+          const modes = resetMode === "all"
+            ? ["klondike", "freecell", "realm"]
+            : [resetMode];
+
+          for (const mode of modes) {
+            // Reset mode rating to 1000 and games_played to 0
+            const { data: existing } = await adminClient
+              .from("player_mode_ratings")
+              .select("user_id")
+              .eq("user_id", uid)
+              .eq("game_mode", mode)
+              .maybeSingle();
+
+            if (existing) {
+              await adminClient
+                .from("player_mode_ratings")
+                .update({ iq: 1000, games_played: 0 })
+                .eq("user_id", uid)
+                .eq("game_mode", mode);
+            }
+          }
+
+          // Recalculate composite IQ
+          const { data: newIQ } = await adminClient.rpc("calculate_puzzle_iq", { p_user_id: uid });
+          await adminClient
             .from("profiles")
-            .update({ rating: 1000 })
+            .update({ rating: newIQ || 1000 })
             .eq("id", uid);
-          if (error) throw error;
-          return json({ success: true });
+
+          return json({ success: true, newCompositeIQ: newIQ || 1000 });
         }
 
         if (actionType === "grant_premium") {

@@ -178,12 +178,14 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
 
   // Reset gameEndedRef when game changes
   useEffect(() => {
+    if (!state) return;
     gameEndedRef.current = false;
     completedGameIdRef.current = null;
-  }, [state.gameId]);
+  }, [state?.gameId]);
 
   // Register deal
   useEffect(() => {
+    if (!state) return;
     if (state.dealUuid) return;
     if (state.seed !== undefined) {
       registerDeal({
@@ -193,25 +195,27 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
         minMoves: state.minMoves || 0,
         difficultyScore: state.difficultyScore,
       }).then(id => {
-        if (id) setState(s => ({ ...s, dealUuid: id }));
+        if (id) setState(s => s ? { ...s, dealUuid: id } : s);
       });
     }
-  }, [state.dealId, state.dealUuid]);
+  }, [state?.dealId, state?.dealUuid]);
 
   // Fetch puzzle name
   useEffect(() => {
+    if (!state) return;
     if (state.puzzleName || !state.regions) return;
     supabase.functions.invoke('name-realm-puzzle', {
       body: { regions: state.regions, size: state.size },
     }).then(({ data }) => {
-      if (data?.name) setState(s => ({ ...s, puzzleName: data.name }));
+      if (data?.name) setState(s => s ? { ...s, puzzleName: data.name } : s);
     }).catch(() => {
-      setState(s => ({ ...s, puzzleName: `${s.size}×${s.size} ${s.difficulty}` }));
+      setState(s => s ? { ...s, puzzleName: `${s.size}×${s.size} ${s.difficulty}` } : s);
     });
-  }, [state.puzzleName, state.regions, state.size]);
+  }, [state?.puzzleName, state?.regions, state?.size]);
 
   // Save state
   useEffect(() => {
+    if (!state) return;
     if (initialSeed !== undefined) return;
     if (state.isWon || state.errors >= state.maxErrors) clearRealmStorage();
     else saveToStorage(state, history);
@@ -224,6 +228,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
 
   // Timer
   useEffect(() => {
+    if (!state) return;
     if (state.isWon || state.errors >= state.maxErrors || !gameStarted) return;
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const start = () => { if (!intervalId) intervalId = setInterval(() => setElapsed(e => e + 1), 1000); };
@@ -232,7 +237,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
     if (!document.hidden) start();
     document.addEventListener('visibilitychange', handleVis);
     return () => { stop(); document.removeEventListener('visibilitychange', handleVis); };
-  }, [state.isWon, state.errors, state.maxErrors, gameStarted]);
+  }, [state?.isWon, state?.errors, state?.maxErrors, gameStarted]);
 
   // Check loss on 3 errors
   useEffect(() => {

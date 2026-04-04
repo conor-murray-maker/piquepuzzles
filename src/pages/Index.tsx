@@ -76,7 +76,7 @@ export default function Index() {
           <Spade className="w-6 h-6 text-primary" />
           <span className="text-lg font-bold tracking-tight">Pique</span>
         </div>
-        <button onClick={toggleTheme} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={toggleDarkMode} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           {isDark ? '☀️' : '🌙'}
         </button>
       </header>

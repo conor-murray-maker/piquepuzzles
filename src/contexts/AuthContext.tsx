@@ -171,6 +171,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       subscription,
       isPremium,
+      isDark,
+      toggleDarkMode,
       signOut,
       refreshProfile,
       checkSubscription,

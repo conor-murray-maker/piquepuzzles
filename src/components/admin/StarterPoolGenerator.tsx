@@ -252,9 +252,9 @@ export function StarterPoolGenerator() {
             }
           }
 
-          // Store crown positions for Grandmaster deals (DDS 131+, gridSize 11-12)
+          // Store crown positions for large-grid Realm deals (gridSize >= 10)
           let crownPositions: { row: number; col: number }[] | null = null;
-          if (isRealm && realmSolution && dds >= 131 && realmGridSize && realmGridSize >= 11) {
+          if (isRealm && realmSolution && realmGridSize && realmGridSize >= 10) {
             crownPositions = realmSolution.map(([row, col]) => ({ row, col }));
           }
 

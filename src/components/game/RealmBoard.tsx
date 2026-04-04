@@ -101,11 +101,11 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
 }
 
 export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initialSeed, dealUuid, gridSize, crownPositions }: RealmBoardProps) {
-  const isGrandmasterWithoutCrowns = initialSeed !== undefined && (gridSize ?? 0) >= 11 && !crownPositions;
+  // Large grids without crown positions cannot reconstruct in reasonable time — skip immediately
+  const isLargeGridWithoutCrowns = initialSeed !== undefined && (gridSize ?? 0) >= 10 && !crownPositions;
 
   const [state, setState] = useState<RealmState | null>(() => {
-    // Defer async init for grandmaster deals without crown positions
-    if (isGrandmasterWithoutCrowns) return null;
+    if (isLargeGridWithoutCrowns) return null;
 
     if (initialSeed !== undefined) {
       const fresh = createRealmGame(initialSeed, gridSize, crownPositions ?? undefined);
@@ -117,20 +117,12 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
     return { ...fresh, dealUuid };
   });
 
-  // Async init with timeout for grandmaster deals without crown positions
+  // Immediately fail for large grids without crown positions — don't attempt reconstruction
   useEffect(() => {
-    if (!isGrandmasterWithoutCrowns || state !== null) return;
-    let cancelled = false;
-    createRealmGameWithTimeout(initialSeed!, gridSize!, 5000).then(result => {
-      if (cancelled) return;
-      if (result) {
-        setState({ ...result, dealUuid });
-      } else {
-        onReconstructionFailed?.();
-      }
-    });
-    return () => { cancelled = true; };
-  }, [isGrandmasterWithoutCrowns, initialSeed, gridSize, dealUuid, onReconstructionFailed, state]);
+    if (!isLargeGridWithoutCrowns || state !== null) return;
+    console.warn(`[Realm] Large grid (${gridSize}) without crown_positions — skipping to next deal`);
+    onReconstructionFailed?.();
+  }, [isLargeGridWithoutCrowns, state, gridSize, onReconstructionFailed]);
   const [history, setHistory] = useState<RealmState[]>(() => {
     if (initialSeed !== undefined) return [];
     const saved = loadFromStorage();

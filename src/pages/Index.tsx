@@ -125,7 +125,7 @@ export default function Index() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">Klondike</p>
-                  <p className="text-xs text-muted-foreground">Classic card puzzle</p>
+                  <p className="text-xs text-muted-foreground">The card game that rewards patience</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
@@ -139,7 +139,7 @@ export default function Index() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">FreeCell</p>
-                  <p className="text-xs text-muted-foreground">Strategic card puzzle</p>
+                  <p className="text-xs text-muted-foreground">Pure strategy. No luck required.</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
@@ -153,7 +153,7 @@ export default function Index() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">Realm</p>
-                  <p className="text-xs text-muted-foreground">Crown placement puzzle</p>
+                  <p className="text-xs text-muted-foreground">Logic deduction at its sharpest</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
@@ -180,9 +180,6 @@ export default function Index() {
         )}
       </main>
 
-      <footer className="py-4 text-center border-t border-border">
-        <p className="text-xs text-muted-foreground">Pique: Puzzle games for sharp minds</p>
-      </footer>
     </div>
   );
 }

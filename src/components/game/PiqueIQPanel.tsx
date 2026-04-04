@@ -19,7 +19,8 @@ const TIER_HEX: Record<string, string> = {
 /** Within-tier progress: 0–100% of the current tier only */
 function withinTierProgress(rating: number): number {
   const tier = getTier(rating);
-  const range = tier.max - tier.min + 1;
+  const range = tier.max - tier.min;
+  if (range <= 0) return 100;
   return Math.min(100, Math.max(0, ((rating - tier.min) / range) * 100));
 }
 

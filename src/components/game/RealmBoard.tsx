@@ -100,8 +100,13 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
   );
 }
 
-export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize, crownPositions }: RealmBoardProps) {
-  const [state, setState] = useState<RealmState>(() => {
+export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initialSeed, dealUuid, gridSize, crownPositions }: RealmBoardProps) {
+  const isGrandmasterWithoutCrowns = initialSeed !== undefined && (gridSize ?? 0) >= 11 && !crownPositions;
+
+  const [state, setState] = useState<RealmState | null>(() => {
+    // Defer async init for grandmaster deals without crown positions
+    if (isGrandmasterWithoutCrowns) return null;
+
     if (initialSeed !== undefined) {
       const fresh = createRealmGame(initialSeed, gridSize, crownPositions ?? undefined);
       return { ...fresh, dealUuid };
@@ -111,6 +116,21 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
     const fresh = createRealmGame(undefined, gridSize, crownPositions ?? undefined);
     return { ...fresh, dealUuid };
   });
+
+  // Async init with timeout for grandmaster deals without crown positions
+  useEffect(() => {
+    if (!isGrandmasterWithoutCrowns || state !== null) return;
+    let cancelled = false;
+    createRealmGameWithTimeout(initialSeed!, gridSize!, 5000).then(result => {
+      if (cancelled) return;
+      if (result) {
+        setState({ ...result, dealUuid });
+      } else {
+        onReconstructionFailed?.();
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isGrandmasterWithoutCrowns, initialSeed, gridSize, dealUuid, onReconstructionFailed, state]);
   const [history, setHistory] = useState<RealmState[]>(() => {
     if (initialSeed !== undefined) return [];
     const saved = loadFromStorage();

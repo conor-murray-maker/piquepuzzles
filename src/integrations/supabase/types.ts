@@ -522,6 +522,7 @@ export type Database = {
           current_streak: number
           daily_challenge_completed_today: boolean
           daily_wins_today: number
+          dark_mode: boolean
           display_name: string | null
           games_played: number
           games_played_freecell: number
@@ -548,6 +549,7 @@ export type Database = {
           current_streak?: number
           daily_challenge_completed_today?: boolean
           daily_wins_today?: number
+          dark_mode?: boolean
           display_name?: string | null
           games_played?: number
           games_played_freecell?: number
@@ -574,6 +576,7 @@ export type Database = {
           current_streak?: number
           daily_challenge_completed_today?: boolean
           daily_wins_today?: number
+          dark_mode?: boolean
           display_name?: string | null
           games_played?: number
           games_played_freecell?: number

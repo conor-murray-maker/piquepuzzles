@@ -62,6 +62,22 @@ const DRAG_HOLD_MS = 150;
 const GOLD_COLOR = '#F4C430';
 const NAVY_COLOR = '#1B2340';
 
+// Dark-mode specific region palette — high saturation, lighter fills for dark backgrounds
+const REALM_COLORS_DARK: Record<string, string> = {
+  '#E8735A': '#F4937E', // coral → lighter coral
+  '#2A9D8F': '#3FC4B4', // teal → bright teal
+  '#E9C46A': '#F0D48A', // amber → lighter amber
+  '#3A86FF': '#6DA8FF', // deep blue → lighter blue
+  '#6A994E': '#8FC06E', // sage → bright sage
+  '#9B5DE5': '#B888F0', // purple → lighter purple
+  '#F15BB5': '#F588CC', // rose → lighter rose
+  '#F4A261': '#F7BE8A', // orange → lighter orange
+  '#2D6A4F': '#4FAF7B', // forest → bright forest
+  '#8E9AAF': '#ABB5C8', // slate → lighter slate
+  '#D4A373': '#E2BF9A', // tan → lighter tan
+  '#00B4D8': '#40D0EC', // cyan → bright cyan
+};
+
 // Star particle component for win animation
 function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: number; angle: number }) {
   const distance = 30 + Math.random() * 20;
@@ -122,7 +138,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   const gameEndedRef = useRef(false);
   const completedGameIdRef = useRef<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const { profile } = useAuth();
+  const { profile, isDark } = useAuth();
 
   // Drag-to-mark state
   const dragStateRef = useRef<{
@@ -522,7 +538,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
         {state.grid.flat().map((cell) => {
           const isError = errorCells.has(`${cell.row},${cell.col}`);
           const isHint = hintCell?.row === cell.row && hintCell?.col === cell.col;
-          const color = state.regionColors[cell.region];
+          const baseColor = state.regionColors[cell.region];
+          const color = isDark ? (REALM_COLORS_DARK[baseColor] || baseColor) : baseColor;
 
           const borderTop = cell.row === 0 || state.grid[cell.row - 1]?.[cell.col]?.region !== cell.region;
           const borderLeft = cell.col === 0 || state.grid[cell.row][cell.col - 1]?.region !== cell.region;
@@ -530,7 +547,11 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
           const borderRight = cell.col === state.size - 1 || state.grid[cell.row]?.[cell.col + 1]?.region !== cell.region;
 
           const crownKey = `${cell.row},${cell.col}`;
-          const crownColor = crownColors[crownKey] || NAVY_COLOR;
+          const crownColor = crownColors[crownKey] || (isDark ? '#E8E8E8' : NAVY_COLOR);
+
+          const fillOpacity = isDark ? '45' : '30';
+          const innerBorder = isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #d1d5db';
+          const regionBorderWidth = isDark ? '3.5px' : '3px';
 
           return (
             <motion.div
@@ -543,11 +564,11 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
               style={{
                 width: cellSize,
                 height: cellSize,
-                backgroundColor: `${color}30`,
-                borderTop: borderTop ? `3px solid ${color}` : '1px solid #d1d5db',
-                borderLeft: borderLeft ? `3px solid ${color}` : '1px solid #d1d5db',
-                borderBottom: borderBottom ? `3px solid ${color}` : '1px solid #d1d5db',
-                borderRight: borderRight ? `3px solid ${color}` : '1px solid #d1d5db',
+                backgroundColor: `${color}${fillOpacity}`,
+                borderTop: borderTop ? `${regionBorderWidth} solid ${color}` : innerBorder,
+                borderLeft: borderLeft ? `${regionBorderWidth} solid ${color}` : innerBorder,
+                borderBottom: borderBottom ? `${regionBorderWidth} solid ${color}` : innerBorder,
+                borderRight: borderRight ? `${regionBorderWidth} solid ${color}` : innerBorder,
                 boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : 'none',
                 transition: 'border-color 0.3s, box-shadow 0.3s',
               }}

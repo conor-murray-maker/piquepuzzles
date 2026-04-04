@@ -22,6 +22,7 @@ interface Profile {
   daily_wins_today: number;
   daily_challenge_completed_today: boolean;
   pending_milestone: number | null;
+  dark_mode: boolean;
 }
 
 interface SubscriptionInfo {
@@ -38,6 +39,8 @@ interface AuthContextType {
   loading: boolean;
   subscription: SubscriptionInfo;
   isPremium: boolean;
+  isDark: boolean;
+  toggleDarkMode: () => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   checkSubscription: () => Promise<void>;
@@ -52,6 +55,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionInfo>(defaultSub);
+  const [isDark, setIsDark] = useState(() => {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  // Apply dark class on initial mount (system preference)
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Apply dark class to document
+  const applyDark = useCallback((dark: boolean) => {
+    setIsDark(dark);
+    document.documentElement.classList.toggle('dark', dark);
+  }, []);
 
   const fetchProfile = useCallback(async (userId: string) => {
     const { data } = await supabase
@@ -59,8 +77,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('*')
       .eq('id', userId)
       .single();
-    if (data) setProfile(data as unknown as Profile);
-  }, []);
+    if (data) {
+      const p = data as unknown as Profile;
+      setProfile(p);
+      // Apply dark mode from profile (if column exists, otherwise fall back to system)
+      if (typeof p.dark_mode === 'boolean') {
+        applyDark(p.dark_mode);
+      }
+    }
+  }, [applyDark]);
+
+  const toggleDarkMode = useCallback(async () => {
+    const newDark = !isDark;
+    applyDark(newDark);
+    // Persist to profile if logged in
+    if (session?.user?.id) {
+      await supabase
+        .from('profiles')
+        .update({ dark_mode: newDark } as any)
+        .eq('id', session.user.id);
+    }
+  }, [isDark, applyDark, session]);
 
   const refreshProfile = useCallback(async () => {
     if (session?.user?.id) await fetchProfile(session.user.id);
@@ -140,6 +177,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       subscription,
       isPremium,
+      isDark,
+      toggleDarkMode,
       signOut,
       refreshProfile,
       checkSubscription,

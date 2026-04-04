@@ -14,16 +14,9 @@ function SkeletonCard({ className = '' }: { className?: string }) {
 
 export default function Index() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, isDark, toggleDarkMode } = useAuth();
   const stats = usePlayerStats();
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setIsDark(prefersDark);
-    document.documentElement.classList.toggle('dark', prefersDark);
-  }, []);
 
   // Check if first-time user
   useEffect(() => {
@@ -40,10 +33,6 @@ export default function Index() {
     setShowOnboarding(false);
   };
 
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
-  };
 
   const container = {
     hidden: { opacity: 0 },
@@ -87,7 +76,7 @@ export default function Index() {
           <Spade className="w-6 h-6 text-primary" />
           <span className="text-lg font-bold tracking-tight">Pique</span>
         </div>
-        <button onClick={toggleTheme} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={toggleDarkMode} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           {isDark ? '☀️' : '🌙'}
         </button>
       </header>

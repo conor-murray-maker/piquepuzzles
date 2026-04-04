@@ -15,6 +15,7 @@ export interface ScoreBreakdownData {
   undoPenaltyPoints: number;
   hintsUsed: number;
   undosUsed: number;
+  breakdownItems?: { label: string; value: number }[];
 }
 
 export interface ModeIQData {

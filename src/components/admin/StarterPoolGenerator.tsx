@@ -12,7 +12,7 @@ import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
 import { generateRealmPuzzleSolutionFirst, generateRealmPuzzle, type GenerationStrategy, type RealmGenOptions } from "@/game/realm";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
-import { Database, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Database, Loader2, CheckCircle, XCircle, Zap } from "lucide-react";
 
 interface VerifiedDeal {
   seed: number;
@@ -97,7 +97,609 @@ const STRATEGY_OPTIONS: { value: GenerationStrategy; label: string; description:
   { value: "legacy", label: "Legacy", description: "Original random-region approach for all sizes" },
 ];
 
+/** Fill All batch definitions with per-band strategy + timeout */
+interface FillAllBatch {
+  mode: string;
+  band: string;
+  strategy: GenerationStrategy;
+  timeoutMs: number;
+}
+
+const FILL_ALL_BATCHES: FillAllBatch[] = [
+  { mode: "realm", band: "easy", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "medium", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "hard", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "expert", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "master", strategy: "hybrid", timeoutMs: 5000 },
+  { mode: "realm", band: "grandmaster", strategy: "solution-first", timeoutMs: 10000 },
+  { mode: "klondike", band: "easy", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "klondike", band: "medium", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "freecell", band: "easy", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "freecell", band: "medium", strategy: "legacy", timeoutMs: 2000 },
+];
+
+/** Generate deals for a single target band, returning inserted count */
+async function generateBatch(
+  target: Target,
+  strategy: GenerationStrategy,
+  timeoutMs: number,
+  needed: number,
+  abortRef: React.MutableRefObject<boolean>,
+  addStatus: (line: string) => void,
+  insertDeals: (deals: VerifiedDeal[]) => Promise<number>,
+): Promise<number> {
+  const isRealm = target.gameMode === "realm";
+  const engine = target.engine;
+  const simCount = target.simCount;
+  const collected: VerifiedDeal[] = [];
+  let tried = 0;
+  const maxTries = Math.min(MAX_CANDIDATES, needed * 100); // cap effort
+
+  while (tried < maxTries && collected.length < needed && !abortRef.current) {
+    for (let b = 0; b < 5 && tried < maxTries && collected.length < needed && !abortRef.current; b++) {
+      tried++;
+      const seed = generateSeed();
+
+      try {
+        let realmGridSize: number | undefined;
+        let realmSkipSurprise = false;
+
+        if (isRealm && target.gridSizes) {
+          realmGridSize = target.gridSizes[Math.floor(Math.random() * target.gridSizes.length)];
+          realmSkipSurprise = target.skipSpatialSurprise ?? false;
+        }
+
+        let deal;
+        let realmSolution: [number, number][] | undefined;
+        if (isRealm) {
+          const genOpts: RealmGenOptions = {
+            gridSize: realmGridSize,
+            skipSpatialSurprise: realmSkipSurprise,
+            timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
+          };
+          const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
+
+          if (useLargeGridStrategy && strategy === "solution-first") {
+            const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+            if (puzzle) realmSolution = puzzle.solution;
+            deal = { seed, gameMode: "realm" as const, data: puzzle };
+          } else if (useLargeGridStrategy && strategy === "hybrid") {
+            let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+            if (!puzzle) puzzle = generateRealmPuzzle(seed, genOpts);
+            if (puzzle) realmSolution = puzzle.solution;
+            deal = { seed, gameMode: "realm" as const, data: puzzle };
+          } else {
+            deal = engine.generateDeal(seed, { gridSize: realmGridSize, skipSpatialSurprise: realmSkipSurprise, timeoutMs: timeoutMs > 0 ? timeoutMs : undefined });
+            if (deal.data) realmSolution = (deal.data as any).solution;
+          }
+        } else {
+          deal = engine.generateDeal(seed);
+        }
+
+        const verifyResult = engine.verifySolvable(deal, simCount);
+        if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
+
+        let dds = verifyResult.complexityScore;
+        const pathDiv = verifyResult.pathDiversityScore;
+        const uniquePaths = verifyResult.uniqueWinningPaths;
+
+        if (!isRealm) dds = applyPathDiversityModifier(dds, pathDiv);
+
+        if (dds < target.ddsMin || dds > target.ddsMax) continue;
+
+        let confidence: number;
+        if (isRealm) {
+          confidence = 1.0;
+        } else {
+          const confResult = calculateDealConfidence({ wins: verifyResult.wins, totalSimulations: verifyResult.simulations, dds });
+          confidence = confResult.confidence;
+        }
+
+        let crownPositions: { row: number; col: number }[] | null = null;
+        if (isRealm && realmSolution && realmGridSize && realmGridSize >= 10) {
+          crownPositions = realmSolution.map(([row, col]) => ({ row, col }));
+        }
+
+        collected.push({
+          seed,
+          game_mode: target.gameMode,
+          draw_mode: isRealm ? 0 : 3,
+          min_moves: verifyResult.minSolutionLength,
+          dds_initial: dds,
+          dds_blended: dds,
+          simulation_count: isRealm ? 1 : verifyResult.simulations,
+          simulation_wins: isRealm ? 0 : verifyResult.wins,
+          confidence,
+          tier: "fresh",
+          is_calibration: false,
+          reserved_for: target.band === "easy" ? "onboarding" : null,
+          unique_winning_paths: isRealm ? 1 : uniquePaths,
+          path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
+          crown_positions: crownPositions,
+        });
+      } catch {
+        // skip
+      }
+    }
+    // yield to event loop
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  }
+
+  if (collected.length === 0) return 0;
+  addStatus(`  Generated ${collected.length} deals, inserting...`);
+  return insertDeals(collected);
+}
+
 export function StarterPoolGenerator() {
+  const action = useAdminAction();
+  const { toast } = useToast();
+  const [selectedMode, setSelectedMode] = useState<string>("klondike");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
+  const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
+  const [selectedStrategy, setSelectedStrategy] = useState<GenerationStrategy>("hybrid");
+  const [running, setRunning] = useState(false);
+  const [candidatesTried, setCandidatesTried] = useState(0);
+  const [starterFound, setStarterFound] = useState(0);
+  const [totalBanked, setTotalBanked] = useState(0);
+  const [statusLines, setStatusLines] = useState<string[]>([]);
+  const [result, setResult] = useState<{ inserted: number; total: number } | null>(null);
+  const [fillAllRunning, setFillAllRunning] = useState(false);
+  const abortRef = useRef(false);
+
+  const addStatus = useCallback((line: string) => {
+    setStatusLines(prev => [...prev.slice(-19), line]);
+  }, []);
+
+  const insertDeals = useCallback(async (deals: VerifiedDeal[]): Promise<number> => {
+    let totalInserted = 0;
+    for (let i = 0; i < deals.length; i += 50) {
+      const batch = deals.slice(i, i + 50);
+      try {
+        const res = await action.mutateAsync({
+          action: "seed_starter_pool",
+          params: { deals: batch },
+        });
+        totalInserted += res.inserted || 0;
+      } catch (e: any) {
+        addStatus(`✗ Insert batch failed: ${e.message}`);
+      }
+    }
+    return totalInserted;
+  }, [action, addStatus]);
+
+  const fillAll = useCallback(async () => {
+    setFillAllRunning(true);
+    setRunning(true);
+    setStatusLines([]);
+    setResult(null);
+    abortRef.current = false;
+
+    addStatus("Fetching current pool counts...");
+
+    let poolCounts: Record<string, Record<string, number>> = {};
+    try {
+      poolCounts = await action.mutateAsync({ action: "pool_counts" });
+    } catch (e: any) {
+      addStatus(`✗ Failed to fetch pool counts: ${e.message}`);
+      setFillAllRunning(false);
+      setRunning(false);
+      return;
+    }
+
+    // Determine which batches need filling
+    const batchesToRun: { batch: FillAllBatch; target: Target; needed: number }[] = [];
+    for (const batch of FILL_ALL_BATCHES) {
+      const targets = TARGETS_BY_MODE[batch.mode];
+      const target = targets?.find(t => t.band === batch.band);
+      if (!target) continue;
+
+      const current = poolCounts[batch.mode]?.[batch.band] ?? 0;
+      const needed = target.target - current;
+      if (needed > 0) {
+        batchesToRun.push({ batch, target, needed });
+      }
+    }
+
+    if (batchesToRun.length === 0) {
+      addStatus("✓ All pools are at or above target. Nothing to generate.");
+      toast({ title: "All pools full", description: "No generation needed." });
+      setFillAllRunning(false);
+      setRunning(false);
+      return;
+    }
+
+    addStatus(`${batchesToRun.length} pool(s) below threshold. Starting sequential fill...`);
+    let totalDealsAdded = 0;
+    let batchesCompleted = 0;
+
+    for (let i = 0; i < batchesToRun.length; i++) {
+      if (abortRef.current) {
+        addStatus("⚠ Fill All stopped by user.");
+        break;
+      }
+
+      const { batch, target, needed } = batchesToRun[i];
+      const label = `${batch.mode} ${batch.band}`;
+      addStatus(`[${i + 1}/${batchesToRun.length}] Filling ${label} (need ${needed})...`);
+
+      const inserted = await generateBatch(
+        target, batch.strategy, batch.timeoutMs, needed,
+        abortRef, addStatus, insertDeals,
+      );
+
+      totalDealsAdded += inserted;
+      batchesCompleted++;
+      addStatus(`[${i + 1}/${batchesToRun.length}] ${label}... done (${inserted} deals added)`);
+    }
+
+    const summary = abortRef.current
+      ? `Stopped early. ${batchesCompleted} batches completed, ${totalDealsAdded} deals added.`
+      : `All critical pools filled. ${batchesCompleted} batches completed, ${totalDealsAdded} deals added.`;
+    addStatus(`✓ ${summary}`);
+    setResult({ inserted: totalDealsAdded, total: totalDealsAdded });
+    toast({ title: "Fill All complete", description: summary });
+
+    setFillAllRunning(false);
+    setRunning(false);
+  }, [action, addStatus, insertDeals, toast]);
+
+  const run = useCallback(async () => {
+    setRunning(true);
+    setCandidatesTried(0);
+    setStarterFound(0);
+    setTotalBanked(0);
+    setStatusLines([]);
+    setResult(null);
+    abortRef.current = false;
+
+    const allTargets = TARGETS_BY_MODE[selectedMode];
+    const targets = selectedDifficulty === "all"
+      ? allTargets
+      : allTargets.filter(t => t.band === selectedDifficulty);
+
+    if (targets.length === 0) {
+      addStatus(`✗ No targets for ${selectedMode} ${selectedDifficulty}`);
+      setRunning(false);
+      return;
+    }
+
+    const collected: VerifiedDeal[] = [];
+    const counts: Record<string, number> = {};
+    for (const t of targets) counts[t.band] = 0;
+
+    const totalTarget = targets.reduce((s, t) => s + t.target, 0);
+    let totalTried = 0;
+    let starterCount = 0;
+    let bankedCount = 0;
+    const timeoutMs = parseInt(selectedTimeout, 10);
+
+    const isRealm = selectedMode === "realm";
+    addStatus(`Starting ${selectedMode} deal generation (${selectedDifficulty})...`);
+    addStatus(`Strategy: ${isRealm ? selectedStrategy : 'n/a (card game)'}`);
+    addStatus(`Targets: ${targets.map(t => `${t.target} ${t.band}${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}`).join(", ")} (${totalTarget} total)`);
+    if (timeoutMs > 0) addStatus(`Timeout per candidate: ${timeoutMs}ms`);
+
+    const engine = targets[0].engine;
+    const simCount = targets[0].simCount;
+    const startTime = Date.now();
+    let timeoutDiscards = 0;
+
+    while (totalTried < MAX_CANDIDATES && !abortRef.current) {
+      const allMet = targets.every(t => counts[t.band] >= t.target);
+      if (allMet) {
+        addStatus("✓ All targets met!");
+        break;
+      }
+
+      for (let b = 0; b < 5 && totalTried < MAX_CANDIDATES && !abortRef.current; b++) {
+        totalTried++;
+        const seed = generateSeed();
+
+        try {
+          // For Realm, pick a random target band that still needs deals to determine grid size
+          let realmGridSize: number | undefined;
+          let realmSkipSurprise = false;
+          let targetBand: Target | undefined;
+
+          if (isRealm) {
+            // Pick a random unfilled target
+            const unfilled = targets.filter(t => counts[t.band] < t.target);
+            if (unfilled.length === 0) continue;
+            targetBand = unfilled[Math.floor(Math.random() * unfilled.length)];
+            if (targetBand.gridSizes) {
+              realmGridSize = targetBand.gridSizes[Math.floor(Math.random() * targetBand.gridSizes.length)];
+            }
+            realmSkipSurprise = targetBand.skipSpatialSurprise ?? false;
+          }
+
+          const candidateStart = performance.now();
+          let deal;
+          let realmSolution: [number, number][] | undefined;
+          if (isRealm) {
+            const genOpts: RealmGenOptions = {
+              gridSize: realmGridSize,
+              skipSpatialSurprise: realmSkipSurprise,
+              timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
+            };
+            const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
+
+            if (useLargeGridStrategy && selectedStrategy === 'solution-first') {
+              // Solution-first only
+              const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+              if (puzzle) realmSolution = puzzle.solution;
+              deal = { seed, gameMode: 'realm' as const, data: puzzle };
+            } else if (useLargeGridStrategy && selectedStrategy === 'hybrid') {
+              // Try solution-first, fall back to legacy
+              let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+              if (!puzzle) {
+                puzzle = generateRealmPuzzle(seed, genOpts);
+              }
+              if (puzzle) realmSolution = puzzle.solution;
+              deal = { seed, gameMode: 'realm' as const, data: puzzle };
+            } else {
+              // Legacy for all sizes, or small grids
+              deal = engine.generateDeal(seed, genOpts);
+              if (deal.data) realmSolution = (deal.data as any).solution;
+            }
+          } else {
+            deal = engine.generateDeal(seed);
+          }
+
+          const verifyResult = engine.verifySolvable(deal, simCount);
+
+          if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
+
+          let dds = verifyResult.complexityScore;
+          const pathDiv = verifyResult.pathDiversityScore;
+          const uniquePaths = verifyResult.uniqueWinningPaths;
+
+          if (!isRealm) {
+            dds = applyPathDiversityModifier(dds, pathDiv);
+          }
+
+          let confidence: number;
+          if (isRealm) {
+            confidence = 1.0;
+          } else {
+            const confResult = calculateDealConfidence({
+              wins: verifyResult.wins,
+              totalSimulations: verifyResult.simulations,
+              dds,
+            });
+            confidence = confResult.confidence;
+          }
+
+          let reservedFor: string | null = null;
+
+          for (const t of targets) {
+            if (dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] < t.target) {
+              counts[t.band]++;
+              if (t.band === "easy") reservedFor = "onboarding";
+              break;
+            }
+          }
+
+          // Store crown positions for large-grid Realm deals (gridSize >= 10)
+          let crownPositions: { row: number; col: number }[] | null = null;
+          if (isRealm && realmSolution && realmGridSize && realmGridSize >= 10) {
+            crownPositions = realmSolution.map(([row, col]) => ({ row, col }));
+          }
+
+          collected.push({
+            seed,
+            game_mode: selectedMode,
+            draw_mode: isRealm ? 0 : 3,
+            min_moves: verifyResult.minSolutionLength,
+            dds_initial: dds,
+            dds_blended: dds,
+            simulation_count: isRealm ? 1 : verifyResult.simulations,
+            simulation_wins: isRealm ? 0 : verifyResult.wins,
+            confidence,
+            tier: "fresh",
+            is_calibration: false,
+            reserved_for: reservedFor,
+            unique_winning_paths: isRealm ? 1 : uniquePaths,
+            path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
+            crown_positions: crownPositions,
+          });
+
+          bankedCount++;
+          // Count deals that matched a target band
+          const matchedTarget = targets.some(t => dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] <= t.target);
+          if (matchedTarget) starterCount++;
+        } catch {
+          // Skip failed attempt
+        }
+      }
+
+      setCandidatesTried(totalTried);
+      setStarterFound(starterCount);
+      setTotalBanked(bankedCount);
+
+      if (totalTried % 5 === 0) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        const rate = totalTried > 0 ? ((bankedCount / totalTried) * 100).toFixed(1) : "0";
+        const remaining = starterCount > 0
+          ? ((totalTarget - starterCount) / (starterCount / (Date.now() - startTime)) / 1000).toFixed(0)
+          : "?";
+        const parts = targets.map(t => `${t.band}: ${counts[t.band]}/${t.target}`);
+        const timeoutStr = timeoutDiscards > 0 ? ` Timeout=${timeoutDiscards}` : "";
+        addStatus(`[${totalTried}] ${elapsed}s | Rate: ${rate}% | ETA: ${remaining}s — ${parts.join(", ")}${timeoutStr}`);
+      }
+
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    if (collected.length === 0) {
+      addStatus(`✗ No verified deals found after ${totalTried} candidates (${elapsed}s)`);
+      setRunning(false);
+      return;
+    }
+
+    addStatus(`Found ${bankedCount} deals in ${elapsed}s. Inserting...`);
+    if (timeoutDiscards > 0) addStatus(`⚠ ${timeoutDiscards} candidates timed out`);
+
+    const totalInserted = await insertDeals(collected);
+
+    setResult({ inserted: totalInserted, total: collected.length });
+    addStatus(`✓ Total inserted: ${totalInserted} deals`);
+    toast({ title: `${selectedMode} pool seeded`, description: `${totalInserted} verified deals inserted` });
+
+    setRunning(false);
+  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout, selectedStrategy, insertDeals]);
+
+  const allTargets = TARGETS_BY_MODE[selectedMode];
+  const targets = selectedDifficulty === "all"
+    ? allTargets
+    : allTargets.filter(t => t.band === selectedDifficulty);
+  const totalTarget = targets.reduce((s, t) => s + t.target, 0);
+  const progress = Math.min(100, totalTarget > 0 ? (starterFound / totalTarget) * 100 : 0);
+
+  const difficultyOptions = selectedMode === "realm"
+    ? DIFFICULTY_OPTIONS
+    : DIFFICULTY_OPTIONS.filter(d => d.value === "all" || d.value === "easy" || d.value === "medium");
+
+  const modeDescription = () => {
+    if (selectedMode === "realm") {
+      if (selectedDifficulty === "all") return "Realm: 50 Easy (5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9-10×), 15 Master (10-11×), 10 Grandmaster (11-12×).";
+      const t = targets[0];
+      if (!t) return "";
+      return `Realm ${t.band}: ${t.target} deals${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}. Confidence=1.0 (unique solution).`;
+    }
+    return `${selectedMode}: ${targets.map(t => `${t.target} ${t.band}`).join(" + ")} starter deals with Wilson confidence scoring.`;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Database className="h-4 w-4" />
+          Pool Generator
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Generates solver-verified deals per game mode. Select a mode and generate, or fill all pools at once.
+        </p>
+
+        {/* Fill All Pools */}
+        <div className="flex items-center gap-3 pb-2 border-b">
+          <Button onClick={fillAll} disabled={running} variant="default" className="gap-2">
+            {fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            {fillAllRunning ? "Filling All Pools..." : "Fill All Pools"}
+          </Button>
+          <p className="text-xs text-muted-foreground">Auto-fills every mode/difficulty below target with optimal strategies.</p>
+        </div>
+
+        {/* Manual controls */}
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={selectedMode} onValueChange={(v) => { setSelectedMode(v); setSelectedDifficulty("all"); }} disabled={running}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="klondike">Klondike</SelectItem>
+              <SelectItem value="freecell">FreeCell</SelectItem>
+              <SelectItem value="realm">Realm</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty} disabled={running}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {difficultyOptions.map(d => (
+                <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedTimeout} onValueChange={setSelectedTimeout} disabled={running}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Timeout" />
+            </SelectTrigger>
+            <SelectContent>
+              {TIMEOUT_OPTIONS.map(t => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {selectedMode === "realm" && (
+            <Select value={selectedStrategy} onValueChange={(v) => setSelectedStrategy(v as GenerationStrategy)} disabled={running}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Strategy" />
+              </SelectTrigger>
+              <SelectContent>
+                {STRATEGY_OPTIONS.map(s => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <Button onClick={run} disabled={running} className="gap-2">
+            {running && !fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            {running && !fillAllRunning ? "Generating..." : "Generate"}
+          </Button>
+
+          {running && (
+            <Button variant="outline" size="sm" onClick={() => { abortRef.current = true; }}>
+              Stop
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">{modeDescription()}</p>
+
+        {(running || result) && !fillAllRunning && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span>Starter: {starterFound} / {totalTarget}</span>
+              <span className="text-muted-foreground">Banked: {totalBanked} | {candidatesTried} tried</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+        )}
+
+        {statusLines.length > 0 && (
+          <div className="bg-muted/50 rounded border p-3 max-h-64 overflow-y-auto">
+            {statusLines.map((line, i) => (
+              <p key={i} className="text-xs font-mono leading-relaxed">
+                {line.startsWith("✓") ? (
+                  <span className="text-emerald-600">{line}</span>
+                ) : line.startsWith("✗") || line.startsWith("⚠") ? (
+                  <span className="text-destructive">{line}</span>
+                ) : (
+                  line
+                )}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {result && (
+          <div className="flex items-center gap-2 text-sm">
+            {result.inserted > 0 ? (
+              <>
+                <CheckCircle className="h-4 w-4 text-emerald-600" />
+                <span>Inserted {result.inserted} verified deals{!fillAllRunning && ` (${starterFound} starter)`}</span>
+              </>
+            ) : (
+              <>
+                <XCircle className="h-4 w-4 text-destructive" />
+                <span>No deals were inserted</span>
+              </>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
   const action = useAdminAction();
   const { toast } = useToast();
   const [selectedMode, setSelectedMode] = useState<string>("klondike");

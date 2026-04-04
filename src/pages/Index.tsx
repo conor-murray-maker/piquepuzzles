@@ -14,16 +14,9 @@ function SkeletonCard({ className = '' }: { className?: string }) {
 
 export default function Index() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, isDark, toggleDarkMode } = useAuth();
   const stats = usePlayerStats();
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setIsDark(prefersDark);
-    document.documentElement.classList.toggle('dark', prefersDark);
-  }, []);
 
   // Check if first-time user
   useEffect(() => {

@@ -836,6 +836,34 @@ export function createRealmGame(seed?: number, gridSize?: number, crownPositions
   return createRealmStateFromDeal(deal, actualSeed);
 }
 
+/**
+ * Async wrapper with timeout for Grandmaster deals without crown positions.
+ * Returns null if reconstruction exceeds the timeout.
+ */
+export function createRealmGameWithTimeout(
+  seed: number,
+  gridSize: number,
+  timeoutMs: number = 5000
+): Promise<RealmState | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      console.warn(`[Realm] Grandmaster reconstruction timed out after ${timeoutMs / 1000}s — falling back to next deal`);
+      resolve(null);
+    }, timeoutMs);
+
+    // Run synchronously — if it completes before the timeout, great
+    try {
+      const result = createRealmGame(seed, gridSize);
+      clearTimeout(timer);
+      resolve(result);
+    } catch (e) {
+      clearTimeout(timer);
+      console.error('[Realm] Grandmaster reconstruction failed:', e);
+      resolve(null);
+    }
+  });
+}
+
 function createFallbackRealmGame(seed: number, gridSize?: number): RealmState {
   for (let offset = 1; offset <= 200; offset++) {
     const retrySeed = seed + offset;

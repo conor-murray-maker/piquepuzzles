@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint } from '@/game/realm';
+import { RealmState, CellState, createRealmGame, createRealmGameWithTimeout, cycleCell, toggleMark, getRealmHint } from '@/game/realm';
 import { supabase } from '@/integrations/supabase/client';
 import { CrownIcon } from './CrownIcon';
 import { GameActionBar } from './GameActionBar';
@@ -53,6 +53,7 @@ export function clearRealmStorage() {
 interface RealmBoardProps {
   onGameEnd: (state: RealmState, elapsedSeconds: number) => void;
   onGiveUp?: (state: RealmState, elapsedSeconds: number) => void;
+  onReconstructionFailed?: () => void;
   initialSeed?: number;
   dealUuid?: string;
   gridSize?: number;
@@ -99,8 +100,13 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
   );
 }
 
-export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize, crownPositions }: RealmBoardProps) {
-  const [state, setState] = useState<RealmState>(() => {
+export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initialSeed, dealUuid, gridSize, crownPositions }: RealmBoardProps) {
+  const isGrandmasterWithoutCrowns = initialSeed !== undefined && (gridSize ?? 0) >= 11 && !crownPositions;
+
+  const [state, setState] = useState<RealmState | null>(() => {
+    // Defer async init for grandmaster deals without crown positions
+    if (isGrandmasterWithoutCrowns) return null;
+
     if (initialSeed !== undefined) {
       const fresh = createRealmGame(initialSeed, gridSize, crownPositions ?? undefined);
       return { ...fresh, dealUuid };
@@ -110,6 +116,21 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
     const fresh = createRealmGame(undefined, gridSize, crownPositions ?? undefined);
     return { ...fresh, dealUuid };
   });
+
+  // Async init with timeout for grandmaster deals without crown positions
+  useEffect(() => {
+    if (!isGrandmasterWithoutCrowns || state !== null) return;
+    let cancelled = false;
+    createRealmGameWithTimeout(initialSeed!, gridSize!, 5000).then(result => {
+      if (cancelled) return;
+      if (result) {
+        setState({ ...result, dealUuid });
+      } else {
+        onReconstructionFailed?.();
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isGrandmasterWithoutCrowns, initialSeed, gridSize, dealUuid, onReconstructionFailed, state]);
   const [history, setHistory] = useState<RealmState[]>(() => {
     if (initialSeed !== undefined) return [];
     const saved = loadFromStorage();
@@ -157,12 +178,14 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
 
   // Reset gameEndedRef when game changes
   useEffect(() => {
+    if (!state) return;
     gameEndedRef.current = false;
     completedGameIdRef.current = null;
-  }, [state.gameId]);
+  }, [state?.gameId]);
 
   // Register deal
   useEffect(() => {
+    if (!state) return;
     if (state.dealUuid) return;
     if (state.seed !== undefined) {
       registerDeal({
@@ -172,25 +195,27 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
         minMoves: state.minMoves || 0,
         difficultyScore: state.difficultyScore,
       }).then(id => {
-        if (id) setState(s => ({ ...s, dealUuid: id }));
+        if (id) setState(s => s ? { ...s, dealUuid: id } : s);
       });
     }
-  }, [state.dealId, state.dealUuid]);
+  }, [state?.dealId, state?.dealUuid]);
 
   // Fetch puzzle name
   useEffect(() => {
+    if (!state) return;
     if (state.puzzleName || !state.regions) return;
     supabase.functions.invoke('name-realm-puzzle', {
       body: { regions: state.regions, size: state.size },
     }).then(({ data }) => {
-      if (data?.name) setState(s => ({ ...s, puzzleName: data.name }));
+      if (data?.name) setState(s => s ? { ...s, puzzleName: data.name } : s);
     }).catch(() => {
-      setState(s => ({ ...s, puzzleName: `${s.size}×${s.size} ${s.difficulty}` }));
+      setState(s => s ? { ...s, puzzleName: `${s.size}×${s.size} ${s.difficulty}` } : s);
     });
-  }, [state.puzzleName, state.regions, state.size]);
+  }, [state?.puzzleName, state?.regions, state?.size]);
 
   // Save state
   useEffect(() => {
+    if (!state) return;
     if (initialSeed !== undefined) return;
     if (state.isWon || state.errors >= state.maxErrors) clearRealmStorage();
     else saveToStorage(state, history);
@@ -203,6 +228,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
 
   // Timer
   useEffect(() => {
+    if (!state) return;
     if (state.isWon || state.errors >= state.maxErrors || !gameStarted) return;
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const start = () => { if (!intervalId) intervalId = setInterval(() => setElapsed(e => e + 1), 1000); };
@@ -211,10 +237,11 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
     if (!document.hidden) start();
     document.addEventListener('visibilitychange', handleVis);
     return () => { stop(); document.removeEventListener('visibilitychange', handleVis); };
-  }, [state.isWon, state.errors, state.maxErrors, gameStarted]);
+  }, [state?.isWon, state?.errors, state?.maxErrors, gameStarted]);
 
   // Check loss on 3 errors
   useEffect(() => {
+    if (!state) return;
     if (state.errors >= state.maxErrors && !state.isWon && !gameEndedRef.current) {
       if (completedGameIdRef.current === state.gameId) return;
       gameEndedRef.current = true;
@@ -223,7 +250,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
       const lostState = { ...state, isWon: false };
       onGameEnd(lostState, elapsedRef.current);
     }
-  }, [state.errors, state.maxErrors, state.isWon, state.gameId, onGameEnd]);
+  }, [state?.errors, state?.maxErrors, state?.isWon, state?.gameId, onGameEnd]);
 
   // Win animation sequence
   const triggerWinAnimation = useCallback((winState: RealmState, lastRow: number, lastCol: number) => {
@@ -369,6 +396,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   // Cell sizing
   const [cellSize, setCellSize] = useState(48);
   useEffect(() => {
+    if (!state) return;
     const updateSize = () => {
       const maxW = Math.min(window.innerWidth - 32, 480);
       const maxH = window.innerHeight - 240;
@@ -379,7 +407,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
     updateSize();
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
-  }, [state.size]);
+  }, [state?.size]);
 
   // Drag-to-mark handlers
   const handlePointerDown = useCallback((e: React.PointerEvent, row: number, col: number) => {
@@ -459,6 +487,18 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
     const sec = s % 60;
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
+
+  // Loading state for async grandmaster reconstruction
+  if (!state) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <span className="text-sm text-muted-foreground">Loading puzzle...</span>
+        </div>
+      </div>
+    );
+  }
 
   const crownsPlaced = state.grid.flat().filter(c => c.state === 'crown').length;
 

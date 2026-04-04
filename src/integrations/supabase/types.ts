@@ -271,6 +271,7 @@ export type Database = {
         Row: {
           confidence: number
           created_at: string
+          crown_positions: Json | null
           dds_blended: number
           dds_empirical: number | null
           dds_initial: number
@@ -295,6 +296,7 @@ export type Database = {
         Insert: {
           confidence?: number
           created_at?: string
+          crown_positions?: Json | null
           dds_blended?: number
           dds_empirical?: number | null
           dds_initial?: number
@@ -319,6 +321,7 @@ export type Database = {
         Update: {
           confidence?: number
           created_at?: string
+          crown_positions?: Json | null
           dds_blended?: number
           dds_empirical?: number | null
           dds_initial?: number

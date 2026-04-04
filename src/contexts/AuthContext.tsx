@@ -22,6 +22,7 @@ interface Profile {
   daily_wins_today: number;
   daily_challenge_completed_today: boolean;
   pending_milestone: number | null;
+  dark_mode: boolean;
 }
 
 interface SubscriptionInfo {

@@ -39,6 +39,8 @@ interface AuthContextType {
   loading: boolean;
   subscription: SubscriptionInfo;
   isPremium: boolean;
+  isDark: boolean;
+  toggleDarkMode: () => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   checkSubscription: () => Promise<void>;

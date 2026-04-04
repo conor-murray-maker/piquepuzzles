@@ -29,6 +29,7 @@ interface VerifiedDeal {
   reserved_for: string | null;
   unique_winning_paths: number;
   path_diversity_score: number;
+  crown_positions?: { row: number; col: number }[] | null;
 }
 
 interface Target {

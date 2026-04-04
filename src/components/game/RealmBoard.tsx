@@ -241,6 +241,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
 
   // Check loss on 3 errors
   useEffect(() => {
+    if (!state) return;
     if (state.errors >= state.maxErrors && !state.isWon && !gameEndedRef.current) {
       if (completedGameIdRef.current === state.gameId) return;
       gameEndedRef.current = true;
@@ -249,7 +250,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
       const lostState = { ...state, isWon: false };
       onGameEnd(lostState, elapsedRef.current);
     }
-  }, [state.errors, state.maxErrors, state.isWon, state.gameId, onGameEnd]);
+  }, [state?.errors, state?.maxErrors, state?.isWon, state?.gameId, onGameEnd]);
 
   // Win animation sequence
   const triggerWinAnimation = useCallback((winState: RealmState, lastRow: number, lastCol: number) => {

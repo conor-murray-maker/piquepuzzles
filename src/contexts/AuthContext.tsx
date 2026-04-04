@@ -59,14 +59,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
+  // Apply dark class to document
+  const applyDark = useCallback((dark: boolean) => {
+    setIsDark(dark);
+    document.documentElement.classList.toggle('dark', dark);
+  }, []);
+
   const fetchProfile = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single();
-    if (data) setProfile(data as unknown as Profile);
-  }, []);
+    if (data) {
+      const p = data as unknown as Profile;
+      setProfile(p);
+      // Apply dark mode from profile (if column exists, otherwise fall back to system)
+      if (typeof p.dark_mode === 'boolean') {
+        applyDark(p.dark_mode);
+      }
+    }
+  }, [applyDark]);
+
+  const toggleDarkMode = useCallback(async () => {
+    const newDark = !isDark;
+    applyDark(newDark);
+    // Persist to profile if logged in
+    if (session?.user?.id) {
+      await supabase
+        .from('profiles')
+        .update({ dark_mode: newDark } as any)
+        .eq('id', session.user.id);
+    }
+  }, [isDark, applyDark, session]);
 
   const refreshProfile = useCallback(async () => {
     if (session?.user?.id) await fetchProfile(session.user.id);

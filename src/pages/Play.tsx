@@ -247,6 +247,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
   const effectiveSeed = initialSeed ?? queuedDeal?.seed;
   const effectiveDealUuid = queuedDeal?.dealUuid;
+  const effectiveCrownPositions = queuedDeal?.crownPositions;
 
   if (gameMode === 'realm') {
     return (
@@ -257,6 +258,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
         initialSeed={effectiveSeed}
         dealUuid={effectiveDealUuid}
         gridSize={queuedDeal?.minMoves}
+        crownPositions={effectiveCrownPositions}
       />
     );
   }

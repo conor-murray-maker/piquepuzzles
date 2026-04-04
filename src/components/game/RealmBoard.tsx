@@ -99,15 +99,15 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
   );
 }
 
-export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize }: RealmBoardProps) {
+export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize, crownPositions }: RealmBoardProps) {
   const [state, setState] = useState<RealmState>(() => {
     if (initialSeed !== undefined) {
-      const fresh = createRealmGame(initialSeed, gridSize);
+      const fresh = createRealmGame(initialSeed, gridSize, crownPositions ?? undefined);
       return { ...fresh, dealUuid };
     }
     const saved = loadFromStorage();
     if (saved) return saved.state;
-    const fresh = createRealmGame(undefined, gridSize);
+    const fresh = createRealmGame(undefined, gridSize, crownPositions ?? undefined);
     return { ...fresh, dealUuid };
   });
   const [history, setHistory] = useState<RealmState[]>(() => {

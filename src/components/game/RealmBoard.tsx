@@ -53,6 +53,7 @@ export function clearRealmStorage() {
 interface RealmBoardProps {
   onGameEnd: (state: RealmState, elapsedSeconds: number) => void;
   onGiveUp?: (state: RealmState, elapsedSeconds: number) => void;
+  onReconstructionFailed?: () => void;
   initialSeed?: number;
   dealUuid?: string;
   gridSize?: number;

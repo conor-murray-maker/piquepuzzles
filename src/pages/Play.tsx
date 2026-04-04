@@ -202,6 +202,16 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     setPhase('playing');
   }, [setPhase, challengeId, dailyDate, gameMode, navigate, popNextDeal, drawMode]);
 
+  const handleReconstructionFailed = useCallback(async () => {
+    console.warn('[Play] Realm Grandmaster reconstruction failed — serving next deal');
+    setQueuedDeal(null);
+    setLoading(true);
+    const deal = await popNextDeal(gameMode, drawMode);
+    if (deal) setQueuedDeal(deal);
+    setLoading(false);
+    setGameKey(k => k + 1);
+  }, [popNextDeal, gameMode, drawMode]);
+
   // Show loading while fetching deal from pool
   if (loading) {
     return (
@@ -248,16 +258,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const effectiveSeed = initialSeed ?? queuedDeal?.seed;
   const effectiveDealUuid = queuedDeal?.dealUuid;
   const effectiveCrownPositions = queuedDeal?.crownPositions;
-
-  const handleReconstructionFailed = useCallback(async () => {
-    console.warn('[Play] Realm Grandmaster reconstruction failed — serving next deal');
-    setQueuedDeal(null);
-    setLoading(true);
-    const deal = await popNextDeal(gameMode, drawMode);
-    if (deal) setQueuedDeal(deal);
-    setLoading(false);
-    setGameKey(k => k + 1);
-  }, [popNextDeal, gameMode, drawMode]);
 
   if (gameMode === 'realm') {
     return (

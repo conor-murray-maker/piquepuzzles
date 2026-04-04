@@ -33,10 +33,6 @@ export default function Index() {
     setShowOnboarding(false);
   };
 
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
-  };
 
   const container = {
     hidden: { opacity: 0 },

@@ -1,4 +1,7 @@
-import { PerformanceSignals } from '@/engines/PuzzleEngine';
+/**
+ * Client-side scoring reference — mirrors the ScoringEngine in complete-game edge function.
+ * Used only for local preview/estimation; authoritative scoring is server-side.
+ */
 
 export interface DealBenchmarks {
   avgTime: number | null;
@@ -7,41 +10,68 @@ export interface DealBenchmarks {
   minSolutionLength: number;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+interface ModeConfig {
+  timeWeight: number;
+  movesWeight: number;
+  undoPenaltyPerUndo: number;
+  baseCompletionFraction: number;
+  lossPenalty: number;
+  winFloor: number | null;
 }
 
+const MODE_CONFIGS: Record<string, ModeConfig> = {
+  realm: {
+    timeWeight: 20,
+    movesWeight: 0,
+    undoPenaltyPerUndo: 2,
+    baseCompletionFraction: 0.4,
+    lossPenalty: -20,
+    winFloor: null,
+  },
+  freecell: {
+    timeWeight: 20,
+    movesWeight: 10,
+    undoPenaltyPerUndo: 0,
+    baseCompletionFraction: 0.5,
+    lossPenalty: -20,
+    winFloor: 1,
+  },
+  klondike: {
+    timeWeight: 10,
+    movesWeight: 20,
+    undoPenaltyPerUndo: 0,
+    baseCompletionFraction: 0.6,
+    lossPenalty: -20,
+    winFloor: 1,
+  },
+};
+
 export class PerformanceService {
-  /**
-   * Compute performance modifier for card games (klondike, freecell).
-   * For Realm, use computeRealmDelta instead.
-   */
-  static computeModifier(signals: PerformanceSignals, benchmarks: DealBenchmarks): number {
-    const hasPoolData = benchmarks.poolAttempts >= 10;
+  static computeModifier(
+    signals: { timeSeconds: number; moves: number; hintsUsed: number },
+    benchmarks: DealBenchmarks,
+    gameMode: string = 'klondike',
+  ): number {
+    const config = MODE_CONFIGS[gameMode] ?? MODE_CONFIGS.klondike;
+    const avgTime = benchmarks.avgTime ?? 200;
+    const avgMoves = benchmarks.avgMoves ?? 100;
 
-    const expectedTime = hasPoolData && benchmarks.avgTime
-      ? benchmarks.avgTime
-      : (benchmarks.minSolutionLength > 0 ? benchmarks.minSolutionLength * 4 : 300);
+    const timeRatio = avgTime / Math.max(signals.timeSeconds, 1);
+    const timeDelta = config.timeWeight * (Math.pow(timeRatio, 1.3) - 1);
 
-    const expectedMoves = hasPoolData && benchmarks.avgMoves
-      ? benchmarks.avgMoves
-      : (benchmarks.minSolutionLength > 0 ? benchmarks.minSolutionLength * 1.8 : 150);
+    let movesDelta = 0;
+    if (config.movesWeight > 0 && avgMoves > 0) {
+      const movesRatio = avgMoves / Math.max(signals.moves, 1);
+      movesDelta = config.movesWeight * (Math.pow(movesRatio, 1.3) - 1);
+    }
 
-    const timeEfficiency = clamp(Math.max(expectedTime, 30) / Math.max(signals.timeSeconds, 10), 0.5, 1.5);
-    const moveEfficiency = clamp(Math.max(expectedMoves, 20) / Math.max(signals.moves, 10), 0.5, 1.5);
     const hintPenalty = Math.max(0.7, 1 - signals.hintsUsed * 0.05);
 
-    return clamp(
-      (timeEfficiency * 0.4 + moveEfficiency * 0.4) * hintPenalty,
-      0.5,
-      1.5
-    );
+    // Return a modifier-like value for backward compat
+    const raw = (timeDelta + movesDelta) * hintPenalty;
+    return Math.max(0.5, Math.min(2.0, 1.0 + raw / 20));
   }
 
-  /**
-   * Realm-specific scoring: exponential time curve, no moves, undo penalty, +60 cap.
-   * Returns the final clamped delta (not a modifier).
-   */
   static computeRealmDelta(
     baseDelta: number,
     actualTime: number,
@@ -49,15 +79,14 @@ export class PerformanceService {
     undosUsed: number,
     hintsUsed: number,
   ): number {
-    const baseCompletion = Math.round(baseDelta * 0.4);
+    const config = MODE_CONFIGS.realm;
+    const baseCompletion = Math.round(baseDelta * config.baseCompletionFraction);
     const timeRatio = avgTime / Math.max(actualTime, 1);
-    const timeBonus = Math.round(20 * (Math.pow(timeRatio, 1.3) - 1));
-    const undoPenalty = 2 * undosUsed;
-    const hintPenalty = Math.max(0.7, 1 - hintsUsed * 0.05);
-    const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenalty));
-
+    const timeBonus = Math.round(config.timeWeight * (Math.pow(timeRatio, 1.3) - 1));
+    const undoPenalty = config.undoPenaltyPerUndo * undosUsed;
+    const hintPenaltyFraction = Math.max(0.7, 1 - hintsUsed * 0.05);
+    const hintPenaltyPts = Math.round(baseCompletion * (1 - hintPenaltyFraction));
     const raw = baseCompletion + timeBonus - undoPenalty - hintPenaltyPts;
-    // Floor only — no upper cap; net negative is allowed
-    return Math.max(-20, raw);
+    return Math.max(config.lossPenalty + 1, raw);
   }
 }

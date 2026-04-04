@@ -74,6 +74,7 @@ function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
     difficulty: ddsToLabel(deal.dds_blended),
     difficultyScore: deal.dds_blended,
     drawMode: deal.draw_mode,
+    crownPositions: deal.crown_positions ?? null,
   };
 }
 

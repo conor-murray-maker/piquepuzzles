@@ -62,6 +62,22 @@ const DRAG_HOLD_MS = 150;
 const GOLD_COLOR = '#F4C430';
 const NAVY_COLOR = '#1B2340';
 
+// Dark-mode specific region palette — high saturation, lighter fills for dark backgrounds
+const REALM_COLORS_DARK: Record<string, string> = {
+  '#E8735A': '#F4937E', // coral → lighter coral
+  '#2A9D8F': '#3FC4B4', // teal → bright teal
+  '#E9C46A': '#F0D48A', // amber → lighter amber
+  '#3A86FF': '#6DA8FF', // deep blue → lighter blue
+  '#6A994E': '#8FC06E', // sage → bright sage
+  '#9B5DE5': '#B888F0', // purple → lighter purple
+  '#F15BB5': '#F588CC', // rose → lighter rose
+  '#F4A261': '#F7BE8A', // orange → lighter orange
+  '#2D6A4F': '#4FAF7B', // forest → bright forest
+  '#8E9AAF': '#ABB5C8', // slate → lighter slate
+  '#D4A373': '#E2BF9A', // tan → lighter tan
+  '#00B4D8': '#40D0EC', // cyan → bright cyan
+};
+
 // Star particle component for win animation
 function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: number; angle: number }) {
   const distance = 30 + Math.random() * 20;

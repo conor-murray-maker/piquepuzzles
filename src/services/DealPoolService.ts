@@ -15,6 +15,7 @@ export interface VerifiedDeal {
   difficulty: string;
   difficultyScore: number;
   drawMode: number;
+  crownPositions?: { row: number; col: number }[] | null;
 }
 
 /** Unified DDS bracket for all game modes */

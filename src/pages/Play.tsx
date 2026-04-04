@@ -249,12 +249,23 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const effectiveDealUuid = queuedDeal?.dealUuid;
   const effectiveCrownPositions = queuedDeal?.crownPositions;
 
+  const handleReconstructionFailed = useCallback(async () => {
+    console.warn('[Play] Realm Grandmaster reconstruction failed — serving next deal');
+    setQueuedDeal(null);
+    setLoading(true);
+    const deal = await popNextDeal(gameMode, drawMode);
+    if (deal) setQueuedDeal(deal);
+    setLoading(false);
+    setGameKey(k => k + 1);
+  }, [popNextDeal, gameMode, drawMode]);
+
   if (gameMode === 'realm') {
     return (
       <RealmBoard
         key={gameKey}
         onGameEnd={handleGameEnd as any}
         onGiveUp={handleGiveUp as any}
+        onReconstructionFailed={handleReconstructionFailed}
         initialSeed={effectiveSeed}
         dealUuid={effectiveDealUuid}
         gridSize={queuedDeal?.minMoves}

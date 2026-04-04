@@ -296,6 +296,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
 
     if (newState.errors > state.errors) {
       haptic.heavy();
+      // Increment undosUsed for error tracking — errors count as undos for scoring
+      setState(s => ({ ...newState, undosUsed: (s.undosUsed ?? 0) + 1 }));
       setErrorCells(prev => new Set(prev).add(`${row},${col}`));
       setTimeout(() => {
         setErrorCells(prev => {
@@ -309,6 +311,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
           return { ...s, grid };
         });
       }, 1000);
+      return; // skip the default setState below since we already set it
     } else {
       haptic.light();
     }

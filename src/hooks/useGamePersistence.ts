@@ -15,6 +15,7 @@ export interface ScoreBreakdownData {
   undoPenaltyPoints: number;
   hintsUsed: number;
   undosUsed: number;
+  breakdownItems?: { label: string; value: number }[];
 }
 
 export interface ModeIQData {
@@ -100,6 +101,7 @@ export function useGamePersistence() {
           undoPenaltyPoints: r.undoPenaltyPoints ?? 0,
           hintsUsed: r.hintsUsed ?? 0,
           undosUsed: r.undosUsed ?? 0,
+          breakdownItems: r.breakdown ?? undefined,
         },
         modeIQData: r.modeIQ != null ? {
           modeIQ: r.modeIQ,

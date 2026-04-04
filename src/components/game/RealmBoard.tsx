@@ -56,6 +56,7 @@ interface RealmBoardProps {
   initialSeed?: number;
   dealUuid?: string;
   gridSize?: number;
+  crownPositions?: { row: number; col: number }[] | null;
 }
 
 const DRAG_HOLD_MS = 150;

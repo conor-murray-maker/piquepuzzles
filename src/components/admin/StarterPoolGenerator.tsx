@@ -12,7 +12,7 @@ import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
 import { generateRealmPuzzleSolutionFirst, generateRealmPuzzle, type GenerationStrategy, type RealmGenOptions } from "@/game/realm";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
-import { Database, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Database, Loader2, CheckCircle, XCircle, Zap } from "lucide-react";
 
 interface VerifiedDeal {
   seed: number;
@@ -97,6 +97,139 @@ const STRATEGY_OPTIONS: { value: GenerationStrategy; label: string; description:
   { value: "legacy", label: "Legacy", description: "Original random-region approach for all sizes" },
 ];
 
+/** Fill All batch definitions with per-band strategy + timeout */
+interface FillAllBatch {
+  mode: string;
+  band: string;
+  strategy: GenerationStrategy;
+  timeoutMs: number;
+}
+
+const FILL_ALL_BATCHES: FillAllBatch[] = [
+  { mode: "realm", band: "easy", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "medium", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "hard", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "expert", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "master", strategy: "hybrid", timeoutMs: 5000 },
+  { mode: "realm", band: "grandmaster", strategy: "solution-first", timeoutMs: 10000 },
+  { mode: "klondike", band: "easy", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "klondike", band: "medium", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "freecell", band: "easy", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "freecell", band: "medium", strategy: "legacy", timeoutMs: 2000 },
+];
+
+/** Generate deals for a single target band, returning inserted count */
+async function generateBatch(
+  target: Target,
+  strategy: GenerationStrategy,
+  timeoutMs: number,
+  needed: number,
+  abortRef: React.MutableRefObject<boolean>,
+  addStatus: (line: string) => void,
+  insertDeals: (deals: VerifiedDeal[]) => Promise<number>,
+): Promise<number> {
+  const isRealm = target.gameMode === "realm";
+  const engine = target.engine;
+  const simCount = target.simCount;
+  const collected: VerifiedDeal[] = [];
+  let tried = 0;
+  const maxTries = Math.min(MAX_CANDIDATES, needed * 100); // cap effort
+
+  while (tried < maxTries && collected.length < needed && !abortRef.current) {
+    for (let b = 0; b < 5 && tried < maxTries && collected.length < needed && !abortRef.current; b++) {
+      tried++;
+      const seed = generateSeed();
+
+      try {
+        let realmGridSize: number | undefined;
+        let realmSkipSurprise = false;
+
+        if (isRealm && target.gridSizes) {
+          realmGridSize = target.gridSizes[Math.floor(Math.random() * target.gridSizes.length)];
+          realmSkipSurprise = target.skipSpatialSurprise ?? false;
+        }
+
+        let deal;
+        let realmSolution: [number, number][] | undefined;
+        if (isRealm) {
+          const genOpts: RealmGenOptions = {
+            gridSize: realmGridSize,
+            skipSpatialSurprise: realmSkipSurprise,
+            timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
+          };
+          const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
+
+          if (useLargeGridStrategy && strategy === "solution-first") {
+            const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+            if (puzzle) realmSolution = puzzle.solution;
+            deal = { seed, gameMode: "realm" as const, data: puzzle };
+          } else if (useLargeGridStrategy && strategy === "hybrid") {
+            let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+            if (!puzzle) puzzle = generateRealmPuzzle(seed, genOpts);
+            if (puzzle) realmSolution = puzzle.solution;
+            deal = { seed, gameMode: "realm" as const, data: puzzle };
+          } else {
+            deal = engine.generateDeal(seed, { gridSize: realmGridSize, skipSpatialSurprise: realmSkipSurprise, timeoutMs: timeoutMs > 0 ? timeoutMs : undefined });
+            if (deal.data) realmSolution = (deal.data as any).solution;
+          }
+        } else {
+          deal = engine.generateDeal(seed);
+        }
+
+        const verifyResult = engine.verifySolvable(deal, simCount);
+        if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
+
+        let dds = verifyResult.complexityScore;
+        const pathDiv = verifyResult.pathDiversityScore;
+        const uniquePaths = verifyResult.uniqueWinningPaths;
+
+        if (!isRealm) dds = applyPathDiversityModifier(dds, pathDiv);
+
+        if (dds < target.ddsMin || dds > target.ddsMax) continue;
+
+        let confidence: number;
+        if (isRealm) {
+          confidence = 1.0;
+        } else {
+          const confResult = calculateDealConfidence({ wins: verifyResult.wins, totalSimulations: verifyResult.simulations, dds });
+          confidence = confResult.confidence;
+        }
+
+        let crownPositions: { row: number; col: number }[] | null = null;
+        if (isRealm && realmSolution && realmGridSize && realmGridSize >= 10) {
+          crownPositions = realmSolution.map(([row, col]) => ({ row, col }));
+        }
+
+        collected.push({
+          seed,
+          game_mode: target.gameMode,
+          draw_mode: isRealm ? 0 : 3,
+          min_moves: verifyResult.minSolutionLength,
+          dds_initial: dds,
+          dds_blended: dds,
+          simulation_count: isRealm ? 1 : verifyResult.simulations,
+          simulation_wins: isRealm ? 0 : verifyResult.wins,
+          confidence,
+          tier: "fresh",
+          is_calibration: false,
+          reserved_for: target.band === "easy" ? "onboarding" : null,
+          unique_winning_paths: isRealm ? 1 : uniquePaths,
+          path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
+          crown_positions: crownPositions,
+        });
+      } catch {
+        // skip
+      }
+    }
+    // yield to event loop
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  }
+
+  if (collected.length === 0) return 0;
+  addStatus(`  Generated ${collected.length} deals, inserting...`);
+  return insertDeals(collected);
+}
+
 export function StarterPoolGenerator() {
   const action = useAdminAction();
   const { toast } = useToast();
@@ -110,11 +243,105 @@ export function StarterPoolGenerator() {
   const [totalBanked, setTotalBanked] = useState(0);
   const [statusLines, setStatusLines] = useState<string[]>([]);
   const [result, setResult] = useState<{ inserted: number; total: number } | null>(null);
+  const [fillAllRunning, setFillAllRunning] = useState(false);
   const abortRef = useRef(false);
 
   const addStatus = useCallback((line: string) => {
-    setStatusLines(prev => [...prev.slice(-14), line]);
+    setStatusLines(prev => [...prev.slice(-19), line]);
   }, []);
+
+  const insertDeals = useCallback(async (deals: VerifiedDeal[]): Promise<number> => {
+    let totalInserted = 0;
+    for (let i = 0; i < deals.length; i += 50) {
+      const batch = deals.slice(i, i + 50);
+      try {
+        const res = await action.mutateAsync({
+          action: "seed_starter_pool",
+          params: { deals: batch },
+        });
+        totalInserted += res.inserted || 0;
+      } catch (e: any) {
+        addStatus(`✗ Insert batch failed: ${e.message}`);
+      }
+    }
+    return totalInserted;
+  }, [action, addStatus]);
+
+  const fillAll = useCallback(async () => {
+    setFillAllRunning(true);
+    setRunning(true);
+    setStatusLines([]);
+    setResult(null);
+    abortRef.current = false;
+
+    addStatus("Fetching current pool counts...");
+
+    let poolCounts: Record<string, Record<string, number>> = {};
+    try {
+      poolCounts = await action.mutateAsync({ action: "pool_counts" });
+    } catch (e: any) {
+      addStatus(`✗ Failed to fetch pool counts: ${e.message}`);
+      setFillAllRunning(false);
+      setRunning(false);
+      return;
+    }
+
+    // Determine which batches need filling
+    const batchesToRun: { batch: FillAllBatch; target: Target; needed: number }[] = [];
+    for (const batch of FILL_ALL_BATCHES) {
+      const targets = TARGETS_BY_MODE[batch.mode];
+      const target = targets?.find(t => t.band === batch.band);
+      if (!target) continue;
+
+      const current = poolCounts[batch.mode]?.[batch.band] ?? 0;
+      const needed = target.target - current;
+      if (needed > 0) {
+        batchesToRun.push({ batch, target, needed });
+      }
+    }
+
+    if (batchesToRun.length === 0) {
+      addStatus("✓ All pools are at or above target. Nothing to generate.");
+      toast({ title: "All pools full", description: "No generation needed." });
+      setFillAllRunning(false);
+      setRunning(false);
+      return;
+    }
+
+    addStatus(`${batchesToRun.length} pool(s) below threshold. Starting sequential fill...`);
+    let totalDealsAdded = 0;
+    let batchesCompleted = 0;
+
+    for (let i = 0; i < batchesToRun.length; i++) {
+      if (abortRef.current) {
+        addStatus("⚠ Fill All stopped by user.");
+        break;
+      }
+
+      const { batch, target, needed } = batchesToRun[i];
+      const label = `${batch.mode} ${batch.band}`;
+      addStatus(`[${i + 1}/${batchesToRun.length}] Filling ${label} (need ${needed})...`);
+
+      const inserted = await generateBatch(
+        target, batch.strategy, batch.timeoutMs, needed,
+        abortRef, addStatus, insertDeals,
+      );
+
+      totalDealsAdded += inserted;
+      batchesCompleted++;
+      addStatus(`[${i + 1}/${batchesToRun.length}] ${label}... done (${inserted} deals added)`);
+    }
+
+    const summary = abortRef.current
+      ? `Stopped early. ${batchesCompleted} batches completed, ${totalDealsAdded} deals added.`
+      : `All critical pools filled. ${batchesCompleted} batches completed, ${totalDealsAdded} deals added.`;
+    addStatus(`✓ ${summary}`);
+    setResult({ inserted: totalDealsAdded, total: totalDealsAdded });
+    toast({ title: "Fill All complete", description: summary });
+
+    setFillAllRunning(false);
+    setRunning(false);
+  }, [action, addStatus, insertDeals, toast]);
 
   const run = useCallback(async () => {
     setRunning(true);
@@ -314,27 +541,14 @@ export function StarterPoolGenerator() {
     addStatus(`Found ${bankedCount} deals in ${elapsed}s. Inserting...`);
     if (timeoutDiscards > 0) addStatus(`⚠ ${timeoutDiscards} candidates timed out`);
 
-    let totalInserted = 0;
-    for (let i = 0; i < collected.length; i += 50) {
-      const batch = collected.slice(i, i + 50);
-      try {
-        const res = await action.mutateAsync({
-          action: "seed_starter_pool",
-          params: { deals: batch },
-        });
-        totalInserted += res.inserted || 0;
-        addStatus(`Batch ${Math.floor(i / 50) + 1}: inserted ${res.inserted} deals`);
-      } catch (e: any) {
-        addStatus(`✗ Batch ${Math.floor(i / 50) + 1} failed: ${e.message}`);
-      }
-    }
+    const totalInserted = await insertDeals(collected);
 
     setResult({ inserted: totalInserted, total: collected.length });
     addStatus(`✓ Total inserted: ${totalInserted} deals`);
     toast({ title: `${selectedMode} pool seeded`, description: `${totalInserted} verified deals inserted` });
 
     setRunning(false);
-  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout, selectedStrategy]);
+  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout, selectedStrategy, insertDeals]);
 
   const allTargets = TARGETS_BY_MODE[selectedMode];
   const targets = selectedDifficulty === "all"
@@ -367,9 +581,19 @@ export function StarterPoolGenerator() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Generates solver-verified deals per game mode. Select a mode and generate.
+          Generates solver-verified deals per game mode. Select a mode and generate, or fill all pools at once.
         </p>
 
+        {/* Fill All Pools */}
+        <div className="flex items-center gap-3 pb-2 border-b">
+          <Button onClick={fillAll} disabled={running} variant="default" className="gap-2">
+            {fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            {fillAllRunning ? "Filling All Pools..." : "Fill All Pools"}
+          </Button>
+          <p className="text-xs text-muted-foreground">Auto-fills every mode/difficulty below target with optimal strategies.</p>
+        </div>
+
+        {/* Manual controls */}
         <div className="flex flex-wrap items-center gap-3">
           <Select value={selectedMode} onValueChange={(v) => { setSelectedMode(v); setSelectedDifficulty("all"); }} disabled={running}>
             <SelectTrigger className="w-32">
@@ -418,8 +642,8 @@ export function StarterPoolGenerator() {
           )}
 
           <Button onClick={run} disabled={running} className="gap-2">
-            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-            {running ? "Generating..." : "Generate"}
+            {running && !fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            {running && !fillAllRunning ? "Generating..." : "Generate"}
           </Button>
 
           {running && (
@@ -431,7 +655,7 @@ export function StarterPoolGenerator() {
 
         <p className="text-xs text-muted-foreground">{modeDescription()}</p>
 
-        {(running || result) && (
+        {(running || result) && !fillAllRunning && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span>Starter: {starterFound} / {totalTarget}</span>
@@ -462,7 +686,7 @@ export function StarterPoolGenerator() {
             {result.inserted > 0 ? (
               <>
                 <CheckCircle className="h-4 w-4 text-emerald-600" />
-                <span>Inserted {result.inserted} verified deals ({starterFound} starter)</span>
+                <span>Inserted {result.inserted} verified deals{!fillAllRunning && ` (${starterFound} starter)`}</span>
               </>
             ) : (
               <>

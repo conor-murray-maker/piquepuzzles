@@ -180,9 +180,6 @@ export default function Index() {
         )}
       </main>
 
-      <footer className="py-4 text-center border-t border-border">
-        <p className="text-xs text-muted-foreground">Pique: Puzzle games for sharp minds</p>
-      </footer>
     </div>
   );
 }

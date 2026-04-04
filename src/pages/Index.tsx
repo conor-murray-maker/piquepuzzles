@@ -153,7 +153,7 @@ export default function Index() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">Realm</p>
-                  <p className="text-xs text-muted-foreground">Crown placement puzzle</p>
+                  <p className="text-xs text-muted-foreground">Logic deduction at its sharpest</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>

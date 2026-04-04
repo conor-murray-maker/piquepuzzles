@@ -396,6 +396,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
   // Cell sizing
   const [cellSize, setCellSize] = useState(48);
   useEffect(() => {
+    if (!state) return;
     const updateSize = () => {
       const maxW = Math.min(window.innerWidth - 32, 480);
       const maxH = window.innerHeight - 240;
@@ -406,7 +407,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
     updateSize();
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
-  }, [state.size]);
+  }, [state?.size]);
 
   // Drag-to-mark handlers
   const handlePointerDown = useCallback((e: React.PointerEvent, row: number, col: number) => {

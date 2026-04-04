@@ -323,13 +323,16 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
   gameMode: string;
   piqueIQDelta: number | null;
 }) {
-  if (ratingChange === 0 && !breakdown) return null;
-
   const bd = breakdown;
-  const diffLabel = difficulty || 'Medium';
   const modeLabel = getModeLabel(gameMode);
 
+  // Use server-provided breakdown items if available
+  const serverItems = bd?.breakdownItems;
+
   if (!won) {
+    const lossItems = serverItems ?? [
+      { label: `${difficulty || 'Medium'} deal — not solved`, value: ratingChange },
+    ];
     return (
       <motion.div
         className="w-full rounded-xl border border-border bg-card p-4 space-y-3"
@@ -340,7 +343,9 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
           {modeLabel} IQ Lost
         </p>
-        <BreakdownLine label={`${diffLabel} deal — not solved`} value={ratingChange} />
+        {lossItems.map((item, i) => (
+          <BreakdownLine key={i} label={item.label} value={item.value} />
+        ))}
         <div className="border-t border-border my-2" />
         <div className="flex justify-between items-center">
           <span className="font-bold text-foreground">Total</span>
@@ -351,17 +356,60 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
     );
   }
 
-  // Win breakdown
-  const baseDelta = bd?.baseDelta ?? ratingChange;
-  const timeBP = bd?.timeBonusPoints ?? 0;
-  const moveBP = bd?.movesBonusPoints ?? 0;
-  const hintPP = bd?.hintPenaltyPoints ?? 0;
-  const hintsUsed = bd?.hintsUsed ?? 0;
+  // Win breakdown — use server items if available, else construct from legacy fields
   const avgTime = bd?.dealAvgTime ?? null;
   const avgMoves = bd?.dealAvgMoves ?? null;
-  const undoPP = bd?.undoPenaltyPoints ?? 0;
-  const undosUsed = bd?.undosUsed ?? 0;
-  const isRealm = gameMode === 'realm';
+
+  const winItems: { label: string; subLabel?: string; value: number }[] = [];
+
+  if (serverItems && serverItems.length > 0) {
+    // Map server items, adding sublabels for time/moves rows
+    serverItems.forEach(item => {
+      const sub = item.label.toLowerCase().includes('than expected')
+        ? (item.label.toLowerCase().includes('time') || item.label.toLowerCase().includes('fast') || item.label.toLowerCase().includes('slow'))
+          ? (avgTime !== null ? `${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg` : undefined)
+          : (item.label.toLowerCase().includes('move') || item.label.toLowerCase().includes('fewer') || item.label.toLowerCase().includes('more'))
+            ? (avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined)
+            : undefined
+        : undefined;
+      winItems.push({ label: item.label, subLabel: sub, value: item.value });
+    });
+  } else {
+    // Legacy fallback from individual fields
+    const baseDelta = bd?.baseDelta ?? ratingChange;
+    const timeBP = bd?.timeBonusPoints ?? 0;
+    const moveBP = bd?.movesBonusPoints ?? 0;
+    const hintPP = bd?.hintPenaltyPoints ?? 0;
+    const undoPP = bd?.undoPenaltyPoints ?? 0;
+    const hintsUsed = bd?.hintsUsed ?? 0;
+    const undosUsed = bd?.undosUsed ?? 0;
+    const isRealm = gameMode === 'realm';
+    const diffLabel = difficulty || 'Medium';
+
+    winItems.push({ label: `${diffLabel} deal won`, value: baseDelta });
+    winItems.push({
+      label: timeBP >= 0 ? 'Faster than expected' : 'Slower than expected',
+      subLabel: avgTime !== null ? `${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg` : undefined,
+      value: timeBP,
+    });
+    if (!isRealm) {
+      winItems.push({
+        label: moveBP >= 0 ? 'Fewer moves than expected' : 'More moves than expected',
+        subLabel: avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined,
+        value: moveBP,
+      });
+    }
+    if (isRealm) {
+      winItems.push({
+        label: undosUsed > 0 ? `Undos used × ${undosUsed}` : 'Undos',
+        value: undosUsed > 0 ? -undoPP : 0,
+      });
+    }
+    winItems.push({
+      label: hintsUsed > 0 ? `Hints used × ${hintsUsed}` : 'Hints',
+      value: hintsUsed > 0 ? -hintPP : 0,
+    });
+  }
 
   return (
     <motion.div
@@ -374,53 +422,9 @@ function ScoreBreakdownCard({ won, breakdown, ratingChange, difficulty, actualTi
         {modeLabel} IQ Earned
       </p>
 
-      <BreakdownLine label={`${diffLabel} deal won`} value={baseDelta} />
-
-      {timeBP >= 0 ? (
-        <BreakdownLine
-          label="Faster than expected"
-          subLabel={avgTime !== null ? `${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg` : undefined}
-          value={timeBP}
-        />
-      ) : (
-        <BreakdownLine
-          label="Slower than expected"
-          subLabel={avgTime !== null ? `${formatTimeRaw(actualTime)} vs ${formatTimeRaw(Math.round(avgTime))} avg` : undefined}
-          value={timeBP}
-        />
-      )}
-
-      {/* Moves row: only for non-Realm modes */}
-      {!isRealm && (
-        moveBP >= 0 ? (
-          <BreakdownLine
-            label="Fewer moves than expected"
-            subLabel={avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined}
-            value={moveBP}
-          />
-        ) : (
-          <BreakdownLine
-            label="More moves than expected"
-            subLabel={avgMoves !== null ? `${actualMoves} vs ${Math.round(avgMoves)} avg` : undefined}
-            value={moveBP}
-          />
-        )
-      )}
-
-      {/* Undos row: only for Realm */}
-      {isRealm && (
-        undoPP > 0 ? (
-          <BreakdownLine label={`Undos used × ${undosUsed}`} value={-undoPP} />
-        ) : (
-          <BreakdownLine label="Undos" value={null} />
-        )
-      )}
-
-      {hintsUsed > 0 ? (
-        <BreakdownLine label={`Hints used × ${hintsUsed}`} value={-hintPP} />
-      ) : (
-        <BreakdownLine label="Hints" value={null} />
-      )}
+      {winItems.map((item, i) => (
+        <BreakdownLine key={i} label={item.label} subLabel={item.subLabel} value={item.value} />
+      ))}
 
       <div className="border-t border-border my-2" />
       <div className="flex justify-between items-center">

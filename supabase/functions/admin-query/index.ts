@@ -1354,6 +1354,7 @@ Deno.serve(async (req) => {
           reserved_for: d.reserved_for || null,
           unique_winning_paths: d.unique_winning_paths || 0,
           path_diversity_score: d.path_diversity_score || 0,
+          ...(d.crown_positions ? { crown_positions: d.crown_positions } : {}),
         }));
 
         const { data, error } = await adminClient

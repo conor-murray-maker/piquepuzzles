@@ -29,6 +29,7 @@ interface VerifiedDeal {
   reserved_for: string | null;
   unique_winning_paths: number;
   path_diversity_score: number;
+  crown_positions?: { row: number; col: number }[] | null;
 }
 
 interface Target {
@@ -186,6 +187,7 @@ export function StarterPoolGenerator() {
 
           const candidateStart = performance.now();
           let deal;
+          let realmSolution: [number, number][] | undefined;
           if (isRealm) {
             const genOpts: RealmGenOptions = {
               gridSize: realmGridSize,
@@ -197,6 +199,7 @@ export function StarterPoolGenerator() {
             if (useLargeGridStrategy && selectedStrategy === 'solution-first') {
               // Solution-first only
               const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
+              if (puzzle) realmSolution = puzzle.solution;
               deal = { seed, gameMode: 'realm' as const, data: puzzle };
             } else if (useLargeGridStrategy && selectedStrategy === 'hybrid') {
               // Try solution-first, fall back to legacy
@@ -204,10 +207,12 @@ export function StarterPoolGenerator() {
               if (!puzzle) {
                 puzzle = generateRealmPuzzle(seed, genOpts);
               }
+              if (puzzle) realmSolution = puzzle.solution;
               deal = { seed, gameMode: 'realm' as const, data: puzzle };
             } else {
               // Legacy for all sizes, or small grids
               deal = engine.generateDeal(seed, genOpts);
+              if (deal.data) realmSolution = (deal.data as any).solution;
             }
           } else {
             deal = engine.generateDeal(seed);
@@ -247,6 +252,12 @@ export function StarterPoolGenerator() {
             }
           }
 
+          // Store crown positions for Grandmaster deals (DDS 131+, gridSize 11-12)
+          let crownPositions: { row: number; col: number }[] | null = null;
+          if (isRealm && realmSolution && dds >= 131 && realmGridSize && realmGridSize >= 11) {
+            crownPositions = realmSolution.map(([row, col]) => ({ row, col }));
+          }
+
           collected.push({
             seed,
             game_mode: selectedMode,
@@ -262,6 +273,7 @@ export function StarterPoolGenerator() {
             reserved_for: reservedFor,
             unique_winning_paths: isRealm ? 1 : uniquePaths,
             path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
+            crown_positions: crownPositions,
           });
 
           bankedCount++;

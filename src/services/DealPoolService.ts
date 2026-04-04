@@ -15,6 +15,7 @@ export interface VerifiedDeal {
   difficulty: string;
   difficultyScore: number;
   drawMode: number;
+  crownPositions?: { row: number; col: number }[] | null;
 }
 
 /** Unified DDS bracket for all game modes */
@@ -73,6 +74,7 @@ function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
     difficulty: ddsToLabel(deal.dds_blended),
     difficultyScore: deal.dds_blended,
     drawMode: deal.draw_mode,
+    crownPositions: deal.crown_positions ?? null,
   };
 }
 
@@ -220,7 +222,7 @@ export class DealPoolService {
     try {
       let query = (supabase as any)
         .from('deals')
-        .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence')
+        .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence, crown_positions')
         .eq('game_mode', gameMode)
         .order('pool_attempts', { ascending: true });
 
@@ -341,7 +343,7 @@ export class DealPoolService {
       for (const entry of data) {
         let query = (supabase as any)
           .from('deals')
-          .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence')
+          .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence, crown_positions')
           .eq('id', entry.deal_id)
           .eq('game_mode', gameMode);
 

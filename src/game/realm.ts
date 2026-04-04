@@ -780,8 +780,53 @@ function generateGameId(): string {
   return `realm-${Date.now()}-${++gameIdCounter}`;
 }
 
-export function createRealmGame(seed?: number, gridSize?: number): RealmState {
+/**
+ * Rebuild a Realm puzzle directly from stored crown positions.
+ * Deterministic: same crownPositions + seed always produce the same layout.
+ * Bypasses generateRealmPuzzle entirely — completes in <100ms for any grid size.
+ */
+export function rebuildFromCrownPositions(
+  crownPositions: { row: number; col: number }[],
+  seed: number
+): RealmState {
+  const n = crownPositions.length;
+  const rand = seededRandom(seed);
+  const crowns: [number, number][] = crownPositions.map(cp => [cp.row, cp.col]);
+
+  const startMs = performance.now();
+
+  // Grow regions deterministically from crown positions
+  const regResult = growRegionsFromCrowns(crowns, n, rand);
+  if (!regResult) {
+    throw new Error(`[Realm] rebuildFromCrownPositions failed to grow regions for ${n}x${n}`);
+  }
+
+  const { regionMap, regions } = regResult;
+
+  // Compute DDS and deduction for metadata
+  const deduction = solveByDeduction(regionMap, n);
+  const sizes = regions.map(r => r.length);
+  const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+  const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
+  const dds = calculateRealmDDS(n, deduction, sizeVariance);
+  const regionColors = assignColors(n, rand);
+
+  const elapsed = (performance.now() - startMs).toFixed(1);
+  console.log(`[Realm] Rebuilt ${n}x${n} from crown_positions in ${elapsed}ms. DDS=${dds}`);
+
+  const solution: [number, number][] = crowns;
+  const deal: RealmDeal = { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: 0 };
+  return createRealmStateFromDeal(deal, seed);
+}
+
+export function createRealmGame(seed?: number, gridSize?: number, crownPositions?: { row: number; col: number }[]): RealmState {
   const actualSeed = seed ?? generateSeed();
+
+  // Fast path: rebuild directly from stored crown positions (Grandmaster deals)
+  if (crownPositions && crownPositions.length > 0) {
+    return rebuildFromCrownPositions(crownPositions, actualSeed);
+  }
+
   const deal = generateRealmPuzzle(actualSeed, gridSize ? { gridSize } : undefined);
 
   if (!deal) {

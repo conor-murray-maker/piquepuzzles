@@ -222,7 +222,7 @@ export class DealPoolService {
     try {
       let query = (supabase as any)
         .from('deals')
-        .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence')
+        .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence, crown_positions')
         .eq('game_mode', gameMode)
         .order('pool_attempts', { ascending: true });
 

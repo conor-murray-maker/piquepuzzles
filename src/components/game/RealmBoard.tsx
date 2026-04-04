@@ -138,7 +138,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   const gameEndedRef = useRef(false);
   const completedGameIdRef = useRef<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const { profile } = useAuth();
+  const { profile, isDark } = useAuth();
 
   // Drag-to-mark state
   const dragStateRef = useRef<{

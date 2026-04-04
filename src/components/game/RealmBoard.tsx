@@ -488,6 +488,18 @@ export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initia
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
+  // Loading state for async grandmaster reconstruction
+  if (!state) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <span className="text-sm text-muted-foreground">Loading puzzle...</span>
+        </div>
+      </div>
+    );
+  }
+
   const crownsPlaced = state.grid.flat().filter(c => c.state === 'crown').length;
 
   return (

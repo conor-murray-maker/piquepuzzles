@@ -59,6 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
+  // Apply dark class on initial mount (system preference)
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Apply dark class to document
   const applyDark = useCallback((dark: boolean) => {
     setIsDark(dark);

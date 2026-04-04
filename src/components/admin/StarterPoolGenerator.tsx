@@ -700,7 +700,6 @@ export function StarterPoolGenerator() {
     </Card>
   );
 }
-  const action = useAdminAction();
   const { toast } = useToast();
   const [selectedMode, setSelectedMode] = useState<string>("klondike");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");

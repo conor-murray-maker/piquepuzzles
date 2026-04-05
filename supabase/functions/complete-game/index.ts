@@ -745,11 +745,15 @@ COMMIT;
       console.error('[complete-game] TRANSACTION FAILED:', { userId, clientDealId, gameMode, error: txErrorMsg });
 
       // Write audit log
-      await supabaseAdmin.from('game_completion_log').insert({
-        user_id: userId, deal_id: clientDealId, deal_uuid: dealUuidForInsert,
-        game_mode: gameMode, succeeded: false, error_message: txErrorMsg,
-        payload: { dds, finalDelta, modeIQ, newModeIQ, actualMoves, actualTime, result },
-      }).catch((e: any) => console.error('[complete-game] audit log insert failed:', e));
+      try {
+        await supabaseAdmin.from('game_completion_log').insert({
+          user_id: userId, deal_id: clientDealId, deal_uuid: dealUuidForInsert,
+          game_mode: gameMode, succeeded: false, error_message: txErrorMsg,
+          payload: { dds, finalDelta, modeIQ, newModeIQ, actualMoves, actualTime, result },
+        });
+      } catch (auditErr) {
+        console.warn('[complete-game] audit log insert failed (non-fatal):', auditErr);
+      }
 
       return new Response(JSON.stringify({
         error: 'completion_failed',
@@ -792,13 +796,16 @@ COMMIT;
         ddsBlended = ddsInitial * (1 - blend) + ddsEmpirical * blend;
       } else ddsBlended = ddsEmpirical;
 
-      supabaseAdmin.from('deals').update({
-        pool_attempts: newAttempts, pool_wins: newWins, pool_avg_moves: newAvgMoves,
-        pool_avg_time: newAvgTime, pool_abandons: newAbandons,
-        dds_empirical: ddsEmpirical, dds_blended: ddsBlended,
-      }).eq('id', deal.id).then(({ error }: any) => {
-        if (error) console.error('[complete-game] deal pool stats update failed:', error);
-      });
+      try {
+        const { error: dealUpdateErr } = await supabaseAdmin.from('deals').update({
+          pool_attempts: newAttempts, pool_wins: newWins, pool_avg_moves: newAvgMoves,
+          pool_avg_time: newAvgTime, pool_abandons: newAbandons,
+          dds_empirical: ddsEmpirical, dds_blended: ddsBlended,
+        }).eq('id', deal.id);
+        if (dealUpdateErr) console.error('[complete-game] deal pool stats update failed:', dealUpdateErr);
+      } catch (dealErr) {
+        console.warn('[complete-game] deal pool stats update error (non-fatal):', dealErr);
+      }
     }
 
     // Update performance_expectations (wins only)
@@ -816,19 +823,26 @@ COMMIT;
       } else {
         upsertData.avg_moves = 0;
       }
-      supabaseAdmin.from('performance_expectations').upsert(
-        upsertData, { onConflict: 'game_mode,dds_bucket,iq_bucket' },
-      ).then(({ error }: any) => {
-        if (error) console.error('[complete-game] perf expectations upsert failed:', error);
-      });
+      try {
+        const { error: perfErr } = await supabaseAdmin.from('performance_expectations').upsert(
+          upsertData, { onConflict: 'game_mode,dds_bucket,iq_bucket' } as any,
+        );
+        if (perfErr) console.error('[complete-game] perf expectations upsert failed:', perfErr);
+      } catch (perfCatchErr) {
+        console.warn('[complete-game] perf expectations upsert error (non-fatal):', perfCatchErr);
+      }
     }
 
     // Write success audit log
-    supabaseAdmin.from('game_completion_log').insert({
-      user_id: userId, deal_id: clientDealId, deal_uuid: dealUuidForInsert,
-      game_mode: gameMode, succeeded: true, error_message: null,
-      payload: { dds, finalDelta, modeIQ, newModeIQ, newPuzzleIQ, actualMoves, actualTime, result },
-    }).catch((e: any) => console.error('[complete-game] audit log insert failed:', e));
+    try {
+      await supabaseAdmin.from('game_completion_log').insert({
+        user_id: userId, deal_id: clientDealId, deal_uuid: dealUuidForInsert,
+        game_mode: gameMode, succeeded: true, error_message: null,
+        payload: { dds, finalDelta, modeIQ, newModeIQ, newPuzzleIQ, actualMoves, actualTime, result },
+      });
+    } catch (auditErr) {
+      console.warn('[complete-game] audit log insert failed (non-fatal):', auditErr);
+    }
 
     // Return result
     return new Response(JSON.stringify({
@@ -867,10 +881,14 @@ COMMIT;
     console.error('[complete-game] internal error:', err);
 
     // Write failure audit log
-    supabaseAdmin.from('game_completion_log').insert({
-      user_id: userId, deal_id: clientDealId, deal_uuid: clientDealUuid,
-      game_mode: gameMode, succeeded: false, error_message: `exception: ${errorMsg}`,
-    }).catch((e: any) => console.error('[complete-game] audit log insert failed:', e));
+    try {
+      await supabaseAdmin.from('game_completion_log').insert({
+        user_id: userId, deal_id: clientDealId, deal_uuid: clientDealUuid,
+        game_mode: gameMode, succeeded: false, error_message: `exception: ${errorMsg}`,
+      });
+    } catch (auditErr) {
+      console.warn('[complete-game] audit log insert failed (non-fatal):', auditErr);
+    }
 
     return new Response(JSON.stringify({ error: 'completion_failed', message: 'An internal error occurred' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

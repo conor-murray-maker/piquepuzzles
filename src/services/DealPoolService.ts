@@ -18,8 +18,40 @@ export interface VerifiedDeal {
   drawMode: number;
 }
 
-/** Unified DDS bracket for all game modes */
-function getDdsBracket(rating: number, _gameMode: string): { min: number; max: number } {
+/** When true, Realm serving switches from grid-size brackets to empirical DDS brackets
+ *  once sufficient sample data exists. Requires manual enable. */
+const USE_EMPIRICAL_REALM_SERVING = false;
+
+/** Realm IQ → allowed grid sizes (min_moves) bracket map */
+const REALM_IQ_GRID_BRACKETS: { maxIQ: number; gridSizes: number[] }[] = [
+  { maxIQ: 1100, gridSizes: [5] },
+  { maxIQ: 1300, gridSizes: [5, 6] },
+  { maxIQ: 1500, gridSizes: [6, 7] },
+  { maxIQ: 1700, gridSizes: [7, 8] },
+  { maxIQ: 2000, gridSizes: [8, 9] },
+  { maxIQ: 2500, gridSizes: [9, 10] },
+  { maxIQ: Infinity, gridSizes: [10] },
+];
+
+function getRealmGridBracket(rating: number): number[] {
+  for (const b of REALM_IQ_GRID_BRACKETS) {
+    if (rating < b.maxIQ) return b.gridSizes;
+  }
+  return [10];
+}
+
+/** DDS bracket — Realm uses recalibrated ranges (max DDS ~113) */
+function getDdsBracket(rating: number, gameMode: string): { min: number; max: number } {
+  if (gameMode === 'realm') {
+    if (rating < 1100) return { min: 0, max: 40 };
+    if (rating < 1300) return { min: 25, max: 55 };
+    if (rating < 1500) return { min: 35, max: 65 };
+    if (rating < 1700) return { min: 45, max: 80 };
+    if (rating < 2000) return { min: 60, max: 95 };
+    if (rating < 2500) return { min: 75, max: 110 };
+    return { min: 90, max: 113 };
+  }
+  // Non-Realm: original brackets unchanged
   if (rating < 1100) return { min: 0, max: 40 };
   if (rating < 1300) return { min: 25, max: 55 };
   if (rating < 1500) return { min: 45, max: 70 };

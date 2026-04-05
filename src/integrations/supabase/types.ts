@@ -351,6 +351,36 @@ export type Database = {
         }
         Relationships: []
       }
+      feedback: {
+        Row: {
+          app_version: string | null
+          content: string
+          created_at: string
+          id: string
+          platform: string | null
+          user_id: string | null
+          user_iq: number | null
+        }
+        Insert: {
+          app_version?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          platform?: string | null
+          user_id?: string | null
+          user_iq?: number | null
+        }
+        Update: {
+          app_version?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          platform?: string | null
+          user_id?: string | null
+          user_iq?: number | null
+        }
+        Relationships: []
+      }
       game_completion_log: {
         Row: {
           attempted_at: string

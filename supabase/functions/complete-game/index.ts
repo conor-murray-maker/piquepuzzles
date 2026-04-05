@@ -813,6 +813,8 @@ COMMIT;
       if (!isRealm) {
         const newAvgM = (perfExpRow.avg_moves * oldSC + actualMoves) / (oldSC + 1);
         upsertData.avg_moves = newAvgM;
+      } else {
+        upsertData.avg_moves = 0;
       }
       supabaseAdmin.from('performance_expectations').upsert(
         upsertData, { onConflict: 'game_mode,dds_bucket,iq_bucket' },

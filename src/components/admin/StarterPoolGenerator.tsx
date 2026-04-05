@@ -413,11 +413,20 @@ export function StarterPoolGenerator() {
 
           let reservedFor: string | null = null;
 
-          for (const t of targets) {
-            if (dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] < t.target) {
-              counts[t.band]++;
-              if (t.band === "easy") reservedFor = "onboarding";
-              break;
+          if (isRealm && targetBand) {
+            // For Realm, count toward the band we specifically generated for (grid size determines difficulty)
+            if (counts[targetBand.band] < targetBand.target) {
+              counts[targetBand.band]++;
+              if (targetBand.band === "easy") reservedFor = "onboarding";
+            }
+          } else {
+            // For card games, match by DDS range
+            for (const t of targets) {
+              if (dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] < t.target) {
+                counts[t.band]++;
+                if (t.band === "easy") reservedFor = "onboarding";
+                break;
+              }
             }
           }
 

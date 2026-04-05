@@ -1039,7 +1039,7 @@ Deno.serve(async (req) => {
         const poolDepth: Array<any> = [];
         for (const mode of gameModes) {
           for (const band of diffBands) {
-            const modeDeals = allDeals.filter((d: any) => d.game_mode === mode && d.dds_blended >= band.min && d.dds_blended <= band.max);
+            const modeDeals = filterDealsByBand(allDeals, mode, band);
             const unplayedByAny = modeDeals.filter((d: any) => d.pool_attempts === 0);
             const avgAttempts = modeDeals.length > 0 ? +(modeDeals.reduce((s: number, d: any) => s + d.pool_attempts, 0) / modeDeals.length).toFixed(1) : 0;
             const sorted = [...modeDeals].sort((a: any, b: any) => a.pool_attempts - b.pool_attempts);

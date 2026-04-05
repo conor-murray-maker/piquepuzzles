@@ -203,7 +203,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }, [setPhase, challengeId, dailyDate, gameMode, navigate, popNextDeal, drawMode]);
 
   const handleReconstructionFailed = useCallback(async () => {
-    console.warn('[Play] Realm Grandmaster reconstruction failed — serving next deal');
+    console.warn('[Play] Realm reconstruction failed — serving next deal');
     setQueuedDeal(null);
     setLoading(true);
     const deal = await popNextDeal(gameMode, drawMode);
@@ -257,7 +257,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
   const effectiveSeed = initialSeed ?? queuedDeal?.seed;
   const effectiveDealUuid = queuedDeal?.dealUuid;
-  const effectiveRegionMap = queuedDeal?.regionMap;
 
   if (gameMode === 'realm') {
     return (
@@ -265,11 +264,9 @@ export default function Play({ onActiveGameChange }: PlayProps) {
         key={gameKey}
         onGameEnd={handleGameEnd as any}
         onGiveUp={handleGiveUp as any}
-        onReconstructionFailed={handleReconstructionFailed}
         initialSeed={effectiveSeed}
         dealUuid={effectiveDealUuid}
         gridSize={queuedDeal?.minMoves}
-        regionMap={effectiveRegionMap}
       />
     );
   }

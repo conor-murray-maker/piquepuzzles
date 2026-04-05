@@ -53,11 +53,9 @@ export function clearRealmStorage() {
 interface RealmBoardProps {
   onGameEnd: (state: RealmState, elapsedSeconds: number) => void;
   onGiveUp?: (state: RealmState, elapsedSeconds: number) => void;
-  onReconstructionFailed?: () => void;
   initialSeed?: number;
   dealUuid?: string;
   gridSize?: number;
-  regionMap?: number[][] | null;
 }
 
 const DRAG_HOLD_MS = 150;
@@ -100,29 +98,17 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
   );
 }
 
-export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initialSeed, dealUuid, gridSize, regionMap }: RealmBoardProps) {
-  // Large grids without region_map cannot reconstruct in reasonable time — skip immediately
-  const isLargeGridWithoutRegionMap = initialSeed !== undefined && (gridSize ?? 0) >= 10 && !regionMap;
-
+export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize }: RealmBoardProps) {
   const [state, setState] = useState<RealmState | null>(() => {
-    if (isLargeGridWithoutRegionMap) return null;
-
     if (initialSeed !== undefined) {
-      const fresh = createRealmGame(initialSeed, gridSize, regionMap ?? undefined);
+      const fresh = createRealmGame(initialSeed, gridSize);
       return { ...fresh, dealUuid };
     }
     const saved = loadFromStorage();
     if (saved) return saved.state;
-    const fresh = createRealmGame(undefined, gridSize, regionMap ?? undefined);
+    const fresh = createRealmGame(undefined, gridSize);
     return { ...fresh, dealUuid };
   });
-
-  // Immediately fail for large grids without region_map — don't attempt reconstruction
-  useEffect(() => {
-    if (!isLargeGridWithoutRegionMap || state !== null) return;
-    console.warn(`[Realm] Large grid (${gridSize}) without region_map — skipping to next deal`);
-    onReconstructionFailed?.();
-  }, [isLargeGridWithoutRegionMap, state, gridSize, onReconstructionFailed]);
   const [history, setHistory] = useState<RealmState[]>(() => {
     if (initialSeed !== undefined) return [];
     const saved = loadFromStorage();

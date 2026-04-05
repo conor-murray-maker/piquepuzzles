@@ -150,12 +150,15 @@ export class DealPoolService {
     gamesPlayedThisMode: number
   ): Promise<VerifiedDeal | null> {
     const playedIds = await this.getUserPlayedDealIds(userId);
-    // DDS bracket based on mode IQ (preference, not hard filter)
-    // First 3 games per mode: no bracket (Easy-only via allowedDiffs handles it)
-    const bracket = gamesPlayedThisMode >= 3 ? getDdsBracket(modeIQ, gameMode) : null;
     const isRealm = gameMode === 'realm';
-    // For Realm, enforce a DDS floor even in fallbacks — never serve below the bracket minimum
-    const ddsFloor = isRealm && bracket ? bracket.min : null;
+
+    // Realm: always use grid-size brackets (even for new players)
+    // Non-Realm: DDS bracket, null for first 3 games
+    const realmGridSizes = isRealm ? getRealmGridBracket(modeIQ) : null;
+    const bracket = !isRealm && gamesPlayedThisMode >= 3 ? getDdsBracket(modeIQ, gameMode) : null;
+    // For non-Realm, enforce DDS floor in fallbacks
+    const ddsFloor = !isRealm && bracket ? bracket.min : null;
+
     const allowedDiffs = getAllowedDifficulties(gamesPlayedThisMode);
     const minConf = getMinConfidence(gamesPlayedThisMode);
     const concentrationCap = getConcentrationCap(gamesPlayedThisMode);
@@ -165,8 +168,7 @@ export class DealPoolService {
       gameMode,
       modeIQ,
       iqSource: 'player_mode_ratings',
-      ddsBracket: bracket,
-      ddsFloor,
+      ...(isRealm ? { realmGridSizes } : { ddsBracket: bracket, ddsFloor }),
       gamesPlayedThisMode,
       allowedDiffs,
       minConfidence: minConf,
@@ -176,7 +178,7 @@ export class DealPoolService {
 
     // Step 1: Query eligible deals with concentration cap
     const { deal: deal1, totalFound: found1, unplayedCount: unplayed1 } = await this.queryEligibleWithStats(
-      gameMode, playedIds, bracket, allowedDiffs, minConf, concentrationCap
+      gameMode, playedIds, bracket, allowedDiffs, minConf, concentrationCap, realmGridSizes
     );
     console.log(`[DealPoolService] Priority 1 (bracket+concentration):`, { totalFound: found1, unplayed: unplayed1, served: !!deal1 });
     if (deal1) {
@@ -189,7 +191,7 @@ export class DealPoolService {
     let found2 = 0, unplayed2 = 0;
     if (concentrationCap !== null) {
       const { deal: expanded, totalFound: f2, unplayedCount: u2 } = await this.queryEligibleWithStats(
-        gameMode, playedIds, bracket, allowedDiffs, minConf, null
+        gameMode, playedIds, bracket, allowedDiffs, minConf, null, realmGridSizes
       );
       found2 = f2; unplayed2 = u2;
       console.log(`[DealPoolService] Priority 2 (bracket, no cap):`, { totalFound: found2, unplayed: unplayed2, served: !!expanded });
@@ -199,30 +201,38 @@ export class DealPoolService {
       }
     }
 
-    // Fallback 2: Remove bracket ceiling but keep floor — serve any deal above the DDS floor
+    // Fallback 2: For non-Realm, remove bracket ceiling but keep floor; for Realm, widen grid sizes
     const floorBracket = ddsFloor !== null ? { min: ddsFloor, max: 9999 } : null;
+    // Realm fallback: expand to all grid sizes at or above the player's minimum
+    const realmWideGridSizes = isRealm && realmGridSizes ? Array.from({ length: 10 - Math.min(...realmGridSizes) + 1 }, (_, i) => Math.min(...realmGridSizes) + i).filter(s => s >= 5 && s <= 10) : null;
     const { deal: noBracket, totalFound: found3, unplayedCount: unplayed3 } = await this.queryEligibleWithStats(
-      gameMode, playedIds, floorBracket, allowedDiffs, minConf, null
+      gameMode, playedIds, floorBracket, allowedDiffs, minConf, null, realmWideGridSizes
     );
-    console.log(`[DealPoolService] Priority 3 (floor only, no ceiling):`, { ddsFloor, totalFound: found3, unplayed: unplayed3, served: !!noBracket });
+    console.log(`[DealPoolService] Priority 3 (floor/wide grid):`, { ddsFloor, realmWideGridSizes, totalFound: found3, unplayed: unplayed3, served: !!noBracket });
     if (noBracket) {
       await this.markPlayed(userId, noBracket.id);
       return dealRowToVerified(noBracket, 'expanded-no-bracket');
     }
 
-    // Fallback 3: Remove difficulty + confidence filters but keep DDS floor for Realm
+    // Fallback 3: Remove difficulty + confidence filters, keep floor/grid constraint
     const { deal: anyDeal, totalFound: found4, unplayedCount: unplayed4 } = await this.queryEligibleWithStats(
-      gameMode, playedIds, floorBracket, null, 0, null
+      gameMode, playedIds, floorBracket, null, 0, null, realmWideGridSizes
     );
-    console.log(`[DealPoolService] Priority 4 (any unplayed, floor enforced):`, { ddsFloor, totalFound: found4, unplayed: unplayed4, served: !!anyDeal });
+    console.log(`[DealPoolService] Priority 4 (any unplayed, floor/grid enforced):`, { ddsFloor, realmWideGridSizes, totalFound: found4, unplayed: unplayed4, served: !!anyDeal });
     if (anyDeal) {
       await this.markPlayed(userId, anyDeal.id);
       return dealRowToVerified(anyDeal, 'any-unplayed');
     }
 
-    // For Realm: if nothing above the floor exists, return null (no undershooting)
-    if (isRealm && ddsFloor !== null) {
-      console.warn(`[DealPoolService] No Realm deals available above DDS floor ${ddsFloor} — refusing to undershoot`);
+    // For Realm: if nothing in grid bracket exists, return null (no undershooting)
+    if (isRealm) {
+      console.warn(`[DealPoolService] No Realm deals available for grid sizes ${JSON.stringify(realmWideGridSizes)} — refusing to undershoot`);
+      return null;
+    }
+
+    // Non-Realm: if nothing above the floor exists, return null
+    if (ddsFloor !== null) {
+      console.warn(`[DealPoolService] No deals available above DDS floor ${ddsFloor} — refusing to undershoot`);
       return null;
     }
 
@@ -253,9 +263,9 @@ export class DealPoolService {
     bracket: { min: number; max: number } | null,
     allowedDiffs: string[] | null,
     minConfidence: number,
-    concentrationCap: number | null
+    concentrationCap: number | null,
+    realmGridSizes: number[] | null = null
   ): Promise<{ deal: any | null; totalFound: number; unplayedCount: number }> {
-    // Build filter description for logging
     const filters: Record<string, any> = { game_mode: gameMode, orderBy: 'pool_attempts ASC' };
     try {
       let query = (supabase as any)
@@ -264,13 +274,18 @@ export class DealPoolService {
         .eq('game_mode', gameMode)
         .order('pool_attempts', { ascending: true });
 
-      if (bracket) {
+      // Realm: filter by grid size (min_moves); non-Realm: filter by DDS bracket
+      if (realmGridSizes) {
+        query = query.in('min_moves', realmGridSizes);
+        filters.realmGridSizes = realmGridSizes;
+      } else if (bracket) {
         query = query.gte('dds_blended', bracket.min).lte('dds_blended', bracket.max);
         filters.dds_blended_gte = bracket.min;
         filters.dds_blended_lte = bracket.max;
       }
 
-      if (allowedDiffs) {
+      // allowedDiffs DDS filter only applies to non-Realm
+      if (allowedDiffs && !realmGridSizes) {
         let ddsMin = 0, ddsMax = 100;
         if (allowedDiffs.length === 1 && allowedDiffs[0] === 'Easy') {
           ddsMax = 25;
@@ -300,7 +315,7 @@ export class DealPoolService {
         filters,
         rowsReturned: data?.length ?? 0,
         error: error ?? null,
-        firstRow: data?.[0] ? { id: data[0].id, dds_blended: data[0].dds_blended, game_mode: data[0].game_mode, confidence: data[0].confidence } : null,
+        firstRow: data?.[0] ? { id: data[0].id, dds_blended: data[0].dds_blended, min_moves: data[0].min_moves, game_mode: data[0].game_mode, confidence: data[0].confidence } : null,
       });
 
       if (!data?.length) return { deal: null, totalFound: 0, unplayedCount: 0 };

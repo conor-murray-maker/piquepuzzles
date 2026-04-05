@@ -165,11 +165,6 @@ async function generateBatch(
           confidence = confResult.confidence;
         }
 
-        let regionMapData: number[][] | null = null;
-        if (isRealm && deal.data && realmGridSize && realmGridSize >= 10) {
-          regionMapData = (deal.data as any).regionMap;
-        }
-
         collected.push({
           seed,
           game_mode: target.gameMode,
@@ -185,8 +180,6 @@ async function generateBatch(
           reserved_for: target.band === "easy" ? "onboarding" : null,
           unique_winning_paths: isRealm ? 1 : uniquePaths,
           path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
-          region_map: regionMapData,
-          deduction_solvable: isRealm ? (verifyResult.confidence === 1.0) : null,
         });
       } catch {
         // skip

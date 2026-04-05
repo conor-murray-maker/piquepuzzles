@@ -785,7 +785,8 @@ Deno.serve(async (req) => {
             gamesWithDefaultModifier++;
           }
           if (g.won && g.final_delta === 0) { gamesWithZeroDeltaOnWin++; brokenGameIds.push(g.id); }
-          if (g.rating_after - g.rating_before !== g.final_delta && g.final_delta != null) {
+          // Mismatch: composite IQ change (rating_after - rating_before) should equal rating_change
+          if (g.rating_after - g.rating_before !== g.rating_change) {
             ratingMismatchCount++;
             brokenGameIds.push(g.id);
           }

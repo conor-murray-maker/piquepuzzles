@@ -470,7 +470,7 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
     n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
   }
 
-  const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0, timeout: 0 };
+  const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0, deduction: 0, timeout: 0 };
   const genStart = performance.now();
 
   for (let attempt = 0; attempt < 2000; attempt++) {
@@ -504,8 +504,13 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
       if (surprise < surpriseThreshold) { discardCounts.stage4++; continue; }
     }
 
-    // All stages passed — compute quality metrics
+    // === Stage 5: Deduction chain — must be fully solvable without guessing ===
     const deduction = solveByDeduction(regionMap, n);
+    if (!deduction.solvable) {
+      discardCounts.deduction++;
+      console.log(`[Realm] Rejected ${n}x${n} puzzle via legacy — deduction chain requires guessing (forced=${deduction.forcedSteps}/${n})`);
+      continue;
+    }
 
     const sizes = regions.map(r => r.length);
     const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
@@ -514,12 +519,12 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
     const dds = calculateRealmDDS(n, deduction, sizeVariance);
     const regionColors = assignColors(n, rand);
 
-    console.log(`[Realm] Accepted ${n}x${n} puzzle via legacy (attempt ${attempt + 1}). DDS=${dds} surprise=${surprise.toFixed(2)} Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} Timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}]`);
+    console.log(`[Realm] Accepted ${n}x${n} puzzle via legacy (attempt ${attempt + 1}). DDS=${dds} surprise=${surprise.toFixed(2)} Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} deduction=${discardCounts.deduction} Timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}]`);
 
     return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
   }
 
-  console.warn(`[Realm] Failed all attempts for ${n}x${n}. Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} Timeout=${discardCounts.timeout}`);
+  console.warn(`[Realm] Failed all attempts for ${n}x${n}. Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} deduction=${discardCounts.deduction} Timeout=${discardCounts.timeout}`);
   return null;
 }
 

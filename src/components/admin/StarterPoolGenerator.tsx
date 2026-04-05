@@ -449,7 +449,9 @@ export function StarterPoolGenerator() {
 
           bankedCount++;
           // Count deals that matched a target band
-          const matchedTarget = targets.some(t => dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] <= t.target);
+          const matchedTarget = isRealm && targetBand
+            ? counts[targetBand.band] <= targetBand.target
+            : targets.some(t => dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] <= t.target);
           if (matchedTarget) starterCount++;
         } catch {
           // Skip failed attempt

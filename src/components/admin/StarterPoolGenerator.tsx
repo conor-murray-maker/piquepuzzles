@@ -86,6 +86,7 @@ const TIMEOUT_OPTIONS = [
   { value: "2000", label: "2s (recommended)" },
   { value: "5000", label: "5s" },
   { value: "10000", label: "10s" },
+  { value: "30000", label: "30s (Master)" },
 ];
 
 /** Fill All batch definitions */

@@ -30,6 +30,7 @@ interface VerifiedDeal {
   unique_winning_paths: number;
   path_diversity_score: number;
   crown_positions?: { row: number; col: number }[] | null;
+  deduction_solvable?: boolean | null;
 }
 
 interface Target {
@@ -216,6 +217,7 @@ async function generateBatch(
           unique_winning_paths: isRealm ? 1 : uniquePaths,
           path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
           crown_positions: crownPositions,
+          deduction_solvable: isRealm ? (verifyResult.confidence === 1.0) : null,
         });
       } catch {
         // skip
@@ -501,6 +503,7 @@ export function StarterPoolGenerator() {
             unique_winning_paths: isRealm ? 1 : uniquePaths,
             path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
             crown_positions: crownPositions,
+            deduction_solvable: isRealm ? (verifyResult.confidence === 1.0) : null,
           });
 
           bankedCount++;

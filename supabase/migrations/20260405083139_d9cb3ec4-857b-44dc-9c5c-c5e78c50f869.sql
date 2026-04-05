@@ -1,0 +1,1 @@
+ALTER TABLE public.deals ADD COLUMN deduction_solvable boolean DEFAULT NULL;

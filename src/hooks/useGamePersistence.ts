@@ -90,11 +90,10 @@ export function useGamePersistence() {
   ): Promise<GameResult | null> => {
     if (!user || !profile) return null;
 
-    const effectiveDealUuid = dealUuid || (gameState as any).dealUuid;
+    const effectiveDealUuid = dealUuid || (gameState as any).dealUuid || undefined;
 
     if (!effectiveDealUuid) {
-      console.error('Cannot save game result: deal_uuid is missing. Game will not be recorded.');
-      return null;
+      console.warn('[useGamePersistence] deal_uuid missing — server will fall back to seed-based lookup');
     }
 
     try {

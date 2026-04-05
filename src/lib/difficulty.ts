@@ -26,6 +26,7 @@ export function getRealmDifficultyFromGridSize(gridSize: number): string {
     case 9: return 'Master';
     case 10: return 'Grandmaster';
     default: return 'Medium';
+  }
 }
 
 /**

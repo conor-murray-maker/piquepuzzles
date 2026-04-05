@@ -61,11 +61,16 @@ interface PiqueIQPanelProps {
   piqueIQ: number;
   modeRatings: ModeRating[];
   defaultExpanded?: boolean;
+  /** When set, headline shows this mode's IQ instead of composite */
+  activeMode?: string | null;
 }
 
-export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: PiqueIQPanelProps) {
+export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false, activeMode }: PiqueIQPanelProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const tier = getTier(piqueIQ);
+  const activeModeRating = activeMode ? modeRatings.find(r => r.game_mode === activeMode) : null;
+  const headlineIQ = activeModeRating ? activeModeRating.iq : piqueIQ;
+  const headlineLabel = activeModeRating ? `${activeModeRating.display_name} IQ` : 'Pique IQ';
+  const tier = getTier(headlineIQ);
   const isGM = tier.color === 'grandmaster';
 
   return (
@@ -78,7 +83,7 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
-              Pique IQ
+              {headlineLabel}
             </p>
             <TooltipProvider delayDuration={200}>
               <Tooltip>
@@ -91,7 +96,7 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[220px] text-xs">
-                  Pique IQ = average of all mode IQs. Unplayed modes count as 1000.
+                  {activeModeRating ? `Your ${activeModeRating.display_name} rating.` : 'Pique IQ = average of all mode IQs. Unplayed modes count as 1000.'}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -104,10 +109,10 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
                 ...(isGM ? { textShadow: `0 0 8px ${TIER_HEX.grandmaster}60` } : {}),
               }}
             >
-              {piqueIQ}
+              {headlineIQ}
             </span>
           </div>
-          <TierProgressBar rating={piqueIQ} />
+          <TierProgressBar rating={headlineIQ} />
         </div>
         <motion.div
           animate={{ rotate: expanded ? 180 : 0 }}

@@ -78,7 +78,7 @@ async function invokeWithRetry(
 }
 
 export function useGamePersistence() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile } = useAuth();
 
   const saveGameResult = useCallback(async (
     gameState: KlondikeState | FreeCellState,
@@ -128,8 +128,6 @@ export function useGamePersistence() {
         return null;
       }
 
-      await refreshProfile();
-
       const gameResult: GameResult = {
         newRating: r.newRating,
         ratingChange: r.puzzleIQDelta ?? r.finalDelta,
@@ -165,7 +163,7 @@ export function useGamePersistence() {
       toast.error('Could not save game result. Your progress may not have been recorded.');
       return null;
     }
-  }, [user, profile, refreshProfile]);
+  }, [user, profile]);
 
   return { saveGameResult, rating: profile?.rating ?? 1000 };
 }

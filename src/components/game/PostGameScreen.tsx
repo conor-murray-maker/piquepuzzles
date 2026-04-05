@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { haptic } from '@/lib/haptics';
 import { StreakMilestoneModal } from './StreakMilestoneModal';
 import { motion } from 'framer-motion';
-import { KlondikeState, getTier, RATING_TIERS } from '@/game/types';
+import { KlondikeState, getTierForMode, RATING_TIERS } from '@/game/types';
 import { Button } from '@/components/ui/button';
 import { Trophy, Target, Timer, Hash, Lightbulb, Undo2, ArrowLeft, Share2, Info } from 'lucide-react';
 import { ChallengeService } from '@/services/ChallengeService';
@@ -32,8 +32,8 @@ const gmShimmerStyle: React.CSSProperties = {
   animation: 'gm-shimmer 3s linear infinite',
 };
 
-function MiniProgressBar({ rating, isGM }: { rating: number; isGM?: boolean }) {
-  const tier = getTier(rating);
+function MiniProgressBar({ rating, isGM, gameMode = 'klondike' }: { rating: number; isGM?: boolean; gameMode?: string }) {
+  const tier = getTierForMode(rating, gameMode);
   const tierIndex = RATING_TIERS.findIndex(t => t.name === tier.name);
   const nextTier = RATING_TIERS[tierIndex + 1];
   const progress = nextTier
@@ -150,9 +150,10 @@ export function PostGameScreen({
   // Render only mode-specific IQ here; do not fall back to composite Pique IQ.
   const displayModeIQ = modeIQData?.modeIQ ?? null;
   const displayModeIQDelta = modeIQData?.modeIQDelta ?? ratingChange;
-  const modeTier = displayModeIQ !== null ? getTier(displayModeIQ) : null;
+  const modeTier = displayModeIQ !== null ? getTierForMode(displayModeIQ, gameMode) : null;
   const modeLabel = getModeLabel(gameMode);
-  const isGM = modeTier?.color === 'grandmaster';
+  // GM visual treatment only for Realm
+  const isGM = modeTier?.color === 'grandmaster' && gameMode === 'realm';
 
   // Dark prestige card styles for Grandmaster
   const gmCardStyle: React.CSSProperties | undefined = isGM ? {
@@ -281,7 +282,7 @@ export function PostGameScreen({
               {modeTier?.name ?? '—'}
             </p>
           )}
-          {displayModeIQ !== null && <MiniProgressBar rating={displayModeIQ} isGM={isGM} />}
+          {displayModeIQ !== null && <MiniProgressBar rating={displayModeIQ} isGM={isGM} gameMode={gameMode} />}
         </div>
 
         {/* Score Breakdown Card */}

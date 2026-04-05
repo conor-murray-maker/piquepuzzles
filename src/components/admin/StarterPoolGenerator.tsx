@@ -10,7 +10,7 @@ import { FreeCellEngine } from "@/engines/FreeCellEngine";
 import { RealmEngine } from "@/engines/RealmEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
-import { generateRealmPuzzleSolutionFirst, generateRealmPuzzle, type GenerationStrategy, type RealmGenOptions } from "@/game/realm";
+import { type RealmGenOptions } from "@/game/realm";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
 import { Database, Loader2, CheckCircle, XCircle, Zap } from "lucide-react";
 
@@ -29,8 +29,6 @@ interface VerifiedDeal {
   reserved_for: string | null;
   unique_winning_paths: number;
   path_diversity_score: number;
-  region_map?: number[][] | null;
-  deduction_solvable?: boolean | null;
 }
 
 interface Target {
@@ -66,9 +64,8 @@ const TARGETS_BY_MODE: Record<string, Target[]> = {
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "easy", ddsMin: 0, ddsMax: 30, target: 50, gridSizes: [5], skipSpatialSurprise: true },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "medium", ddsMin: 15, ddsMax: 55, target: 40, gridSizes: [6] },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "hard", ddsMin: 30, ddsMax: 80, target: 30, gridSizes: [7, 8] },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 60, ddsMax: 100, target: 20, gridSizes: [9, 10] },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "master", ddsMin: 100, ddsMax: 130, target: 15, gridSizes: [10, 11] },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "grandmaster", ddsMin: 120, ddsMax: 150, target: 10, gridSizes: [11, 12] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 60, ddsMax: 100, target: 20, gridSizes: [9] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "master", ddsMin: 75, ddsMax: 100, target: 15, gridSizes: [10] },
   ],
 };
 
@@ -81,7 +78,6 @@ const DIFFICULTY_OPTIONS = [
   { value: "hard", label: "Hard only" },
   { value: "expert", label: "Expert only" },
   { value: "master", label: "Master only" },
-  { value: "grandmaster", label: "Grandmaster only" },
 ];
 
 const TIMEOUT_OPTIONS = [
@@ -92,37 +88,28 @@ const TIMEOUT_OPTIONS = [
   { value: "10000", label: "10s" },
 ];
 
-const STRATEGY_OPTIONS: { value: GenerationStrategy; label: string; description: string }[] = [
-  { value: "hybrid", label: "Hybrid (default)", description: "Solution-first for ≥10, legacy fallback" },
-  { value: "solution-first", label: "Solution-first", description: "Crown-first for ≥10, legacy for <10" },
-  { value: "legacy", label: "Legacy", description: "Original random-region approach for all sizes" },
-];
-
-/** Fill All batch definitions with per-band strategy + timeout */
+/** Fill All batch definitions */
 interface FillAllBatch {
   mode: string;
   band: string;
-  strategy: GenerationStrategy;
   timeoutMs: number;
 }
 
 const FILL_ALL_BATCHES: FillAllBatch[] = [
-  { mode: "realm", band: "easy", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "realm", band: "medium", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "realm", band: "hard", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "realm", band: "expert", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "realm", band: "master", strategy: "hybrid", timeoutMs: 5000 },
-  { mode: "realm", band: "grandmaster", strategy: "solution-first", timeoutMs: 10000 },
-  { mode: "klondike", band: "easy", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "klondike", band: "medium", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "freecell", band: "easy", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "freecell", band: "medium", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "easy", timeoutMs: 2000 },
+  { mode: "realm", band: "medium", timeoutMs: 2000 },
+  { mode: "realm", band: "hard", timeoutMs: 2000 },
+  { mode: "realm", band: "expert", timeoutMs: 2000 },
+  { mode: "realm", band: "master", timeoutMs: 5000 },
+  { mode: "klondike", band: "easy", timeoutMs: 2000 },
+  { mode: "klondike", band: "medium", timeoutMs: 2000 },
+  { mode: "freecell", band: "easy", timeoutMs: 2000 },
+  { mode: "freecell", band: "medium", timeoutMs: 2000 },
 ];
 
 /** Generate deals for a single target band, returning inserted count */
 async function generateBatch(
   target: Target,
-  strategy: GenerationStrategy,
   timeoutMs: number,
   needed: number,
   abortRef: React.MutableRefObject<boolean>,
@@ -151,28 +138,8 @@ async function generateBatch(
         }
 
         let deal;
-        let realmSolution: [number, number][] | undefined;
         if (isRealm) {
-          const genOpts: RealmGenOptions = {
-            gridSize: realmGridSize,
-            skipSpatialSurprise: realmSkipSurprise,
-            timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
-          };
-          const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
-
-          if (useLargeGridStrategy && strategy === "solution-first") {
-            const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
-            if (puzzle) realmSolution = puzzle.solution;
-            deal = { seed, gameMode: "realm" as const, data: puzzle };
-          } else if (useLargeGridStrategy && strategy === "hybrid") {
-            let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
-            if (!puzzle) puzzle = generateRealmPuzzle(seed, genOpts);
-            if (puzzle) realmSolution = puzzle.solution;
-            deal = { seed, gameMode: "realm" as const, data: puzzle };
-          } else {
-            deal = engine.generateDeal(seed, { gridSize: realmGridSize, skipSpatialSurprise: realmSkipSurprise, timeoutMs: timeoutMs > 0 ? timeoutMs : undefined });
-            if (deal.data) realmSolution = (deal.data as any).solution;
-          }
+          deal = engine.generateDeal(seed, { gridSize: realmGridSize, skipSpatialSurprise: realmSkipSurprise, timeoutMs: timeoutMs > 0 ? timeoutMs : undefined });
         } else {
           deal = engine.generateDeal(seed);
         }
@@ -196,11 +163,6 @@ async function generateBatch(
           confidence = confResult.confidence;
         }
 
-        let regionMapData: number[][] | null = null;
-        if (isRealm && deal.data && realmGridSize && realmGridSize >= 10) {
-          regionMapData = (deal.data as any).regionMap;
-        }
-
         collected.push({
           seed,
           game_mode: target.gameMode,
@@ -216,8 +178,6 @@ async function generateBatch(
           reserved_for: target.band === "easy" ? "onboarding" : null,
           unique_winning_paths: isRealm ? 1 : uniquePaths,
           path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
-          region_map: regionMapData,
-          deduction_solvable: isRealm ? (verifyResult.confidence === 1.0) : null,
         });
       } catch {
         // skip
@@ -238,7 +198,7 @@ export function StarterPoolGenerator() {
   const [selectedMode, setSelectedMode] = useState<string>("klondike");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
   const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
-  const [selectedStrategy, setSelectedStrategy] = useState<GenerationStrategy>("hybrid");
+  const [selectedStrategy] = useState<string>("legacy");
   const [running, setRunning] = useState(false);
   const [candidatesTried, setCandidatesTried] = useState(0);
   const [starterFound, setStarterFound] = useState(0);
@@ -325,7 +285,7 @@ export function StarterPoolGenerator() {
       addStatus(`[${i + 1}/${batchesToRun.length}] Filling ${label} (need ${needed})...`);
 
       const inserted = await generateBatch(
-        target, batch.strategy, batch.timeoutMs, needed,
+        target, batch.timeoutMs, needed,
         abortRef, addStatus, insertDeals,
       );
 
@@ -416,33 +376,12 @@ export function StarterPoolGenerator() {
 
           const candidateStart = performance.now();
           let deal;
-          let realmSolution: [number, number][] | undefined;
           if (isRealm) {
-            const genOpts: RealmGenOptions = {
+            deal = engine.generateDeal(seed, {
               gridSize: realmGridSize,
               skipSpatialSurprise: realmSkipSurprise,
               timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
-            };
-            const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
-
-            if (useLargeGridStrategy && selectedStrategy === 'solution-first') {
-              // Solution-first only
-              const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
-              if (puzzle) realmSolution = puzzle.solution;
-              deal = { seed, gameMode: 'realm' as const, data: puzzle };
-            } else if (useLargeGridStrategy && selectedStrategy === 'hybrid') {
-              // Try solution-first, fall back to legacy
-              let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
-              if (!puzzle) {
-                puzzle = generateRealmPuzzle(seed, genOpts);
-              }
-              if (puzzle) realmSolution = puzzle.solution;
-              deal = { seed, gameMode: 'realm' as const, data: puzzle };
-            } else {
-              // Legacy for all sizes, or small grids
-              deal = engine.generateDeal(seed, genOpts);
-              if (deal.data) realmSolution = (deal.data as any).solution;
-            }
+            });
           } else {
             deal = engine.generateDeal(seed);
           }
@@ -481,14 +420,6 @@ export function StarterPoolGenerator() {
             }
           }
 
-          // Store region_map for large-grid Realm deals (gridSize >= 10)
-          let regionMapData: number[][] | null = null;
-          if (isRealm && realmGridSize && realmGridSize >= 10) {
-            // Get region map from whichever generator produced it
-            const puzzleData = deal?.data as any;
-            if (puzzleData?.regionMap) regionMapData = puzzleData.regionMap;
-          }
-
           collected.push({
             seed,
             game_mode: selectedMode,
@@ -504,8 +435,6 @@ export function StarterPoolGenerator() {
             reserved_for: reservedFor,
             unique_winning_paths: isRealm ? 1 : uniquePaths,
             path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
-            region_map: regionMapData,
-            deduction_solvable: isRealm ? (verifyResult.confidence === 1.0) : null,
           });
 
           bankedCount++;
@@ -568,7 +497,7 @@ export function StarterPoolGenerator() {
 
   const modeDescription = () => {
     if (selectedMode === "realm") {
-      if (selectedDifficulty === "all") return "Realm: 50 Easy (5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9-10×), 15 Master (10-11×), 10 Grandmaster (11-12×).";
+      if (selectedDifficulty === "all") return "Realm: 50 Easy (5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9×), 15 Master (10×).";
       const t = targets[0];
       if (!t) return "";
       return `Realm ${t.band}: ${t.target} deals${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}. Confidence=1.0 (unique solution).`;
@@ -633,18 +562,6 @@ export function StarterPoolGenerator() {
             </SelectContent>
           </Select>
 
-          {selectedMode === "realm" && (
-            <Select value={selectedStrategy} onValueChange={(v) => setSelectedStrategy(v as GenerationStrategy)} disabled={running}>
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="Strategy" />
-              </SelectTrigger>
-              <SelectContent>
-                {STRATEGY_OPTIONS.map(s => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
 
           <Button onClick={run} disabled={running} className="gap-2">
             {running && !fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}

@@ -390,7 +390,7 @@ function assignColors(n: number, rand: () => number): string[] {
 function calculateRealmDDS(n: number, deduction: DeductionResult, regionSizeVariance: number): number {
   const sizeRanges: Record<number, [number, number]> = {
     4: [5, 15], 5: [10, 25], 6: [15, 30], 7: [30, 50], 8: [45, 65],
-    9: [60, 80], 10: [75, 100], 11: [100, 130], 12: [120, 150],
+    9: [60, 80], 10: [75, 100],
   };
   const [baseMin, baseMax] = sizeRanges[n] || [50, 70];
   let dds = (baseMin + baseMax) / 2;
@@ -466,11 +466,11 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
   if (forcedSize) {
     n = forcedSize;
   } else {
-    const sizeWeights = [4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+    const sizeWeights = [5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10, 10];
     n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
   }
 
-  const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0, deduction: 0, timeout: 0 };
+  const discardCounts = { stage1: 0, stage2: 0, stage3: 0, stage4: 0, timeout: 0 };
   const genStart = performance.now();
 
   for (let attempt = 0; attempt < 2000; attempt++) {
@@ -504,13 +504,8 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
       if (surprise < surpriseThreshold) { discardCounts.stage4++; continue; }
     }
 
-    // === Stage 5: Deduction chain — must be fully solvable without guessing ===
+    // Deduction chain — used for DDS scoring metadata only, not as a rejection gate
     const deduction = solveByDeduction(regionMap, n);
-    if (!deduction.solvable) {
-      discardCounts.deduction++;
-      console.log(`[Realm] Rejected ${n}x${n} puzzle via legacy — deduction chain requires guessing (forced=${deduction.forcedSteps}/${n})`);
-      continue;
-    }
 
     const sizes = regions.map(r => r.length);
     const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
@@ -519,322 +514,22 @@ export function generateRealmPuzzle(seed: number, options?: RealmGenOptions): Re
     const dds = calculateRealmDDS(n, deduction, sizeVariance);
     const regionColors = assignColors(n, rand);
 
-    console.log(`[Realm] Accepted ${n}x${n} puzzle via legacy (attempt ${attempt + 1}). DDS=${dds} surprise=${surprise.toFixed(2)} Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} deduction=${discardCounts.deduction} Timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}]`);
+    console.log(`[Realm] Accepted ${n}x${n} puzzle via legacy (attempt ${attempt + 1}). DDS=${dds} surprise=${surprise.toFixed(2)} Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} Timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}]`);
 
     return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
   }
 
-  console.warn(`[Realm] Failed all attempts for ${n}x${n}. Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} deduction=${discardCounts.deduction} Timeout=${discardCounts.timeout}`);
+  console.warn(`[Realm] Failed all attempts for ${n}x${n}. Discards: S1=${discardCounts.stage1} S2=${discardCounts.stage2} S3=${discardCounts.stage3} S4=${discardCounts.stage4} Timeout=${discardCounts.timeout}`);
   return null;
 }
-
-// ==================== Solution-First Generation ====================
-
-export type GenerationStrategy = 'solution-first' | 'legacy' | 'hybrid';
-
-/**
- * Place N non-attacking crowns on an NxN grid (one per row, one per column,
- * no two adjacent including diagonals). Returns null if placement fails.
- */
-function placeNonAttackingCrowns(n: number, rand: () => number): [number, number][] | null {
-  const placement: [number, number][] = [];
-  const usedCols = new Set<number>();
-
-  function isAdjacentToExisting(row: number, col: number): boolean {
-    for (const [pr, pc] of placement) {
-      if (Math.abs(pr - row) <= 1 && Math.abs(pc - col) <= 1) return true;
-    }
-    return false;
-  }
-
-  function solve(row: number): boolean {
-    if (row === n) return true;
-
-    // Shuffle column order for variety
-    const cols = Array.from({ length: n }, (_, i) => i);
-    for (let i = cols.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
-      [cols[i], cols[j]] = [cols[j], cols[i]];
-    }
-
-    for (const col of cols) {
-      if (usedCols.has(col)) continue;
-      if (isAdjacentToExisting(row, col)) continue;
-
-      placement.push([row, col]);
-      usedCols.add(col);
-      if (solve(row + 1)) return true;
-      placement.pop();
-      usedCols.delete(col);
-    }
-    return false;
-  }
-
-  if (!solve(0)) return null;
-  return placement;
-}
-
-/**
- * Grow N contiguous regions from crown positions outward using flood-fill.
- * Each region is guaranteed to contain its crown cell.
- */
-function growRegionsFromCrowns(
-  crowns: [number, number][],
-  n: number,
-  rand: () => number
-): RegionGenResult | null {
-  const regionMap: number[][] = Array.from({ length: n }, () => Array(n).fill(-1));
-  const regions: number[][] = Array.from({ length: n }, () => []);
-
-  // Seed each region at its crown position
-  for (let i = 0; i < n; i++) {
-    const [r, c] = crowns[i];
-    regionMap[r][c] = i;
-    regions[i].push(r * n + c);
-  }
-
-  // Flood-fill round-robin expansion with compact bias
-  let unfilled = n * n - n;
-  let safetyCounter = 0;
-  const maxSafety = n * n * 20;
-
-  while (unfilled > 0 && safetyCounter < maxSafety) {
-    safetyCounter++;
-    let anyGrew = false;
-
-    // Randomize region growth order each round for balanced sizes
-    const order = Array.from({ length: n }, (_, i) => i);
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-
-    for (const regionId of order) {
-      const candidates: { r: number; c: number; weight: number }[] = [];
-      const seen = new Set<string>();
-
-      for (const idx of regions[regionId]) {
-        const cr = Math.floor(idx / n);
-        const cc = idx % n;
-        for (const [dr, dc] of DIRS) {
-          const nr = cr + dr;
-          const nc = cc + dc;
-          const key = `${nr},${nc}`;
-          if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] === -1 && !seen.has(key)) {
-            seen.add(key);
-            let neighboursInRegion = 0;
-            for (const [dr2, dc2] of DIRS) {
-              const nr2 = nr + dr2;
-              const nc2 = nc + dc2;
-              if (nr2 >= 0 && nr2 < n && nc2 >= 0 && nc2 < n && regionMap[nr2][nc2] === regionId) {
-                neighboursInRegion++;
-              }
-            }
-            candidates.push({ r: nr, c: nc, weight: neighboursInRegion + 1 });
-          }
-        }
-      }
-      if (candidates.length === 0) continue;
-
-      const totalWeight = candidates.reduce((s, c) => s + c.weight, 0);
-      let pick = rand() * totalWeight;
-      for (const { r, c, weight } of candidates) {
-        pick -= weight;
-        if (pick <= 0) {
-          regionMap[r][c] = regionId;
-          regions[regionId].push(r * n + c);
-          unfilled--;
-          anyGrew = true;
-          break;
-        }
-      }
-    }
-    if (!anyGrew) break;
-  }
-
-  // Assign any remaining unfilled cells to nearest region
-  if (unfilled > 0) {
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        if (regionMap[r][c] !== -1) continue;
-        for (const [dr, dc] of DIRS) {
-          const nr = r + dr;
-          const nc = c + dc;
-          if (nr >= 0 && nr < n && nc >= 0 && nc < n && regionMap[nr][nc] !== -1) {
-            regionMap[r][c] = regionMap[nr][nc];
-            regions[regionMap[nr][nc]].push(r * n + c);
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  // Validate: contiguous regions of reasonable size
-  for (let ri = 0; ri < n; ri++) {
-    if (regions[ri].length < 3 || regions[ri].length > n * 2) return null;
-
-    const cellSet = new Set(regions[ri]);
-    const visited = new Set<number>();
-    const queue = [regions[ri][0]];
-    visited.add(regions[ri][0]);
-    while (queue.length > 0) {
-      const idx = queue.shift()!;
-      const cr = Math.floor(idx / n);
-      const cc = idx % n;
-      for (const [dr, dc] of DIRS) {
-        const nr = cr + dr;
-        const nc = cc + dc;
-        if (nr >= 0 && nr < n && nc >= 0 && nc < n) {
-          const nIdx = nr * n + nc;
-          if (cellSet.has(nIdx) && !visited.has(nIdx)) {
-            visited.add(nIdx);
-            queue.push(nIdx);
-          }
-        }
-      }
-    }
-    if (visited.size !== regions[ri].length) return null;
-  }
-
-  return { regionMap, regions };
-}
-
-/**
- * Solution-first Realm generator: place crowns first, then grow regions.
- * Dramatically improves throughput for large grids (10+).
- */
-export function generateRealmPuzzleSolutionFirst(seed: number, options?: RealmGenOptions): RealmDeal | null {
-  const rand = seededRandom(seed);
-  const forcedSize = options?.gridSize;
-  const skipSurprise = options?.skipSpatialSurprise ?? false;
-  const timeoutMs = options?.timeoutMs;
-
-  let n: number;
-  if (forcedSize) {
-    n = forcedSize;
-  } else {
-    const sizeWeights = [4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10, 10, 11, 11, 12];
-    n = sizeWeights[Math.floor(rand() * sizeWeights.length)];
-  }
-
-  const discardCounts = { crown: 0, region: 0, uniqueness: 0, deduction: 0, surprise: 0, timeout: 0 };
-  const genStart = performance.now();
-
-  for (let attempt = 0; attempt < 2000; attempt++) {
-    if (timeoutMs && (performance.now() - genStart) > timeoutMs) {
-      discardCounts.timeout++;
-      break;
-    }
-
-    // === Stage A: Place N non-attacking crowns ===
-    const crowns = placeNonAttackingCrowns(n, rand);
-    if (!crowns) { discardCounts.crown++; continue; }
-
-    // === Stage B: Grow regions from crown positions ===
-    const regResult = growRegionsFromCrowns(crowns, n, rand);
-    if (!regResult) { discardCounts.region++; continue; }
-
-    const { regionMap, regions } = regResult;
-
-    // === Stage C: Verify uniqueness — the placed crowns should be the ONLY solution ===
-    const solverResult = findAllSolutions(regionMap, n, 2);
-    if (solverResult === 'timeout') { discardCounts.timeout++; continue; }
-    if (solverResult.length !== 1) { discardCounts.uniqueness++; continue; }
-
-    const solution = solverResult[0];
-
-    // === Stage D: Deduction chain — must be fully solvable without guessing ===
-    const deduction = solveByDeduction(regionMap, n);
-    if (!deduction.solvable) {
-      discardCounts.deduction++;
-      console.log(`[Realm] Rejected ${n}x${n} puzzle — unique solution but deduction chain requires guessing (forced=${deduction.forcedSteps}/${n})`);
-      continue;
-    }
-
-    // === Stage E: Spatial surprise scoring ===
-    let surprise = 0;
-    if (!skipSurprise) {
-      surprise = spatialSurpriseScore(solution, n);
-      const maxVariance = (n * n - 1) / 12;
-      const surpriseThreshold = maxVariance * 0.4;
-      if (surprise < surpriseThreshold) { discardCounts.surprise++; continue; }
-    }
-
-    // All stages passed — compute DDS
-    const sizes = regions.map(r => r.length);
-    const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
-    const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
-
-    const dds = calculateRealmDDS(n, deduction, sizeVariance);
-    const regionColors = assignColors(n, rand);
-
-    console.log(`[Realm] Accepted ${n}x${n} puzzle via solution-first (attempt ${attempt + 1}). DDS=${dds} surprise=${surprise.toFixed(2)} Discards: crown=${discardCounts.crown} region=${discardCounts.region} uniq=${discardCounts.uniqueness} deduction=${discardCounts.deduction} surprise=${discardCounts.surprise} timeout=${discardCounts.timeout}. Sizes=[${sizes.join(',')}]`);
-
-    return { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: surprise };
-  }
-
-  console.warn(`[Realm] Solution-first failed for ${n}x${n}. Discards: crown=${discardCounts.crown} region=${discardCounts.region} uniq=${discardCounts.uniqueness} deduction=${discardCounts.deduction} surprise=${discardCounts.surprise} timeout=${discardCounts.timeout}`);
-  return null;
-}
-
-
 
 let gameIdCounter = 0;
 function generateGameId(): string {
   return `realm-${Date.now()}-${++gameIdCounter}`;
 }
 
-/**
- * Rebuild a Realm puzzle directly from a stored region map.
- * The region map is the ground truth — no region-growing step needed.
- * Completes in <10ms for any grid size.
- */
-export function rebuildFromRegionMap(
-  regionMap: number[][],
-  seed: number
-): RealmState {
-  const n = regionMap.length;
-  const rand = seededRandom(seed);
-  const startMs = performance.now();
-
-  // Build regions array from the stored region map
-  const regions: number[][] = Array.from({ length: n }, () => []);
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      regions[regionMap[r][c]].push(r * n + c);
-    }
-  }
-
-  // Find the unique solution
-  const solverResult = findAllSolutions(regionMap, n, 2);
-  if (solverResult === 'timeout' || solverResult.length !== 1) {
-    throw new Error(`[Realm] rebuildFromRegionMap: expected exactly 1 solution for ${n}x${n}, got ${solverResult === 'timeout' ? 'timeout' : solverResult.length}`);
-  }
-  const solution = solverResult[0];
-
-  // Compute DDS and deduction for metadata
-  const deduction = solveByDeduction(regionMap, n);
-  const sizes = regions.map(r => r.length);
-  const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
-  const sizeVariance = sizes.reduce((s, sz) => s + (sz - avgSize) ** 2, 0) / sizes.length;
-  const dds = calculateRealmDDS(n, deduction, sizeVariance);
-  const regionColors = assignColors(n, rand);
-
-  const elapsed = (performance.now() - startMs).toFixed(1);
-  console.log(`[Realm] Rebuilt ${n}x${n} from region_map in ${elapsed}ms. DDS=${dds}`);
-
-  const deal: RealmDeal = { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: 0 };
-  return createRealmStateFromDeal(deal, seed);
-}
-
-export function createRealmGame(seed?: number, gridSize?: number, regionMap?: number[][]): RealmState {
+export function createRealmGame(seed?: number, gridSize?: number): RealmState {
   const actualSeed = seed ?? generateSeed();
-
-  // Fast path: rebuild directly from stored region map (Master/Grandmaster deals)
-  if (regionMap && regionMap.length > 0) {
-    return rebuildFromRegionMap(regionMap, actualSeed);
-  }
 
   const deal = generateRealmPuzzle(actualSeed, gridSize ? { gridSize } : undefined);
 
@@ -843,34 +538,6 @@ export function createRealmGame(seed?: number, gridSize?: number, regionMap?: nu
   }
 
   return createRealmStateFromDeal(deal, actualSeed);
-}
-
-/**
- * Async wrapper with timeout for Grandmaster deals without crown positions.
- * Returns null if reconstruction exceeds the timeout.
- */
-export function createRealmGameWithTimeout(
-  seed: number,
-  gridSize: number,
-  timeoutMs: number = 5000
-): Promise<RealmState | null> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      console.warn(`[Realm] Grandmaster reconstruction timed out after ${timeoutMs / 1000}s — falling back to next deal`);
-      resolve(null);
-    }, timeoutMs);
-
-    // Run synchronously — if it completes before the timeout, great
-    try {
-      const result = createRealmGame(seed, gridSize);
-      clearTimeout(timer);
-      resolve(result);
-    } catch (e) {
-      clearTimeout(timer);
-      console.error('[Realm] Grandmaster reconstruction failed:', e);
-      resolve(null);
-    }
-  });
 }
 
 function createFallbackRealmGame(seed: number, gridSize?: number): RealmState {
@@ -891,8 +558,7 @@ function ddsToRealmDifficulty(dds: number): string {
   if (dds < 51) return 'Medium';
   if (dds < 76) return 'Hard';
   if (dds < 101) return 'Expert';
-  if (dds < 131) return 'Master';
-  return 'Grandmaster';
+  return 'Master';
 }
 
 // ==================== Constraint-Based Win Check ====================

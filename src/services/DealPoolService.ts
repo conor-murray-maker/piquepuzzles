@@ -15,7 +15,6 @@ export interface VerifiedDeal {
   difficulty: string;
   difficultyScore: number;
   drawMode: number;
-  regionMap?: number[][] | null;
 }
 
 /** Unified DDS bracket for all game modes */
@@ -74,7 +73,6 @@ function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
     difficulty: ddsToLabel(deal.dds_blended),
     difficultyScore: deal.dds_blended,
     drawMode: deal.draw_mode,
-    regionMap: deal.region_map ?? null,
   };
 }
 
@@ -222,7 +220,7 @@ export class DealPoolService {
     try {
       let query = (supabase as any)
         .from('deals')
-        .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence, region_map')
+        .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence')
         .eq('game_mode', gameMode)
         .order('pool_attempts', { ascending: true });
 
@@ -343,7 +341,7 @@ export class DealPoolService {
       for (const entry of data) {
         let query = (supabase as any)
           .from('deals')
-          .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence, region_map')
+          .select('id, seed, game_mode, draw_mode, min_moves, dds_initial, dds_blended, confidence')
           .eq('id', entry.deal_id)
           .eq('game_mode', gameMode);
 
@@ -388,8 +386,7 @@ export class DealPoolService {
           const sizes = bracket.max <= 35 ? [5] :
                        bracket.max <= 65 ? [6] :
                        bracket.max <= 85 ? [7, 8] :
-                       bracket.max <= 100 ? [9, 10] :
-                       bracket.max <= 130 ? [10, 11] : [11, 12];
+                       bracket.max <= 100 ? [9, 10] : [10];
           const size = sizes[Math.floor(Math.random() * sizes.length)];
           deal = engine.generateDeal(seed, { gridSize: size, skipSpatialSurprise: size <= 5 });
         } else {

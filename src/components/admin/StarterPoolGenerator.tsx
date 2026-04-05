@@ -10,7 +10,7 @@ import { FreeCellEngine } from "@/engines/FreeCellEngine";
 import { RealmEngine } from "@/engines/RealmEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
-import { generateRealmPuzzleSolutionFirst, generateRealmPuzzle, type GenerationStrategy, type RealmGenOptions } from "@/game/realm";
+import { generateRealmPuzzle, type RealmGenOptions } from "@/game/realm";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
 import { Database, Loader2, CheckCircle, XCircle, Zap } from "lucide-react";
 
@@ -66,9 +66,8 @@ const TARGETS_BY_MODE: Record<string, Target[]> = {
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "easy", ddsMin: 0, ddsMax: 30, target: 50, gridSizes: [5], skipSpatialSurprise: true },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "medium", ddsMin: 15, ddsMax: 55, target: 40, gridSizes: [6] },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "hard", ddsMin: 30, ddsMax: 80, target: 30, gridSizes: [7, 8] },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 60, ddsMax: 100, target: 20, gridSizes: [9, 10] },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "master", ddsMin: 100, ddsMax: 130, target: 15, gridSizes: [10, 11] },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "grandmaster", ddsMin: 120, ddsMax: 150, target: 10, gridSizes: [11, 12] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 60, ddsMax: 100, target: 20, gridSizes: [9] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "master", ddsMin: 75, ddsMax: 100, target: 15, gridSizes: [10] },
   ],
 };
 
@@ -81,7 +80,6 @@ const DIFFICULTY_OPTIONS = [
   { value: "hard", label: "Hard only" },
   { value: "expert", label: "Expert only" },
   { value: "master", label: "Master only" },
-  { value: "grandmaster", label: "Grandmaster only" },
 ];
 
 const TIMEOUT_OPTIONS = [

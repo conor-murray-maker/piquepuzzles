@@ -90,12 +90,7 @@ export function useGamePersistence() {
   ): Promise<GameResult | null> => {
     if (!user || !profile) return null;
 
-    const effectiveDealUuid = dealUuid || (gameState as any).dealUuid;
-
-    if (!effectiveDealUuid) {
-      console.error('Cannot save game result: deal_uuid is missing. Game will not be recorded.');
-      return null;
-    }
+    const effectiveDealUuid = dealUuid || (gameState as any).dealUuid || undefined;
 
     try {
       const { data, error } = await invokeWithRetry({

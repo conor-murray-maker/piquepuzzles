@@ -188,13 +188,15 @@ export class DealPoolService {
       return null;
     }
 
-    // Fallback 4: Replay oldest played eligible deal
-    const replay = await this.getOldestPlayedDeal(userId, gameMode, null, allowedDiffs, minConf);
-    console.log(`[DealPoolService] Priority 5 (replay):`, { served: !!replay });
+    // Fallback 4: Replay oldest played eligible deal — respects DDS floor
+    const replayBracket = ddsFloor !== null ? { min: ddsFloor, max: 9999 } : null;
+    const replay = await this.getOldestPlayedDeal(userId, gameMode, replayBracket, allowedDiffs, minConf);
     if (replay) {
+      console.log(`[DealPoolService] Priority 5 (replay):`, { served: true, ddsFloor });
       await this.markPlayed(userId, replay.id);
       return dealRowToVerified(replay, 'replay');
     }
+    console.log(`[DealPoolService] Priority 5 (replay): no eligible deal above DDS floor ${ddsFloor ?? 'none'}`);
 
     // Fallback 5: Generate on client — should only trigger if pool is truly empty
     console.warn(`[DealPoolService] Fallback generation triggered for ${gameMode} — pool exhausted (total deals: ${found4}, all played)`);

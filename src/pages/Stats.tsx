@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { RATING_TIERS } from '@/game/types';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
@@ -25,9 +25,10 @@ interface GameRecord {
   game_mode: string;
 }
 
-function StatsContent({ games, stats }: {
+function StatsContent({ games, stats, modeIQ }: {
   games: GameRecord[];
   stats: ReturnType<typeof usePlayerStats>;
+  modeIQ?: number | null;
 }) {
   const localStats = useMemo(() => {
     if (games.length === 0) return null;
@@ -78,8 +79,8 @@ function StatsContent({ games, stats }: {
           <CardContent className="pt-5 pb-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Pique IQ</p>
-                <PuzzleIQBadge rating={stats.puzzleIQ} size="lg" />
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">{modeIQ != null ? 'Mode IQ' : 'Pique IQ'}</p>
+                <PuzzleIQBadge rating={modeIQ ?? stats.puzzleIQ} size="lg" />
               </div>
               <div className="text-right space-y-1">
                 <p className={`text-lg font-bold font-mono flex items-center gap-1 ${
@@ -92,7 +93,7 @@ function StatsContent({ games, stats }: {
               </div>
             </div>
 
-            {stats.percentile > 0 && (
+            {stats.percentile > 0 && !modeIQ && (
               <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-3 py-2">
                 <Users className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium">
@@ -101,7 +102,7 @@ function StatsContent({ games, stats }: {
               </div>
             )}
 
-            <TierProgressBar rating={stats.puzzleIQ} />
+            <TierProgressBar rating={modeIQ ?? stats.puzzleIQ} />
 
             {ratingHistory.length > 1 && (
               <div className="pt-2">
@@ -211,6 +212,7 @@ function StatsContent({ games, stats }: {
 
 export default function Stats() {
   const stats = usePlayerStats();
+  const [selectedTab, setSelectedTab] = useState('all');
 
   const klondikeGames = useMemo(() => stats.games.filter((g: any) => !g.game_mode || g.game_mode === 'klondike'), [stats.games]);
   const freecellGames = useMemo(() => stats.games.filter((g: any) => g.game_mode === 'freecell'), [stats.games]);
@@ -247,11 +249,11 @@ export default function Stats() {
         {/* Pique IQ Panel */}
         {stats.modeRatings.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
-            <PiqueIQPanel piqueIQ={stats.puzzleIQ} modeRatings={stats.modeRatings} />
+            <PiqueIQPanel piqueIQ={stats.puzzleIQ} modeRatings={stats.modeRatings} activeMode={selectedTab !== 'all' ? selectedTab : null} />
           </motion.div>
         )}
 
-        <Tabs defaultValue="all" className="w-full">
+        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
           <TabsList className="w-full">
             <TabsTrigger value="all" className="flex-1">All</TabsTrigger>
             <TabsTrigger value="klondike" className="flex-1">Klondike</TabsTrigger>
@@ -263,13 +265,13 @@ export default function Stats() {
             <StatsContent games={stats.games as GameRecord[]} stats={stats} />
           </TabsContent>
           <TabsContent value="klondike">
-            <StatsContent games={klondikeGames as GameRecord[]} stats={stats} />
+            <StatsContent games={klondikeGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'klondike')?.iq} />
           </TabsContent>
           <TabsContent value="freecell">
-            <StatsContent games={freecellGames as GameRecord[]} stats={stats} />
+            <StatsContent games={freecellGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'freecell')?.iq} />
           </TabsContent>
           <TabsContent value="realm">
-            <StatsContent games={realmGames as GameRecord[]} stats={stats} />
+            <StatsContent games={realmGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'realm')?.iq} />
           </TabsContent>
         </Tabs>
       </div>

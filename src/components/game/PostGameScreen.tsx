@@ -241,7 +241,13 @@ export function PostGameScreen({
             {displayModeIQ !== null && (
               <motion.span
                 className={`font-mono font-semibold text-lg`}
-                style={isGM ? { ...gmShimmerStyle, fontSize: '1.125rem' } : undefined}
+                style={isGM
+                  ? displayModeIQDelta > 0
+                    ? { ...gmShimmerStyle, fontSize: '1.125rem' }
+                    : displayModeIQDelta < 0
+                      ? { color: '#ef4444', fontSize: '1.125rem' }
+                      : { color: '#666', fontSize: '1.125rem' }
+                  : undefined}
                 initial={{ opacity: 0, y: displayModeIQDelta >= 0 ? 10 : -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}

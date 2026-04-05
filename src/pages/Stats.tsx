@@ -256,7 +256,7 @@ export default function Stats() {
 
         {/* Global Standing */}
         {stats.modeRatings.length > 0 && (
-          <GlobalStanding modeRatings={stats.modeRatings} />
+          <GlobalStanding modeRatings={stats.modeRatings} activeTab={selectedTab} compositeIQ={stats.puzzleIQ} />
         )}
 
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">

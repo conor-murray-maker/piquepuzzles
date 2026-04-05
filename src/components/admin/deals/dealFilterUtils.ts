@@ -51,7 +51,7 @@ function getConfidenceBand(conf: number): string {
 export function applyFilters(deals: DealRow[], filters: DealFilterState): DealRow[] {
   return deals.filter(d => {
     if (filters.gameMode !== "all" && d.game_mode !== filters.gameMode) return false;
-    if (filters.difficulty !== "all" && getDifficultyBand(d.dds_blended) !== filters.difficulty) return false;
+    if (filters.difficulty !== "all" && getDifficultyBand(d) !== filters.difficulty) return false;
     if (filters.ddsSource !== "all" && getDdsSource(d.pool_attempts) !== filters.ddsSource) return false;
 
     if (filters.confidence !== "all") {

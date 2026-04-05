@@ -10,7 +10,7 @@ import { FreeCellEngine } from "@/engines/FreeCellEngine";
 import { RealmEngine } from "@/engines/RealmEngine";
 import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
-import { generateRealmPuzzle, type RealmGenOptions } from "@/game/realm";
+import { type RealmGenOptions } from "@/game/realm";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
 import { Database, Loader2, CheckCircle, XCircle, Zap } from "lucide-react";
 
@@ -497,7 +497,7 @@ export function StarterPoolGenerator() {
 
   const modeDescription = () => {
     if (selectedMode === "realm") {
-      if (selectedDifficulty === "all") return "Realm: 50 Easy (5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9-10×), 15 Master (10-11×), 10 Grandmaster (11-12×).";
+      if (selectedDifficulty === "all") return "Realm: 50 Easy (5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9×), 15 Master (10×).";
       const t = targets[0];
       if (!t) return "";
       return `Realm ${t.band}: ${t.target} deals${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}. Confidence=1.0 (unique solution).`;

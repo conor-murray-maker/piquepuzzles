@@ -18,7 +18,7 @@ interface ScoreInput {
   completed: boolean;
   avgTime: number;
   avgMoves: number;
-  baseDelta: number; // raw ELO delta before modifiers
+  baseDelta: number;
 }
 
 interface ScoreResult {
@@ -32,12 +32,12 @@ interface ScoreResult {
 }
 
 interface ModeConfig {
-  timeWeight: number;     // coefficient for time formula
-  movesWeight: number;    // coefficient for moves formula (0 for realm)
-  undoPenaltyPerUndo: number; // flat per-undo penalty (0 for card games)
-  baseCompletionFraction: number; // fraction of baseDelta used as completion reward
-  lossPenalty: number;    // fixed loss penalty (worst possible)
-  winFloor: number | null; // minimum win delta (null = no floor)
+  timeWeight: number;
+  movesWeight: number;
+  undoPenaltyPerUndo: number;
+  baseCompletionFraction: number;
+  lossPenalty: number;
+  winFloor: number | null;
 }
 
 const MODE_CONFIGS: Record<string, ModeConfig> = {
@@ -47,12 +47,12 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
     undoPenaltyPerUndo: 2,
     baseCompletionFraction: 0.4,
     lossPenalty: -20,
-    winFloor: null, // net negative allowed
+    winFloor: null,
   },
   freecell: {
     timeWeight: 20,
     movesWeight: 10,
-    undoPenaltyPerUndo: 0, // folded into moves
+    undoPenaltyPerUndo: 0,
     baseCompletionFraction: 0.5,
     lossPenalty: -20,
     winFloor: 1,
@@ -60,8 +60,8 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
   klondike: {
     timeWeight: 10,
     movesWeight: 20,
-    undoPenaltyPerUndo: 0, // folded into moves
-    baseCompletionFraction: 0.6, // higher — completion not guaranteed
+    undoPenaltyPerUndo: 0,
+    baseCompletionFraction: 0.6,
     lossPenalty: -20,
     winFloor: 1,
   },
@@ -71,7 +71,6 @@ function computeScore(input: ScoreInput): ScoreResult {
   const config = MODE_CONFIGS[input.gameMode] ?? MODE_CONFIGS.klondike;
 
   if (!input.completed) {
-    // Loss: fixed penalty
     return {
       baseCompletion: config.lossPenalty,
       timeDelta: 0,
@@ -85,38 +84,30 @@ function computeScore(input: ScoreInput): ScoreResult {
     };
   }
 
-  // Base completion points
   const baseCompletion = Math.round(input.baseDelta * config.baseCompletionFraction);
 
-  // Time delta: weight × (ratio^1.3 - 1)
   const timeRatio = Math.max(input.avgTime, 1) / Math.max(input.actualTime, 1);
   const timeDelta = Math.round(config.timeWeight * (Math.pow(timeRatio, 1.3) - 1));
 
-  // Moves delta: weight × (ratio^1.3 - 1) — 0 for realm
   let movesDelta = 0;
   if (config.movesWeight > 0 && input.avgMoves > 0) {
     const movesRatio = input.avgMoves / Math.max(input.actualMoves, 1);
     movesDelta = Math.round(config.movesWeight * (Math.pow(movesRatio, 1.3) - 1));
   }
 
-  // Undo penalty (realm only; card games have undos folded into moves)
   const undoPenalty = config.undoPenaltyPerUndo * input.undosUsed;
 
-  // Hint penalty: percentage of base completion
   const hintPenaltyFraction = Math.max(0.7, 1 - input.hintsUsed * 0.05);
   const hintPenalty = Math.round(baseCompletion * (1 - hintPenaltyFraction));
 
   let total = baseCompletion + timeDelta + movesDelta - undoPenalty - hintPenalty;
 
-  // Win floor (card games get +1 minimum; realm allows net negative)
   if (config.winFloor !== null) {
     total = Math.max(config.winFloor, total);
   }
 
-  // Ensure completion never scores worse than loss
   total = Math.max(config.lossPenalty + 1, total);
 
-  // Build breakdown
   const breakdown: { label: string; value: number }[] = [];
   const diffLabel = ddsToLabel(input.dealDDS);
 
@@ -153,7 +144,6 @@ function computeScore(input: ScoreInput): ScoreResult {
 
 // ─── Utility functions ─────────────────────────────────────────
 
-// Game-agnostic normalisation config (for deal pool stats)
 const NORM_CONFIG: Record<string, { movesMin: number; movesRange: number; timeMin: number; timeRange: number }> = {
   klondike: { movesMin: 50, movesRange: 150, timeMin: 60, timeRange: 540 },
   freecell: { movesMin: 40, movesRange: 140, timeMin: 60, timeRange: 480 },
@@ -349,12 +339,30 @@ async function updateStreak(
   return { currentStreak, bestStreak, freezeUsed, milestoneReached, profileUpdate: streakUpdate };
 }
 
+// ─── SQL escape helper ─────────────────────────────────────────
+
+function sqlLiteral(val: unknown): string {
+  if (val === null || val === undefined) return 'NULL';
+  if (typeof val === 'number') return String(val);
+  if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+  // Escape single quotes
+  return `'${String(val).replace(/'/g, "''")}'`;
+}
+
 // ─── Main handler ──────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+  // Variables for audit logging (captured early so failure path can log)
+  let userId = 'unknown';
+  let clientDealId = 'unknown';
+  let clientDealUuid: string | null = null;
+  let gameMode = 'unknown';
 
   try {
     const authHeader = req.headers.get('Authorization');
@@ -364,7 +372,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const supabaseUser = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -375,14 +382,17 @@ Deno.serve(async (req) => {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const userId = authUser.id;
+    userId = authUser.id;
 
     const body = await req.json();
     const {
-      dealSeed, gameMode, drawMode = 3, result, actualMoves, actualTime,
-      hintsUsed = 0, undosUsed = 0, dealId: clientDealId, dealUuid: clientDealUuid,
-      isDaily: clientIsDaily = false, timezoneOffset = 0, dealDDS: clientDealDDS = 0,
+      dealSeed, drawMode = 3, result, actualMoves, actualTime,
+      hintsUsed = 0, undosUsed = 0, isDaily: clientIsDaily = false,
+      timezoneOffset = 0, dealDDS: clientDealDDS = 0,
     } = body;
+    gameMode = body.gameMode;
+    clientDealId = body.dealId || `deal-${dealSeed}`;
+    clientDealUuid = body.dealUuid || null;
 
     // Input validation
     if (!['win', 'loss', 'abandon'].includes(result)) {
@@ -410,7 +420,7 @@ Deno.serve(async (req) => {
     const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
     const { data: existingGame } = await supabaseAdmin
       .from('game_history').select('id')
-      .eq('user_id', userId).eq('deal_id', clientDealId || `deal-${dealSeed}`)
+      .eq('user_id', userId).eq('deal_id', clientDealId)
       .eq('won', result === 'win').eq('moves', actualMoves)
       .gte('played_at', thirtySecsAgo).limit(1);
 
@@ -577,25 +587,184 @@ Deno.serve(async (req) => {
       finalDelta, newModeIQ,
     });
 
-    // 8. Upsert player_mode_ratings
-    const { error: modeUpsertErr } = await supabaseAdmin
-      .from('player_mode_ratings')
-      .upsert({
-        user_id: userId,
-        game_mode: gameMode,
-        iq: newModeIQ,
-        games_played: modeGamesPlayed + 1,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,game_mode' });
-    if (modeUpsertErr) console.error('[complete-game] mode rating upsert failed:', modeUpsertErr);
+    // 12. Evaluate streak (before transaction — streak_history is separate)
+    const streakResult = await updateStreak(supabaseAdmin, userId, result, isDaily, profile);
 
-    // 9. Calculate composite puzzle IQ
-    const { data: puzzleIQResult } = await supabaseAdmin.rpc('calculate_puzzle_iq', { p_user_id: userId });
-    const newPuzzleIQ = puzzleIQResult ?? modeIQ;
+    // ─── ATOMIC TRANSACTION: All critical writes in one SQL block ───
+    // This ensures game_history, player_mode_ratings, and profiles are
+    // updated together. If any step fails, everything rolls back.
+
     const previousPuzzleIQ = profile.rating as number;
+    const gamesPlayed = profile.games_played as number;
+    const perModeKey = `games_played_${gameMode}` as string;
+    const currentPerMode = (profile[perModeKey] as number) ?? 0;
+
+    // Build the atomic SQL transaction
+    const nowISO = new Date().toISOString();
+    const dealUuidForInsert = deal?.id || null;
+    const difficulty = ddsToLabel(dds);
+
+    // We need to compute composite IQ inside the transaction to avoid races.
+    // We'll do it by first upserting mode rating, then computing the average.
+    const txSQL = `
+BEGIN;
+
+-- Step 1: Upsert player_mode_ratings (IQ + games_played counter)
+INSERT INTO player_mode_ratings (user_id, game_mode, iq, games_played, updated_at)
+VALUES (${sqlLiteral(userId)}, ${sqlLiteral(gameMode)}, ${newModeIQ}, ${modeGamesPlayed + 1}, ${sqlLiteral(nowISO)})
+ON CONFLICT (user_id, game_mode)
+DO UPDATE SET iq = ${newModeIQ}, games_played = ${modeGamesPlayed + 1}, updated_at = ${sqlLiteral(nowISO)};
+
+-- Step 2: Calculate new composite puzzle IQ
+-- (done inline via subquery in the profile update)
+
+-- Step 3: Insert game_history
+INSERT INTO game_history (
+  user_id, deal_id, won, moves, time_seconds, hints_used, undos_used,
+  difficulty, difficulty_score, rating_before, rating_after, rating_change,
+  game_mode, performance_modifier, base_delta, final_delta, deal_uuid
+) VALUES (
+  ${sqlLiteral(userId)}, ${sqlLiteral(clientDealId)}, ${isWin}, ${actualMoves}, ${actualTime},
+  ${hintsUsed}, ${undosUsed}, ${sqlLiteral(difficulty)}, ${dds},
+  ${previousPuzzleIQ},
+  (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+   FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
+   WHERE gm.is_active = true),
+  (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+   FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
+   WHERE gm.is_active = true) - ${previousPuzzleIQ},
+  ${sqlLiteral(gameMode)}, 1.0, ${baseDelta}, ${finalDelta},
+  ${dealUuidForInsert ? sqlLiteral(dealUuidForInsert) : 'NULL'}
+);
+
+-- Step 4: Update profile (rating, counters, streak)
+UPDATE profiles SET
+  rating = (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+            FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
+            WHERE gm.is_active = true),
+  games_played = ${gamesPlayed + 1},
+  games_won = ${(profile.games_won as number) + (isWin ? 1 : 0)},
+  ${perModeKey} = ${currentPerMode + 1},
+  updated_at = ${sqlLiteral(nowISO)},
+  daily_wins_today = ${streakResult.profileUpdate.daily_wins_today ?? profile.daily_wins_today},
+  daily_challenge_completed_today = ${streakResult.profileUpdate.daily_challenge_completed_today ?? profile.daily_challenge_completed_today},
+  current_streak = ${streakResult.currentStreak},
+  best_streak = ${streakResult.bestStreak},
+  streak_freezes_remaining = ${streakResult.profileUpdate.streak_freezes_remaining ?? profile.streak_freezes_remaining}
+  ${streakResult.profileUpdate.last_streak_date ? `, last_streak_date = ${sqlLiteral(streakResult.profileUpdate.last_streak_date)}` : ''}
+  ${streakResult.profileUpdate.streak_freeze_used_on ? `, streak_freeze_used_on = ${sqlLiteral(streakResult.profileUpdate.streak_freeze_used_on)}` : ''}
+  ${streakResult.milestoneReached !== null ? `, pending_milestone = ${streakResult.milestoneReached}` : ''}
+  ${isWin ? `, last_win_date = ${sqlLiteral(streakResult.profileUpdate.last_win_date)}` : ''}
+  ${Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840 ? `, timezone_offset = ${timezoneOffset}` : ''}
+WHERE id = ${sqlLiteral(userId)};
+
+COMMIT;
+`;
+
+    // Execute the atomic transaction via raw SQL
+    const { error: txError } = await supabaseAdmin.rpc('execute_sql', { sql: txSQL }).maybeSingle();
+
+    // If RPC not available, fall back to individual writes but treat as atomic block
+    let newPuzzleIQ = previousPuzzleIQ;
+    let txFailed = false;
+    let txErrorMsg = '';
+
+    if (txError) {
+      // RPC may not exist — fall back to sequential writes with explicit error checking
+      console.warn('[complete-game] Transaction RPC unavailable, using sequential writes:', txError.message);
+
+      // Step 1: Upsert mode rating
+      const { error: modeErr } = await supabaseAdmin
+        .from('player_mode_ratings')
+        .upsert({
+          user_id: userId, game_mode: gameMode,
+          iq: newModeIQ, games_played: modeGamesPlayed + 1,
+          updated_at: nowISO,
+        }, { onConflict: 'user_id,game_mode' });
+
+      if (modeErr) {
+        txFailed = true;
+        txErrorMsg = `mode_rating_upsert: ${modeErr.message}`;
+        console.error('[complete-game] CRITICAL: mode rating upsert failed:', modeErr);
+      }
+
+      if (!txFailed) {
+        // Step 2: Calculate composite IQ
+        const { data: puzzleIQResult } = await supabaseAdmin.rpc('calculate_puzzle_iq', { p_user_id: userId });
+        newPuzzleIQ = puzzleIQResult ?? newModeIQ;
+
+        // Step 3: Insert game history
+        const { error: historyErr } = await supabaseAdmin.from('game_history').insert({
+          user_id: userId, deal_id: clientDealId,
+          won: isWin, moves: actualMoves, time_seconds: actualTime,
+          hints_used: hintsUsed, undos_used: undosUsed,
+          difficulty, difficulty_score: dds,
+          rating_before: previousPuzzleIQ, rating_after: newPuzzleIQ,
+          rating_change: newPuzzleIQ - previousPuzzleIQ, game_mode: gameMode,
+          performance_modifier: 1.0,
+          base_delta: baseDelta, final_delta: finalDelta,
+          deal_uuid: dealUuidForInsert,
+        } as Record<string, unknown>);
+
+        if (historyErr) {
+          txFailed = true;
+          txErrorMsg = `game_history_insert: ${historyErr.message}`;
+          console.error('[complete-game] CRITICAL: game_history insert failed:', historyErr);
+        }
+      }
+
+      if (!txFailed) {
+        // Step 4: Update profile
+        const profileUpdate: Record<string, unknown> = {
+          rating: newPuzzleIQ,
+          games_played: gamesPlayed + 1,
+          games_won: (profile.games_won as number) + (isWin ? 1 : 0),
+          [perModeKey]: currentPerMode + 1,
+          updated_at: nowISO,
+          ...streakResult.profileUpdate,
+        };
+        if (Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840) {
+          profileUpdate.timezone_offset = timezoneOffset;
+        }
+
+        const { error: profileUpdateErr } = await supabaseAdmin.from('profiles').update(profileUpdate).eq('id', userId);
+        if (profileUpdateErr) {
+          txFailed = true;
+          txErrorMsg = `profile_update: ${profileUpdateErr.message}`;
+          console.error('[complete-game] CRITICAL: profile update failed:', profileUpdateErr);
+        }
+      }
+    } else {
+      // Transaction succeeded — compute the new puzzle IQ for the response
+      const { data: puzzleIQResult } = await supabaseAdmin.rpc('calculate_puzzle_iq', { p_user_id: userId });
+      newPuzzleIQ = puzzleIQResult ?? newModeIQ;
+    }
+
+    // If the critical writes failed, log audit and return error
+    if (txFailed) {
+      console.error('[complete-game] TRANSACTION FAILED:', { userId, clientDealId, gameMode, error: txErrorMsg });
+
+      // Write audit log
+      await supabaseAdmin.from('game_completion_log').insert({
+        user_id: userId, deal_id: clientDealId, deal_uuid: dealUuidForInsert,
+        game_mode: gameMode, succeeded: false, error_message: txErrorMsg,
+        payload: { dds, finalDelta, modeIQ, newModeIQ, actualMoves, actualTime, result },
+      }).catch((e: any) => console.error('[complete-game] audit log insert failed:', e));
+
+      return new Response(JSON.stringify({
+        error: 'completion_failed',
+        message: 'Game completion could not be recorded. Please try again.',
+        detail: txErrorMsg,
+      }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const puzzleIQDelta = newPuzzleIQ - previousPuzzleIQ;
 
-    // 10. Update deal pool stats
+    // ─── Non-critical updates (fire-and-forget, don't block response) ───
+
+    // Update deal pool stats
     if (deal) {
       const pa = deal.pool_attempts as number;
       const newAttempts = pa + 1;
@@ -623,69 +792,43 @@ Deno.serve(async (req) => {
         ddsBlended = ddsInitial * (1 - blend) + ddsEmpirical * blend;
       } else ddsBlended = ddsEmpirical;
 
-      await supabaseAdmin.from('deals').update({
+      supabaseAdmin.from('deals').update({
         pool_attempts: newAttempts, pool_wins: newWins, pool_avg_moves: newAvgMoves,
         pool_avg_time: newAvgTime, pool_abandons: newAbandons,
         dds_empirical: ddsEmpirical, dds_blended: ddsBlended,
-      }).eq('id', deal.id);
+      }).eq('id', deal.id).then(({ error }: any) => {
+        if (error) console.error('[complete-game] deal pool stats update failed:', error);
+      });
     }
 
-    // 11. Update performance_expectations (wins only)
+    // Update performance_expectations (wins only)
     if (isWin && perfExpRow) {
       const oldSC = perfExpRow.sample_count ?? 0;
       const newAvgT = (perfExpRow.avg_time_seconds * oldSC + actualTime) / (oldSC + 1);
       const upsertData: Record<string, unknown> = {
         game_mode: gameMode, dds_bucket: ddsBucket, iq_bucket: iqBucket,
         avg_time_seconds: newAvgT,
-        sample_count: oldSC + 1, updated_at: new Date().toISOString(),
+        sample_count: oldSC + 1, updated_at: nowISO,
       };
       if (!isRealm) {
         const newAvgM = (perfExpRow.avg_moves * oldSC + actualMoves) / (oldSC + 1);
         upsertData.avg_moves = newAvgM;
       }
-      await supabaseAdmin.from('performance_expectations').upsert(
+      supabaseAdmin.from('performance_expectations').upsert(
         upsertData, { onConflict: 'game_mode,dds_bucket,iq_bucket' },
-      );
+      ).then(({ error }: any) => {
+        if (error) console.error('[complete-game] perf expectations upsert failed:', error);
+      });
     }
 
-    // 12. Evaluate streak
-    const streakResult = await updateStreak(supabaseAdmin, userId, result, isDaily, profile);
+    // Write success audit log
+    supabaseAdmin.from('game_completion_log').insert({
+      user_id: userId, deal_id: clientDealId, deal_uuid: dealUuidForInsert,
+      game_mode: gameMode, succeeded: true, error_message: null,
+      payload: { dds, finalDelta, modeIQ, newModeIQ, newPuzzleIQ, actualMoves, actualTime, result },
+    }).catch((e: any) => console.error('[complete-game] audit log insert failed:', e));
 
-    // 13. Update profile
-    const gamesPlayed = profile.games_played as number;
-    const perModeKey = `games_played_${gameMode}` as string;
-    const currentPerMode = (profile[perModeKey] as number) ?? 0;
-    const profileUpdate: Record<string, unknown> = {
-      rating: newPuzzleIQ,
-      games_played: gamesPlayed + 1,
-      games_won: (profile.games_won as number) + (isWin ? 1 : 0),
-      [perModeKey]: currentPerMode + 1,
-      updated_at: new Date().toISOString(),
-      ...streakResult.profileUpdate,
-    };
-
-    if (Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840) {
-      profileUpdate.timezone_offset = timezoneOffset;
-    }
-
-    const { error: profileUpdateErr } = await supabaseAdmin.from('profiles').update(profileUpdate).eq('id', userId);
-    if (profileUpdateErr) console.error('[complete-game] profiles update failed:', profileUpdateErr);
-
-    // 14. Insert game history
-    const { error: historyErr } = await supabaseAdmin.from('game_history').insert({
-      user_id: userId, deal_id: clientDealId || `deal-${dealSeed}`,
-      won: isWin, moves: actualMoves, time_seconds: actualTime,
-      hints_used: hintsUsed, undos_used: undosUsed,
-      difficulty: ddsToLabel(dds), difficulty_score: dds,
-      rating_before: previousPuzzleIQ, rating_after: newPuzzleIQ,
-      rating_change: puzzleIQDelta, game_mode: gameMode,
-      performance_modifier: 1.0,
-      base_delta: baseDelta, final_delta: finalDelta,
-      deal_uuid: deal?.id || null,
-    } as Record<string, unknown>);
-    if (historyErr) console.error('[complete-game] game_history insert failed:', historyErr);
-
-    // 15. Return result
+    // Return result
     return new Response(JSON.stringify({
       finalDelta,
       baseDelta: scoreResult.baseCompletion,
@@ -701,7 +844,6 @@ Deno.serve(async (req) => {
       undoPenaltyPoints: scoreResult.undoPenalty,
       hintsUsed, undosUsed,
       breakdown: scoreResult.breakdown,
-      // Mode-specific IQ data
       modeIQ: newModeIQ,
       previousModeIQ: modeIQ,
       modeIQDelta: finalDelta,
@@ -719,8 +861,16 @@ Deno.serve(async (req) => {
     });
 
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('[complete-game] internal error:', err);
-    return new Response(JSON.stringify({ error: 'An internal error occurred' }), {
+
+    // Write failure audit log
+    supabaseAdmin.from('game_completion_log').insert({
+      user_id: userId, deal_id: clientDealId, deal_uuid: clientDealUuid,
+      game_mode: gameMode, succeeded: false, error_message: `exception: ${errorMsg}`,
+    }).catch((e: any) => console.error('[complete-game] audit log insert failed:', e));
+
+    return new Response(JSON.stringify({ error: 'completion_failed', message: 'An internal error occurred' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

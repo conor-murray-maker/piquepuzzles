@@ -112,7 +112,6 @@ const FILL_ALL_BATCHES: FillAllBatch[] = [
 /** Generate deals for a single target band, returning inserted count */
 async function generateBatch(
   target: Target,
-  strategy: GenerationStrategy,
   timeoutMs: number,
   needed: number,
   abortRef: React.MutableRefObject<boolean>,
@@ -141,28 +140,8 @@ async function generateBatch(
         }
 
         let deal;
-        let realmSolution: [number, number][] | undefined;
         if (isRealm) {
-          const genOpts: RealmGenOptions = {
-            gridSize: realmGridSize,
-            skipSpatialSurprise: realmSkipSurprise,
-            timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
-          };
-          const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
-
-          if (useLargeGridStrategy && strategy === "solution-first") {
-            const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
-            if (puzzle) realmSolution = puzzle.solution;
-            deal = { seed, gameMode: "realm" as const, data: puzzle };
-          } else if (useLargeGridStrategy && strategy === "hybrid") {
-            let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
-            if (!puzzle) puzzle = generateRealmPuzzle(seed, genOpts);
-            if (puzzle) realmSolution = puzzle.solution;
-            deal = { seed, gameMode: "realm" as const, data: puzzle };
-          } else {
-            deal = engine.generateDeal(seed, { gridSize: realmGridSize, skipSpatialSurprise: realmSkipSurprise, timeoutMs: timeoutMs > 0 ? timeoutMs : undefined });
-            if (deal.data) realmSolution = (deal.data as any).solution;
-          }
+          deal = engine.generateDeal(seed, { gridSize: realmGridSize, skipSpatialSurprise: realmSkipSurprise, timeoutMs: timeoutMs > 0 ? timeoutMs : undefined });
         } else {
           deal = engine.generateDeal(seed);
         }

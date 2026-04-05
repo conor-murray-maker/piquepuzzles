@@ -4,6 +4,7 @@
  */
 
 import { generateSeed } from './deck';
+import { getRealmDifficultyFromGridSize } from '../lib/difficulty';
 
 export type CellState = 'empty' | 'marked' | 'auto-marked' | 'crown';
 
@@ -438,7 +439,7 @@ function createRealmStateFromDeal(deal: RealmDeal, seed: number): RealmState {
     errors: 0,
     maxErrors: 3,
     dealId: `realm-${seed}`,
-    difficulty: ddsToRealmDifficulty(deal.dds),
+    difficulty: getRealmDifficultyFromGridSize(deal.size),
     difficultyScore: deal.dds,
     seed,
     minMoves: deal.size,
@@ -553,13 +554,6 @@ function createFallbackRealmGame(seed: number, gridSize?: number): RealmState {
   throw new Error('Realm generation failed after exhausting recovery attempts');
 }
 
-function ddsToRealmDifficulty(dds: number): string {
-  if (dds < 26) return 'Easy';
-  if (dds < 51) return 'Medium';
-  if (dds < 76) return 'Hard';
-  if (dds < 101) return 'Expert';
-  return 'Master';
-}
 
 // ==================== Constraint-Based Win Check ====================
 

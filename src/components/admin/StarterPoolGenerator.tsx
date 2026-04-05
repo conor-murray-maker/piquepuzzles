@@ -587,6 +587,16 @@ export function StarterPoolGenerator() {
             </SelectContent>
           </Select>
 
+          <Select value={selectedBatchMultiplier} onValueChange={setSelectedBatchMultiplier} disabled={running}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Batch size" />
+            </SelectTrigger>
+            <SelectContent>
+              {BATCH_SIZE_OPTIONS.map(b => (
+                <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Button onClick={run} disabled={running} className="gap-2">
             {running && !fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}

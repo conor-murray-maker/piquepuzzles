@@ -735,13 +735,19 @@ Deno.serve(async (req) => {
           else empiricalOnly++;
           const mode = d.game_mode as string;
           if (confByMode[mode]) { confByMode[mode].sum += d.confidence; confByMode[mode].count++; }
-          const dds = d.dds_blended;
-          if (dds < 26) byDiff.easy++;
-          else if (dds < 51) byDiff.medium++;
-          else if (dds < 76) byDiff.hard++;
-          else if (dds < 101) byDiff.expert++;
-          else if (dds < 131) byDiff.master++;
-          else byDiff.grandmaster++;
+          if (d.game_mode === 'realm') {
+            const gridDiff: Record<number, string> = { 5: 'easy', 6: 'medium', 7: 'hard', 8: 'expert', 9: 'master', 10: 'grandmaster' };
+            const rd = gridDiff[d.min_moves] || 'medium';
+            byDiff[rd]++;
+          } else {
+            const dds = d.dds_blended;
+            if (dds < 26) byDiff.easy++;
+            else if (dds < 51) byDiff.medium++;
+            else if (dds < 76) byDiff.hard++;
+            else if (dds < 101) byDiff.expert++;
+            else if (dds < 131) byDiff.master++;
+            else byDiff.grandmaster++;
+          }
         }
         const n = allDeals.length || 1;
         const totalDeals = allDeals.length;

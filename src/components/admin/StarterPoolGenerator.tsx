@@ -481,10 +481,12 @@ export function StarterPoolGenerator() {
             }
           }
 
-          // Store crown positions for large-grid Realm deals (gridSize >= 10)
-          let crownPositions: { row: number; col: number }[] | null = null;
-          if (isRealm && realmSolution && realmGridSize && realmGridSize >= 10) {
-            crownPositions = realmSolution.map(([row, col]) => ({ row, col }));
+          // Store region_map for large-grid Realm deals (gridSize >= 10)
+          let regionMapData: number[][] | null = null;
+          if (isRealm && realmGridSize && realmGridSize >= 10) {
+            // Get region map from whichever generator produced it
+            const puzzleData = deal?.data as any;
+            if (puzzleData?.regionMap) regionMapData = puzzleData.regionMap;
           }
 
           collected.push({
@@ -502,7 +504,7 @@ export function StarterPoolGenerator() {
             reserved_for: reservedFor,
             unique_winning_paths: isRealm ? 1 : uniquePaths,
             path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
-            crown_positions: crownPositions,
+            region_map: regionMapData,
             deduction_solvable: isRealm ? (verifyResult.confidence === 1.0) : null,
           });
 

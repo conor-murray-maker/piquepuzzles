@@ -761,20 +761,27 @@ Deno.serve(async (req) => {
         }));
 
         // === SCORING INTEGRITY ===
+        // Validity score uses only recent games (last 30 days) to avoid historical artefacts
+        const VALIDITY_SCORE_CUTOFF = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         let gamesWithZeroDDS = 0, gamesWithDefaultModifier = 0, gamesWithZeroDeltaOnWin = 0;
         let ratingMismatchCount = 0, duplicateGameCount = 0;
         const brokenGameIds: string[] = [];
-        const totalWins = allGames.filter((g: any) => g.won).length;
         const totalGamesCount = allGames.length;
+
+        // Recent games for validity scoring
+        const recentValidityGames = allGames.filter((g: any) => g.played_at >= VALIDITY_SCORE_CUTOFF);
+        const recentTotalCount = recentValidityGames.length;
+        const recentWins = recentValidityGames.filter((g: any) => g.won);
+        const recentWinCount = recentWins.length;
 
         // Dedup detection: group by user_id + deal_uuid + won
         const dedupMap = new Map<string, any[]>();
 
-        for (const g of allGames) {
+        for (const g of recentValidityGames) {
           const dds = g.difficulty_score || 0;
           if (dds === 0) { gamesWithZeroDDS++; brokenGameIds.push(g.id); }
-          if (g.won && g.performance_modifier === 1.0 && g.difficulty_score > 0) {
-            // Only flag if we'd expect a non-1.0 modifier (has deal data)
+          // Realm uses pure time delta — performance_modifier 1.0 is correct for Realm
+          if (g.won && g.performance_modifier === 1.0 && g.difficulty_score > 0 && g.game_mode !== 'realm') {
             gamesWithDefaultModifier++;
           }
           if (g.won && g.final_delta === 0) { gamesWithZeroDeltaOnWin++; brokenGameIds.push(g.id); }
@@ -795,11 +802,11 @@ Deno.serve(async (req) => {
           if (games.length > 1) duplicateGameCount += games.length - 1;
         }
 
-        const gamesWithValidDDS = totalGamesCount - gamesWithZeroDDS;
-        const gamesWithNonDefaultMod = totalWins - gamesWithDefaultModifier;
-        const duplicateRate = totalGamesCount > 0 ? duplicateGameCount / totalGamesCount : 0;
-        const ratingValidityScore = totalGamesCount > 0
-          ? +((gamesWithValidDDS / totalGamesCount) * (totalWins > 0 ? gamesWithNonDefaultMod / totalWins : 1) * (1 - duplicateRate)).toFixed(3)
+        const gamesWithValidDDS = recentTotalCount - gamesWithZeroDDS;
+        const gamesWithNonDefaultMod = recentWinCount - gamesWithDefaultModifier;
+        const duplicateRate = recentTotalCount > 0 ? duplicateGameCount / recentTotalCount : 0;
+        const ratingValidityScore = recentTotalCount > 0
+          ? +((gamesWithValidDDS / recentTotalCount) * (recentWinCount > 0 ? gamesWithNonDefaultMod / recentWinCount : 1) * (1 - duplicateRate)).toFixed(3)
           : 1.0;
 
         // === DEAL GENERATION HEALTH ===

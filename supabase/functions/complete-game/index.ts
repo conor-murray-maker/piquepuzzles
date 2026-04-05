@@ -207,12 +207,12 @@ function getIqBucket(iq: number): string {
 // ─── Hardcoded priors ──────────────────────────────────────────
 
 const REALM_PRIORS: Record<string, Record<string, { time: number; moves: number }>> = {
-  '0-25':   { '<1100': { time: 45, moves: 12 },  '1100-1300': { time: 30, moves: 10 }, '1300-1500': { time: 20, moves: 8 },  '1500-1700': { time: 14, moves: 6 },  '1700-2000': { time: 10, moves: 5 }, '2000-2500': { time: 5, moves: 4 },  '2500+': { time: 3, moves: 3 } },
-  '26-50':  { '<1100': { time: 120, moves: 22 }, '1100-1300': { time: 75, moves: 18 }, '1300-1500': { time: 45, moves: 14 }, '1500-1700': { time: 30, moves: 10 }, '1700-2000': { time: 20, moves: 8 }, '2000-2500': { time: 9, moves: 6 },  '2500+': { time: 5, moves: 5 } },
-  '51-75':  { '<1100': { time: 240, moves: 35 }, '1100-1300': { time: 150, moves: 28 }, '1300-1500': { time: 90, moves: 22 }, '1500-1700': { time: 60, moves: 16 }, '1700-2000': { time: 40, moves: 12 }, '2000-2500': { time: 18, moves: 9 }, '2500+': { time: 10, moves: 7 } },
-  '76-100': { '<1100': { time: 420, moves: 55 }, '1100-1300': { time: 270, moves: 42 }, '1300-1500': { time: 160, moves: 32 }, '1500-1700': { time: 100, moves: 22 }, '1700-2000': { time: 65, moves: 16 }, '2000-2500': { time: 28, moves: 11 }, '2500+': { time: 15, moves: 8 } },
-  '101-130': { '<1100': { time: 700, moves: 75 }, '1100-1300': { time: 480, moves: 58 }, '1300-1500': { time: 300, moves: 44 }, '1500-1700': { time: 180, moves: 30 }, '1700-2000': { time: 110, moves: 22 }, '2000-2500': { time: 40, moves: 14 }, '2500+': { time: 22, moves: 10 } },
-  '131-150': { '<1100': { time: 900, moves: 90 }, '1100-1300': { time: 600, moves: 70 }, '1300-1500': { time: 400, moves: 52 }, '1500-1700': { time: 240, moves: 36 }, '1700-2000': { time: 150, moves: 26 }, '2000-2500': { time: 55, moves: 17 }, '2500+': { time: 30, moves: 12 } },
+  '0-25':   { '<1100': { time: 45, moves: 0 },  '1100-1300': { time: 30, moves: 0 }, '1300-1500': { time: 20, moves: 0 },  '1500-1700': { time: 14, moves: 0 },  '1700-2000': { time: 10, moves: 0 }, '2000-2500': { time: 5, moves: 0 },  '2500+': { time: 3, moves: 0 } },
+  '26-50':  { '<1100': { time: 120, moves: 0 }, '1100-1300': { time: 75, moves: 0 }, '1300-1500': { time: 45, moves: 0 }, '1500-1700': { time: 30, moves: 0 }, '1700-2000': { time: 20, moves: 0 }, '2000-2500': { time: 9, moves: 0 },  '2500+': { time: 5, moves: 0 } },
+  '51-75':  { '<1100': { time: 240, moves: 0 }, '1100-1300': { time: 150, moves: 0 }, '1300-1500': { time: 90, moves: 0 }, '1500-1700': { time: 60, moves: 0 }, '1700-2000': { time: 40, moves: 0 }, '2000-2500': { time: 18, moves: 0 }, '2500+': { time: 10, moves: 0 } },
+  '76-100': { '<1100': { time: 420, moves: 0 }, '1100-1300': { time: 270, moves: 0 }, '1300-1500': { time: 160, moves: 0 }, '1500-1700': { time: 100, moves: 0 }, '1700-2000': { time: 65, moves: 0 }, '2000-2500': { time: 28, moves: 0 }, '2500+': { time: 15, moves: 0 } },
+  '101-130': { '<1100': { time: 700, moves: 0 }, '1100-1300': { time: 480, moves: 0 }, '1300-1500': { time: 300, moves: 0 }, '1500-1700': { time: 180, moves: 0 }, '1700-2000': { time: 110, moves: 0 }, '2000-2500': { time: 40, moves: 0 }, '2500+': { time: 22, moves: 0 } },
+  '131-150': { '<1100': { time: 900, moves: 0 }, '1100-1300': { time: 600, moves: 0 }, '1300-1500': { time: 400, moves: 0 }, '1500-1700': { time: 240, moves: 0 }, '1700-2000': { time: 150, moves: 0 }, '2000-2500': { time: 55, moves: 0 }, '2500+': { time: 30, moves: 0 } },
 };
 
 const FREECELL_PRIORS: Record<string, Record<string, { time: number; moves: number }>> = {

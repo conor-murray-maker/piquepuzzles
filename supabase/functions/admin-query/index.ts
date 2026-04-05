@@ -379,13 +379,20 @@ Deno.serve(async (req) => {
           if (d.pool_attempts < 30) solverOnly++;
           else if (d.pool_attempts < 100) blending++;
           else empirical++;
-          const dds = d.dds_blended;
-          if (dds < 26) byBand.Easy++;
-          else if (dds < 51) byBand.Medium++;
-          else if (dds < 76) byBand.Hard++;
-          else if (dds < 101) byBand.Expert++;
-          else if (dds < 131) byBand.Master++;
-          else byBand.Grandmaster++;
+          // Realm: classify by grid size (min_moves); non-Realm: by DDS
+          if (d.game_mode === 'realm') {
+            const gridDiff: Record<number, string> = { 5: 'Easy', 6: 'Medium', 7: 'Hard', 8: 'Expert', 9: 'Master', 10: 'Grandmaster' };
+            const label = gridDiff[d.min_moves] || 'Medium';
+            byBand[label]++;
+          } else {
+            const dds = d.dds_blended;
+            if (dds < 26) byBand.Easy++;
+            else if (dds < 51) byBand.Medium++;
+            else if (dds < 76) byBand.Hard++;
+            else if (dds < 101) byBand.Expert++;
+            else if (dds < 131) byBand.Master++;
+            else byBand.Grandmaster++;
+          }
         }
 
         return json({
@@ -623,20 +630,45 @@ Deno.serve(async (req) => {
           { label: 'Master', min: 101, max: 130 },
           { label: 'Grandmaster', min: 131, max: 150 },
         ];
+        const realmGridToDiff: Record<number, string> = { 5: 'Easy', 6: 'Medium', 7: 'Hard', 8: 'Expert', 9: 'Master', 10: 'Grandmaster' };
+        // Suppressed tiers: Master/GM for card games intentionally have no deals
+        const suppressedTiers = new Set(['klondike:Master', 'klondike:Grandmaster', 'freecell:Master', 'freecell:Grandmaster']);
         const lowPools: Array<{ mode: string; difficulty: string; remaining: number; severity: string }> = [];
 
         for (const mode of gameModes) {
-          for (const band of bands) {
-            const { count } = await adminClient
-              .from('deals')
-              .select('id', { count: 'exact', head: true })
-              .eq('game_mode', mode)
-              .gte('dds_blended', band.min)
-              .lte('dds_blended', band.max)
-              .eq('pool_attempts', 0);
-            const remaining = count || 0;
-            if (remaining < 20) {
-              lowPools.push({ mode, difficulty: band.label, remaining, severity: remaining < 10 ? 'critical' : 'warning' });
+          if (mode === 'realm') {
+            // Realm: count by grid size (min_moves)
+            for (const [gridSize, diffLabel] of Object.entries(realmGridToDiff)) {
+              const { count } = await adminClient
+                .from('deals')
+                .select('id', { count: 'exact', head: true })
+                .eq('game_mode', 'realm')
+                .eq('min_moves', parseInt(gridSize))
+                .eq('pool_attempts', 0);
+              const remaining = count || 0;
+              if (remaining < 20) {
+                lowPools.push({ mode, difficulty: diffLabel, remaining, severity: remaining < 10 ? 'critical' : 'warning' });
+              }
+            }
+          } else {
+            // Non-Realm: count by DDS bands
+            for (const band of bands) {
+              const key = `${mode}:${band.label}`;
+              if (suppressedTiers.has(key)) {
+                // These tiers intentionally have no deals for card games — suppress warnings
+                continue;
+              }
+              const { count } = await adminClient
+                .from('deals')
+                .select('id', { count: 'exact', head: true })
+                .eq('game_mode', mode)
+                .gte('dds_blended', band.min)
+                .lte('dds_blended', band.max)
+                .eq('pool_attempts', 0);
+              const remaining = count || 0;
+              if (remaining < 20) {
+                lowPools.push({ mode, difficulty: band.label, remaining, severity: remaining < 10 ? 'critical' : 'warning' });
+              }
             }
           }
         }

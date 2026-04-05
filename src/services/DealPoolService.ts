@@ -177,7 +177,7 @@ export class DealPoolService {
         const sampleMap = new Map((perfData || []).map((p: any) => [p.dds_bucket, p.sample_count]));
         const allSufficient = realmGridSizes.every(gs => {
           const bucket = gridDdsBuckets[gs];
-          return bucket && (sampleMap.get(bucket) ?? 0) >= 30;
+          return bucket && ((sampleMap.get(bucket) as number) ?? 0) >= 30;
         });
         if (allSufficient) {
           useEmpiricalForRealm = true;

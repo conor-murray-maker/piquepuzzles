@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
         dds_blended: difficultyScore ?? 50,
         tier: 'fresh',
         is_calibration: false,
+        ...(body.deduction_solvable != null ? { deduction_solvable: body.deduction_solvable } : {}),
       }, { onConflict: 'seed,game_mode,draw_mode' })
       .select('id')
       .single();

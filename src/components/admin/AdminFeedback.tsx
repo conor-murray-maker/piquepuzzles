@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAdminQuery } from '@/hooks/useAdminQuery';
+import { useAdminData } from '@/hooks/useAdminQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Copy, Check, MessageSquare, Loader2 } from 'lucide-react';
@@ -15,7 +15,7 @@ interface FeedbackRow {
 }
 
 export function AdminFeedback() {
-  const { data, isLoading } = useAdminQuery<{ feedback: FeedbackRow[]; total: number }>('feedback_list');
+  const { data, isLoading } = useAdminData('feedback_list') as { data: { feedback: FeedbackRow[]; total: number } | undefined; isLoading: boolean };
   const [copied, setCopied] = useState(false);
 
   const feedback = data?.feedback || [];

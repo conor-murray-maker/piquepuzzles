@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Trophy, Flame, BarChart3, LogOut, Share2, Check, Edit3, User, Layers, Grid3X3, Shield, Brain, Puzzle } from 'lucide-react';
 import { toast } from 'sonner';
+import { FeedbackBox } from '@/components/profile/FeedbackBox';
 
 export default function Profile() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -203,8 +204,11 @@ export default function Profile() {
           </Card>
         </motion.div>
 
+        {/* Feedback */}
+        <FeedbackBox userIQ={stats.puzzleIQ} />
+
         {/* Sign out */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
           <Button variant="ghost" onClick={signOut} className="w-full text-destructive hover:text-destructive hover:bg-destructive/10">
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out

@@ -1651,6 +1651,39 @@ Deno.serve(async (req) => {
         return json({ recalculated: results.length, results });
       }
 
+      case "feedback_list": {
+        const { data: feedback, error: fbErr } = await adminClient
+          .from("feedback")
+          .select("id, content, created_at, user_iq, platform, user_id")
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (fbErr) return json({ error: fbErr.message }, 500);
+
+        // Join display names from profiles
+        const userIds = [...new Set((feedback || []).map((f: any) => f.user_id).filter(Boolean))];
+        let nameMap: Record<string, string> = {};
+        if (userIds.length > 0) {
+          const { data: profiles } = await adminClient
+            .from("profiles")
+            .select("id, display_name")
+            .in("id", userIds);
+          for (const p of profiles || []) {
+            nameMap[p.id] = p.display_name || "Anonymous";
+          }
+        }
+
+        const enriched = (feedback || []).map((f: any) => ({
+          ...f,
+          display_name: f.user_id ? (nameMap[f.user_id] || "Anonymous") : "Anonymous",
+        }));
+
+        const { count } = await adminClient
+          .from("feedback")
+          .select("id", { count: "exact", head: true });
+
+        return json({ feedback: enriched, total: count || enriched.length });
+      }
+
       default:
         return json({ error: "Unknown action" }, 400);
     }

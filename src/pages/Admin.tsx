@@ -10,7 +10,8 @@ import { AdminGames } from "@/components/admin/AdminGames";
 import { AdminStreaks } from "@/components/admin/AdminStreaks";
 import { AdminSystem } from "@/components/admin/AdminSystem";
 import { AdminReleases } from "@/components/admin/AdminReleases";
-import { LayoutDashboard, Users, Database, Gamepad2, Flame, Settings, Loader2, BookOpen } from "lucide-react";
+import { AdminFeedback } from "@/components/admin/AdminFeedback";
+import { LayoutDashboard, Users, Database, Gamepad2, Flame, Settings, Loader2, BookOpen, MessageSquare } from "lucide-react";
 
 export default function Admin() {
   const { user, loading } = useAuth();
@@ -58,6 +59,7 @@ export default function Admin() {
     { id: "streaks", label: "Streaks", icon: Flame },
     { id: "system", label: "System", icon: Settings },
     { id: "releases", label: "Releases", icon: BookOpen },
+    { id: "feedback", label: "Feedback", icon: MessageSquare },
   ];
 
   return (
@@ -89,6 +91,7 @@ export default function Admin() {
           <TabsContent value="streaks"><AdminStreaks /></TabsContent>
           <TabsContent value="system"><AdminSystem /></TabsContent>
           <TabsContent value="releases"><AdminReleases /></TabsContent>
+          <TabsContent value="feedback"><AdminFeedback /></TabsContent>
         </Tabs>
       </div>
     </div>

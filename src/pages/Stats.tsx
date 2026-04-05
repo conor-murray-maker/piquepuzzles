@@ -4,6 +4,7 @@ import { RATING_TIERS } from '@/game/types';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
 import { PiqueIQPanel } from '@/components/game/PiqueIQPanel';
+import { GlobalStanding } from '@/components/game/GlobalStanding';
 import { usePlayerStats, ModeRating } from '@/hooks/usePlayerStats';
 import { formatTime } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -251,6 +252,11 @@ export default function Stats() {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
             <PiqueIQPanel piqueIQ={stats.puzzleIQ} modeRatings={stats.modeRatings} activeMode={selectedTab !== 'all' ? selectedTab : null} />
           </motion.div>
+        )}
+
+        {/* Global Standing */}
+        {stats.modeRatings.length > 0 && (
+          <GlobalStanding modeRatings={stats.modeRatings} />
         )}
 
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">

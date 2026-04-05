@@ -16,6 +16,16 @@ const TIER_HEX: Record<string, string> = {
   grandmaster: '#FFD700',
 };
 
+const GM_SHIMMER_GRADIENT = 'linear-gradient(135deg, #B8860B 0%, #FFD700 35%, #FFF8DC 55%, #FFD700 75%, #B8860B 100%)';
+
+const gmShimmerTextStyle: React.CSSProperties = {
+  background: GM_SHIMMER_GRADIENT,
+  backgroundSize: '200% 100%',
+  WebkitBackgroundClip: 'text',
+  WebkitTextFillColor: 'transparent',
+  animation: 'gm-shimmer 3s linear infinite',
+};
+
 /** Within-tier progress: 0–100% of the current tier only */
 function withinTierProgress(rating: number): number {
   const tier = getTier(rating);
@@ -30,13 +40,17 @@ function MiniProgressBar({ rating, className = '' }: { rating: number; className
   const isGM = tier.color === 'grandmaster';
 
   return (
-    <div className={`h-1.5 rounded-full bg-secondary overflow-hidden ${className}`}>
+    <div className={`rounded-full bg-secondary overflow-hidden ${className}`} style={{ height: isGM ? 2 : 6 }}>
       <div
         className="h-full rounded-full transition-all duration-500"
-        style={{
+        style={isGM ? {
+          width: `${progress}%`,
+          background: GM_SHIMMER_GRADIENT,
+          backgroundSize: '200% 100%',
+          animation: 'gm-shimmer 3s linear infinite',
+        } : {
           width: `${progress}%`,
           backgroundColor: TIER_HEX[tier.color] || TIER_HEX.bronze,
-          ...(isGM ? { boxShadow: `0 0 4px ${TIER_HEX.grandmaster}80` } : {}),
         }}
       />
     </div>
@@ -125,28 +139,39 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false }: 
                       <div className="flex items-center justify-between mb-0.5">
                         <span className="text-sm font-medium">{mr.display_name}</span>
                         <div className="flex items-center gap-1.5">
+                          {/* IQ number — GM gets serif + shimmer + larger size */}
                           <span
-                            className={`font-mono font-bold text-sm ${isUnranked ? 'text-muted-foreground' : ''} ${
-                              modeIsGM && !isUnranked ? 'font-extrabold' : ''
+                            className={`font-mono font-bold ${isUnranked ? 'text-muted-foreground text-sm' : ''} ${
+                              modeIsGM && !isUnranked ? 'font-extrabold' : 'text-sm'
                             }`}
-                            style={!isUnranked ? {
-                              color: TIER_HEX[modeTier.color],
-                              ...(modeIsGM ? { textShadow: `0 0 6px ${TIER_HEX.grandmaster}60` } : {}),
-                            } : undefined}
+                            style={
+                              modeIsGM && !isUnranked
+                                ? { ...gmShimmerTextStyle, fontSize: 18, fontFamily: 'Georgia, "Times New Roman", serif' }
+                                : !isUnranked
+                                  ? { color: TIER_HEX[modeTier.color] }
+                                  : undefined
+                            }
                           >
                             {mr.iq}
                           </span>
                           {isUnranked ? (
                             <span className="text-[10px] text-muted-foreground">Unranked</span>
+                          ) : modeIsGM ? (
+                            <span
+                              className="font-extrabold uppercase"
+                              style={{
+                                fontSize: 9,
+                                letterSpacing: '3px',
+                                color: '#D4A017',
+                                fontFamily: 'monospace',
+                              }}
+                            >
+                              {modeTier.name}
+                            </span>
                           ) : (
                             <span
-                              className={`text-[10px] font-medium uppercase tracking-wider ${
-                                modeIsGM ? 'font-extrabold' : ''
-                              }`}
-                              style={{
-                                color: TIER_HEX[modeTier.color],
-                                ...(modeIsGM ? { textShadow: `0 0 4px ${TIER_HEX.grandmaster}60` } : {}),
-                              }}
+                              className="text-[10px] font-medium uppercase tracking-wider"
+                              style={{ color: TIER_HEX[modeTier.color] }}
                             >
                               {modeTier.name}
                             </span>

@@ -345,6 +345,42 @@ export type Database = {
         }
         Relationships: []
       }
+      game_completion_log: {
+        Row: {
+          attempted_at: string
+          deal_id: string | null
+          deal_uuid: string | null
+          error_message: string | null
+          game_mode: string
+          id: string
+          payload: Json | null
+          succeeded: boolean
+          user_id: string
+        }
+        Insert: {
+          attempted_at?: string
+          deal_id?: string | null
+          deal_uuid?: string | null
+          error_message?: string | null
+          game_mode?: string
+          id?: string
+          payload?: Json | null
+          succeeded?: boolean
+          user_id: string
+        }
+        Update: {
+          attempted_at?: string
+          deal_id?: string | null
+          deal_uuid?: string | null
+          error_message?: string | null
+          game_mode?: string
+          id?: string
+          payload?: Json | null
+          succeeded?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       game_history: {
         Row: {
           base_delta: number | null

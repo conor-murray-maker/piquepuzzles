@@ -131,10 +131,10 @@ export function PostGameScreen({
     );
   }
 
-  // Mode IQ values (fall back to composite if no mode data)
-  const displayModeIQ = modeIQData?.modeIQ ?? currentRating;
+  // Render only mode-specific IQ here; do not fall back to composite Pique IQ.
+  const displayModeIQ = modeIQData?.modeIQ ?? null;
   const displayModeIQDelta = modeIQData?.modeIQDelta ?? ratingChange;
-  const modeTier = getTier(displayModeIQ);
+  const modeTier = displayModeIQ !== null ? getTier(displayModeIQ) : null;
   const modeLabel = getModeLabel(gameMode);
 
   return (
@@ -186,31 +186,33 @@ export function PostGameScreen({
           </p>
           <div className="flex items-baseline justify-center gap-2">
             <motion.span
-              className="text-5xl font-bold font-mono"
-              style={{ color: TIER_COLORS[modeTier.color] }}
-              key={displayModeIQ}
+              className={`text-5xl font-bold font-mono${displayModeIQ === null ? ' text-muted-foreground' : ''}`}
+              style={modeTier ? { color: TIER_COLORS[modeTier.color] } : undefined}
+              key={displayModeIQ ?? 'mode-iq-unavailable'}
               initial={{ scale: 1.1 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 300 }}
             >
-              {displayModeIQ}
+              {displayModeIQ ?? '—'}
             </motion.span>
-            <motion.span
-              className={`font-mono font-semibold text-lg ${displayModeIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}`}
-              initial={{ opacity: 0, y: displayModeIQDelta >= 0 ? 10 : -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              {displayModeIQDelta > 0 ? '+' : ''}{displayModeIQDelta}
-            </motion.span>
+            {displayModeIQ !== null && (
+              <motion.span
+                className={`font-mono font-semibold text-lg ${displayModeIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}`}
+                initial={{ opacity: 0, y: displayModeIQDelta >= 0 ? 10 : -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+              >
+                {displayModeIQDelta > 0 ? '+' : ''}{displayModeIQDelta}
+              </motion.span>
+            )}
           </div>
           <p
-            className="text-xs font-semibold uppercase tracking-wider"
-            style={{ color: TIER_COLORS[modeTier.color] }}
+            className={`text-xs font-semibold uppercase tracking-wider${modeTier ? '' : ' text-muted-foreground'}`}
+            style={modeTier ? { color: TIER_COLORS[modeTier.color] } : undefined}
           >
-            {modeTier.name}
+            {modeTier?.name ?? '—'}
           </p>
-          <MiniProgressBar rating={displayModeIQ} />
+          {displayModeIQ !== null && <MiniProgressBar rating={displayModeIQ} />}
         </div>
 
         {/* Score Breakdown Card */}

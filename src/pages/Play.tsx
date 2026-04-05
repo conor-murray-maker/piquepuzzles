@@ -27,7 +27,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const initialSeed = seedParam ? parseInt(seedParam) : undefined;
   const drawMode = (drawModeParam ? parseInt(drawModeParam) : 3) as DrawMode;
 
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { saveGameResult } = useGamePersistence();
   const { popNextDeal } = useDealQueue();
   const [gamePhase, setGamePhase] = useState<'playing' | 'postgame'>('playing');
@@ -108,6 +108,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const isDaily = !!dailyDate;
     const result = await saveGameResult(state, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
     setRatingResult(result);
+    setPhase('postgame');
 
     // Save challenge completion
     if (challengeId && user) {
@@ -137,8 +138,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       });
     }
 
-    setPhase('postgame');
-  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode]);
+    void refreshProfile();
+  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile]);
 
   const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
     if (gameEndInFlight.current) return;
@@ -160,6 +161,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const isDaily = !!dailyDate;
     const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
     setRatingResult(result);
+    setPhase('postgame');
+
+    if (gameMode === 'realm') clearRealmStorage();
+    else if (gameMode === 'freecell') clearFreeCellStorage();
+    else clearStorage();
 
     // Save daily challenge completion on give up
     if (dailyDate && dailyDealId && user) {
@@ -175,12 +181,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       });
     }
 
-    if (gameMode === 'realm') clearRealmStorage();
-    else if (gameMode === 'freecell') clearFreeCellStorage();
-    else clearStorage();
-
-    setPhase('postgame');
-  }, [saveGameResult, setPhase, gameMode, profile, dailyDate, dailyDealId, user, drawMode]);
+    void refreshProfile();
+  }, [saveGameResult, setPhase, gameMode, dailyDate, dailyDealId, user, drawMode, refreshProfile]);
 
   const handlePlayAgain = useCallback(async () => {
     gameEndInFlight.current = false;

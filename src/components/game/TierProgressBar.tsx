@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { RATING_TIERS, getTier, getTierForMode } from '@/game/types';
+import { RATING_TIERS, getTier } from '@/game/types';
 import { useState, useEffect } from 'react';
 
 const TIER_HEX: Record<string, string> = {

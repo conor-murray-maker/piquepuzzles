@@ -77,6 +77,24 @@ export function getTier(rating: number): RatingTier {
   return RATING_TIERS.find(t => rating >= t.min && rating <= t.max) || RATING_TIERS[0];
 }
 
+/** Returns the maximum allowed tier name for a game mode.
+ *  Klondike/FreeCell cap at Master; Realm allows Grandmaster. */
+export function getMaxTierForMode(gameMode: string): string {
+  if (gameMode === 'klondike' || gameMode === 'freecell') return 'master';
+  return 'grandmaster';
+}
+
+/** Get tier with mode-aware capping. For Klondike/FreeCell, clamps to Master. */
+export function getTierForMode(rating: number, gameMode: string): RatingTier {
+  const tier = getTier(rating);
+  const maxTierName = getMaxTierForMode(gameMode);
+  const maxTier = RATING_TIERS.find(t => t.color === maxTierName);
+  if (maxTier && RATING_TIERS.indexOf(tier) > RATING_TIERS.indexOf(maxTier)) {
+    return maxTier;
+  }
+  return tier;
+}
+
 export const SUITS: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades'];
 export const RANKS: Rank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 

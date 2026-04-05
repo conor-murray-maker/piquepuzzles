@@ -270,7 +270,7 @@ export function StarterPoolGenerator() {
   const action = useAdminAction();
   const { toast } = useToast();
   const [selectedModes, setSelectedModes] = useState<string[]>(["klondike", "freecell", "realm"]);
-  const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>(["easy", "medium", "hard", "expert", "master"]);
+  const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>(["easy", "medium", "hard", "expert", "master", "grandmaster"]);
   const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
   const [selectedBatchMultiplier, setSelectedBatchMultiplier] = useState<string>("1");
   const [running, setRunning] = useState(false);

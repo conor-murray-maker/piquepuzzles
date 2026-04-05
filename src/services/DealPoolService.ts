@@ -3,7 +3,7 @@ import { EngineRegistry } from '@/engines/EngineRegistry';
 import { GameMode } from '@/engines/PuzzleEngine';
 import { DDSService } from './DDSService';
 import { generateSeed } from '@/game/deck';
-import { getRealmDifficultyFromGridSize } from '@/lib/difficulty';
+import { getRealmDifficulty } from '@/lib/difficulty';
 
 export interface VerifiedDeal {
   dealUuid: string;
@@ -42,6 +42,12 @@ function getRealmGridBracket(rating: number): number[] {
 
 /** DDS bracket — Realm uses recalibrated ranges (max DDS ~113) */
 function getDdsBracket(rating: number, gameMode: string): { min: number; max: number } {
+  // ── Realm DDS brackets ──────────────────────────────────────────────
+  // RESERVED FOR FUTURE EMPIRICAL SERVING (USE_EMPIRICAL_REALM_SERVING).
+  // These ranges are calibrated to the actual Realm DDS distribution
+  // (max ~113) and will be used when empirical serving is enabled.
+  // Currently NOT active — Realm always routes through getRealmGridBracket().
+  // ────────────────────────────────────────────────────────────────────
   if (gameMode === 'realm') {
     if (rating < 1100) return { min: 0, max: 40 };
     if (rating < 1300) return { min: 25, max: 55 };
@@ -97,7 +103,7 @@ function ddsToLabel(dds: number): string {
 function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
   // Realm: derive difficulty from grid size (min_moves = N); others: from DDS
   const difficulty = deal.game_mode === 'realm' && deal.min_moves >= 5 && deal.min_moves <= 10
-    ? getRealmDifficultyFromGridSize(deal.min_moves)
+    ? getRealmDifficulty(deal.min_moves, deal.dds_blended, deal.pool_attempts ?? 0)
     : ddsToLabel(deal.dds_blended);
 
   return {
@@ -152,10 +158,41 @@ export class DealPoolService {
     const playedIds = await this.getUserPlayedDealIds(userId);
     const isRealm = gameMode === 'realm';
 
-    // Realm: always use grid-size brackets (even for new players)
-    // Non-Realm: DDS bracket, null for first 3 games
-    const realmGridSizes = isRealm ? getRealmGridBracket(modeIQ) : null;
-    const bracket = !isRealm && gamesPlayedThisMode >= 3 ? getDdsBracket(modeIQ, gameMode) : null;
+    // Realm: use grid-size brackets by default; switch to DDS if empirical serving is enabled
+    // and all grid sizes in the bracket have sufficient sample data
+    let useEmpiricalForRealm = false;
+    let realmGridSizes: number[] | null = isRealm ? getRealmGridBracket(modeIQ) : null;
+    let bracket: { min: number; max: number } | null = null;
+
+    if (isRealm && USE_EMPIRICAL_REALM_SERVING && realmGridSizes) {
+      // Check if all grid sizes in the player's bracket have ≥30 samples
+      try {
+        const gridDdsBuckets: Record<number, string> = { 5: '0-25', 6: '26-50', 7: '51-75', 8: '76-100', 9: '101-130', 10: '131-150' };
+        const iqBucket = modeIQ < 1100 ? '<1100' : modeIQ < 1300 ? '1100-1300' : modeIQ < 1500 ? '1300-1500' : modeIQ < 1700 ? '1500-1700' : modeIQ < 2000 ? '1700-2000' : modeIQ < 2500 ? '2000-2500' : '2500+';
+        const { data: perfData } = await (supabase as any)
+          .from('performance_expectations')
+          .select('dds_bucket, sample_count')
+          .eq('game_mode', 'realm')
+          .eq('iq_bucket', iqBucket);
+        const sampleMap = new Map((perfData || []).map((p: any) => [p.dds_bucket, p.sample_count]));
+        const allSufficient = realmGridSizes.every(gs => {
+          const bucket = gridDdsBuckets[gs];
+          return bucket && ((sampleMap.get(bucket) as number) ?? 0) >= 30;
+        });
+        if (allSufficient) {
+          useEmpiricalForRealm = true;
+          bracket = getDdsBracket(modeIQ, gameMode);
+          realmGridSizes = null; // switch to DDS-based serving
+          console.log(`[DealPoolService] Realm empirical serving ACTIVE for IQ ${modeIQ}`);
+        }
+      } catch (err) {
+        console.warn('[DealPoolService] Failed to check empirical samples, staying on grid-size serving', err);
+      }
+    }
+
+    if (!isRealm) {
+      bracket = gamesPlayedThisMode >= 3 ? getDdsBracket(modeIQ, gameMode) : null;
+    }
     // For non-Realm, enforce DDS floor in fallbacks
     const ddsFloor = !isRealm && bracket ? bracket.min : null;
 

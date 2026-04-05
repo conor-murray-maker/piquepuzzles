@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Info } from 'lucide-react';
-import { getTier, RATING_TIERS } from '@/game/types';
+import { getTier, getTierForMode, RATING_TIERS } from '@/game/types';
 import { ModeRating } from '@/hooks/usePlayerStats';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
@@ -135,7 +135,7 @@ export function PiqueIQPanel({ piqueIQ, modeRatings, defaultExpanded = false, ac
           >
             <div className="pt-3 mt-3 border-t border-border space-y-2.5">
               {modeRatings.map((mr) => {
-                const modeTier = getTier(mr.iq);
+                const modeTier = getTierForMode(mr.iq, mr.game_mode);
                 const isUnranked = mr.games_played === 0;
                 const modeIsGM = modeTier.color === 'grandmaster';
                 return (

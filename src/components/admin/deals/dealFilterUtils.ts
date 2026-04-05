@@ -1,5 +1,5 @@
 import type { DealFilterState } from "./DealFilters";
-import { getRealmDifficultyFromGridSize } from "@/lib/difficulty";
+import { getRealmDifficulty } from "@/lib/difficulty";
 
 export interface DealRow {
   id: string;
@@ -31,7 +31,7 @@ function getDifficultyBandDds(dds: number): string {
 
 function getDifficultyBand(deal: DealRow): string {
   if (deal.game_mode === "realm") {
-    return getRealmDifficultyFromGridSize(deal.min_moves).toLowerCase();
+    return getRealmDifficulty(deal.min_moves, deal.dds_blended, deal.pool_attempts ?? 0).toLowerCase();
   }
   return getDifficultyBandDds(deal.dds_blended);
 }

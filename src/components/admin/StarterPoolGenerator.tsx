@@ -29,7 +29,7 @@ interface VerifiedDeal {
   reserved_for: string | null;
   unique_winning_paths: number;
   path_diversity_score: number;
-  crown_positions?: { row: number; col: number }[] | null;
+  region_map?: number[][] | null;
   deduction_solvable?: boolean | null;
 }
 
@@ -196,9 +196,9 @@ async function generateBatch(
           confidence = confResult.confidence;
         }
 
-        let crownPositions: { row: number; col: number }[] | null = null;
-        if (isRealm && realmSolution && realmGridSize && realmGridSize >= 10) {
-          crownPositions = realmSolution.map(([row, col]) => ({ row, col }));
+        let regionMapData: number[][] | null = null;
+        if (isRealm && deal.data && realmGridSize && realmGridSize >= 10) {
+          regionMapData = (deal.data as any).regionMap;
         }
 
         collected.push({
@@ -216,7 +216,7 @@ async function generateBatch(
           reserved_for: target.band === "easy" ? "onboarding" : null,
           unique_winning_paths: isRealm ? 1 : uniquePaths,
           path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
-          crown_positions: crownPositions,
+          region_map: regionMapData,
           deduction_solvable: isRealm ? (verifyResult.confidence === 1.0) : null,
         });
       } catch {

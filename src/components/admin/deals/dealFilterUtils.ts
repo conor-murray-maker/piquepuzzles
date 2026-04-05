@@ -118,13 +118,9 @@ export function computeHealthStats(deals: DealRow[]) {
     else if (d.confidence >= 0.7) byConfBand.Medium++;
     else byConfBand.Low++;
 
-    const dds = d.dds_blended;
-    if (dds < 26) byBand.Easy++;
-    else if (dds < 51) byBand.Medium++;
-    else if (dds < 76) byBand.Hard++;
-    else if (dds < 101) byBand.Expert++;
-    else if (dds < 131) byBand.Master++;
-    else byBand.Grandmaster++;
+    const band = getDifficultyBand(d);
+    const label = band.charAt(0).toUpperCase() + band.slice(1);
+    if (label in byBand) byBand[label]++;
   }
 
   return {

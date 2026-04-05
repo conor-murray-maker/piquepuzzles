@@ -252,7 +252,7 @@ export function PostGameScreen({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
               >
-                {!isGM && <span className={displayModeIQDelta >= 0 ? 'text-rating-up' : 'text-rating-down'}>
+                {!isGM && <span className={displayModeIQDelta > 0 ? 'text-rating-up' : displayModeIQDelta < 0 ? 'text-rating-down' : ''} style={displayModeIQDelta === 0 ? { color: '#666' } : undefined}>
                   {displayModeIQDelta > 0 ? '+' : ''}{displayModeIQDelta}
                 </span>}
                 {isGM && <>{displayModeIQDelta > 0 ? '+' : ''}{displayModeIQDelta}</>}

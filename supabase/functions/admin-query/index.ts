@@ -997,17 +997,23 @@ Deno.serve(async (req) => {
         }
 
         const diffBands = [
-          { label: 'Easy', min: 0, max: 25 },
-          { label: 'Medium', min: 26, max: 50 },
-          { label: 'Hard', min: 51, max: 75 },
-          { label: 'Expert', min: 76, max: 100 },
-          { label: 'Master', min: 101, max: 130 },
-          { label: 'Grandmaster', min: 131, max: 150 },
+          { label: 'Easy', min: 0, max: 25, realmGrid: 5 },
+          { label: 'Medium', min: 26, max: 50, realmGrid: 6 },
+          { label: 'Hard', min: 51, max: 75, realmGrid: 7 },
+          { label: 'Expert', min: 76, max: 100, realmGrid: 8 },
+          { label: 'Master', min: 101, max: 130, realmGrid: 9 },
+          { label: 'Grandmaster', min: 131, max: 150, realmGrid: 10 },
         ];
+        const filterDealsByBand = (deals: any[], mode: string, band: typeof diffBands[0]) => {
+          if (mode === 'realm') {
+            return deals.filter((d: any) => d.game_mode === mode && d.min_moves === band.realmGrid);
+          }
+          return deals.filter((d: any) => d.game_mode === mode && d.dds_blended >= band.min && d.dds_blended <= band.max);
+        };
         const poolConsumption: Array<any> = [];
         for (const mode of gameModes) {
           for (const band of diffBands) {
-            const modeDeals = allDeals.filter((d: any) => d.game_mode === mode && d.dds_blended >= band.min && d.dds_blended <= band.max);
+            const modeDeals = filterDealsByBand(allDeals, mode, band);
             const unplayedByAny = modeDeals.filter((d: any) => d.pool_attempts === 0);
             const playedByAtLeast1 = modeDeals.filter((d: any) => playedByUser[d.id]?.size > 0);
             const avgAttempts = modeDeals.length > 0 ? +(modeDeals.reduce((s: number, d: any) => s + d.pool_attempts, 0) / modeDeals.length).toFixed(1) : 0;

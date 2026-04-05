@@ -86,6 +86,7 @@ const TIMEOUT_OPTIONS = [
   { value: "2000", label: "2s (recommended)" },
   { value: "5000", label: "5s" },
   { value: "10000", label: "10s" },
+  { value: "30000", label: "30s (Master)" },
 ];
 
 /** Fill All batch definitions */
@@ -412,11 +413,20 @@ export function StarterPoolGenerator() {
 
           let reservedFor: string | null = null;
 
-          for (const t of targets) {
-            if (dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] < t.target) {
-              counts[t.band]++;
-              if (t.band === "easy") reservedFor = "onboarding";
-              break;
+          if (isRealm && targetBand) {
+            // For Realm, count toward the band we specifically generated for (grid size determines difficulty)
+            if (counts[targetBand.band] < targetBand.target) {
+              counts[targetBand.band]++;
+              if (targetBand.band === "easy") reservedFor = "onboarding";
+            }
+          } else {
+            // For card games, match by DDS range
+            for (const t of targets) {
+              if (dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] < t.target) {
+                counts[t.band]++;
+                if (t.band === "easy") reservedFor = "onboarding";
+                break;
+              }
             }
           }
 
@@ -439,7 +449,9 @@ export function StarterPoolGenerator() {
 
           bankedCount++;
           // Count deals that matched a target band
-          const matchedTarget = targets.some(t => dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] <= t.target);
+          const matchedTarget = isRealm && targetBand
+            ? counts[targetBand.band] <= targetBand.target
+            : targets.some(t => dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] <= t.target);
           if (matchedTarget) starterCount++;
         } catch {
           // Skip failed attempt

@@ -1,4 +1,5 @@
 import type { DealFilterState } from "./DealFilters";
+import { getRealmDifficultyFromGridSize } from "@/lib/difficulty";
 
 export interface DealRow {
   id: string;
@@ -16,15 +17,23 @@ export interface DealRow {
   simulation_count: number;
   simulation_wins: number;
   is_calibration: boolean;
+  min_moves: number;
 }
 
-function getDifficultyBand(dds: number): string {
+function getDifficultyBandDds(dds: number): string {
   if (dds < 26) return "easy";
   if (dds < 51) return "medium";
   if (dds < 76) return "hard";
   if (dds < 101) return "expert";
   if (dds < 131) return "master";
   return "grandmaster";
+}
+
+function getDifficultyBand(deal: DealRow): string {
+  if (deal.game_mode === "realm") {
+    return getRealmDifficultyFromGridSize(deal.min_moves).toLowerCase();
+  }
+  return getDifficultyBandDds(deal.dds_blended);
 }
 
 function getDdsSource(poolAttempts: number): string {

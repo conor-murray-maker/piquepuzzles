@@ -1414,7 +1414,7 @@ Deno.serve(async (req) => {
         while (true) {
           const { data: batch } = await adminClient
             .from("deals")
-            .select("id, seed, game_mode, tier, dds_initial, dds_blended, confidence, path_diversity_score, pool_attempts, pool_wins, pool_avg_moves, pool_avg_time, simulation_count, simulation_wins, is_calibration")
+            .select("id, seed, game_mode, tier, dds_initial, dds_blended, confidence, path_diversity_score, pool_attempts, pool_wins, pool_avg_moves, pool_avg_time, simulation_count, simulation_wins, is_calibration, min_moves")
             .range(pg * batchSize, (pg + 1) * batchSize - 1);
           if (!batch || batch.length === 0) break;
           allDeals = allDeals.concat(batch);

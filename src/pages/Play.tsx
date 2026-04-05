@@ -49,6 +49,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   } | null>(null);
   const hasPopped = useRef(false);
   const popInFlight = useRef(false);
+  const gameEndInFlight = useRef(false);
 
   // Pop deal from pool on mount (only for regular games, not challenges/daily)
   useEffect(() => {

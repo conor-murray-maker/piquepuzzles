@@ -88,6 +88,13 @@ const TIMEOUT_OPTIONS = [
   { value: "10000", label: "10s" },
   { value: "30000", label: "30s (Master)" },
 ];
+const BATCH_SIZE_OPTIONS = [
+  { value: "1", label: "1× (default)" },
+  { value: "2", label: "2× targets" },
+  { value: "5", label: "5× targets" },
+  { value: "10", label: "10× targets" },
+  { value: "20", label: "20× targets" },
+];
 
 /** Fill All batch definitions */
 interface FillAllBatch {
@@ -199,6 +206,7 @@ export function StarterPoolGenerator() {
   const [selectedMode, setSelectedMode] = useState<string>("klondike");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
   const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
+  const [selectedBatchMultiplier, setSelectedBatchMultiplier] = useState<string>("1");
   const [selectedStrategy] = useState<string>("legacy");
   const [running, setRunning] = useState(false);
   const [candidatesTried, setCandidatesTried] = useState(0);
@@ -316,9 +324,13 @@ export function StarterPoolGenerator() {
     abortRef.current = false;
 
     const allTargets = TARGETS_BY_MODE[selectedMode];
-    const targets = selectedDifficulty === "all"
+    const batchMultiplier = parseInt(selectedBatchMultiplier, 10);
+    const baseTargets = selectedDifficulty === "all"
       ? allTargets
       : allTargets.filter(t => t.band === selectedDifficulty);
+
+    // Apply batch multiplier to targets
+    const targets = baseTargets.map(t => ({ ...t, target: t.target * batchMultiplier }));
 
     if (targets.length === 0) {
       addStatus(`✗ No targets for ${selectedMode} ${selectedDifficulty}`);
@@ -347,14 +359,15 @@ export function StarterPoolGenerator() {
     const startTime = Date.now();
     let timeoutDiscards = 0;
 
-    while (totalTried < MAX_CANDIDATES && !abortRef.current) {
+    const maxCandidates = MAX_CANDIDATES * batchMultiplier;
+    while (totalTried < maxCandidates && !abortRef.current) {
       const allMet = targets.every(t => counts[t.band] >= t.target);
       if (allMet) {
         addStatus("✓ All targets met!");
         break;
       }
 
-      for (let b = 0; b < 5 && totalTried < MAX_CANDIDATES && !abortRef.current; b++) {
+      for (let b = 0; b < 5 && totalTried < maxCandidates && !abortRef.current; b++) {
         totalTried++;
         const seed = generateSeed();
 
@@ -574,6 +587,16 @@ export function StarterPoolGenerator() {
             </SelectContent>
           </Select>
 
+          <Select value={selectedBatchMultiplier} onValueChange={setSelectedBatchMultiplier} disabled={running}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Batch size" />
+            </SelectTrigger>
+            <SelectContent>
+              {BATCH_SIZE_OPTIONS.map(b => (
+                <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Button onClick={run} disabled={running} className="gap-2">
             {running && !fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}

@@ -1381,14 +1381,14 @@ Deno.serve(async (req) => {
       }
 
       case "pool_counts": {
-        // Return deal counts grouped by game_mode and DDS band
+        // Return deal counts grouped by game_mode and difficulty band
         let allDeals: any[] = [];
         let pg = 0;
         const sz = 1000;
         while (true) {
           const { data: batch } = await adminClient
             .from("deals")
-            .select("game_mode, dds_blended")
+            .select("game_mode, dds_blended, min_moves")
             .range(pg * sz, (pg + 1) * sz - 1);
           if (!batch || batch.length === 0) break;
           allDeals = allDeals.concat(batch);
@@ -1396,18 +1396,24 @@ Deno.serve(async (req) => {
           pg++;
         }
 
+        const realmGridToDiff: Record<number, string> = { 5: 'easy', 6: 'medium', 7: 'hard', 8: 'expert', 9: 'master', 10: 'grandmaster' };
         // Count by mode + band
         const counts: Record<string, Record<string, number>> = {};
         for (const d of allDeals) {
           const mode = d.game_mode as string;
           if (!counts[mode]) counts[mode] = { easy: 0, medium: 0, hard: 0, expert: 0, master: 0, grandmaster: 0 };
-          const dds = d.dds_blended;
-          if (dds < 26) counts[mode].easy++;
-          else if (dds < 51) counts[mode].medium++;
-          else if (dds < 76) counts[mode].hard++;
-          else if (dds < 101) counts[mode].expert++;
-          else if (dds < 131) counts[mode].master++;
-          else counts[mode].grandmaster++;
+          if (mode === 'realm') {
+            const diff = realmGridToDiff[d.min_moves] || 'medium';
+            counts[mode][diff]++;
+          } else {
+            const dds = d.dds_blended;
+            if (dds < 26) counts[mode].easy++;
+            else if (dds < 51) counts[mode].medium++;
+            else if (dds < 76) counts[mode].hard++;
+            else if (dds < 101) counts[mode].expert++;
+            else if (dds < 131) counts[mode].master++;
+            else counts[mode].grandmaster++;
+          }
         }
         return json(counts);
       }

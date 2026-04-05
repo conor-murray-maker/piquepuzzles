@@ -386,8 +386,7 @@ export class DealPoolService {
           const sizes = bracket.max <= 35 ? [5] :
                        bracket.max <= 65 ? [6] :
                        bracket.max <= 85 ? [7, 8] :
-                       bracket.max <= 100 ? [9, 10] :
-                       bracket.max <= 130 ? [10, 11] : [11, 12];
+                       bracket.max <= 100 ? [9, 10] : [10];
           const size = sizes[Math.floor(Math.random() * sizes.length)];
           deal = engine.generateDeal(seed, { gridSize: size, skipSpatialSurprise: size <= 5 });
         } else {

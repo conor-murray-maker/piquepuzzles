@@ -324,9 +324,13 @@ export function StarterPoolGenerator() {
     abortRef.current = false;
 
     const allTargets = TARGETS_BY_MODE[selectedMode];
-    const targets = selectedDifficulty === "all"
+    const batchMultiplier = parseInt(selectedBatchMultiplier, 10);
+    const baseTargets = selectedDifficulty === "all"
       ? allTargets
       : allTargets.filter(t => t.band === selectedDifficulty);
+
+    // Apply batch multiplier to targets
+    const targets = baseTargets.map(t => ({ ...t, target: t.target * batchMultiplier }));
 
     if (targets.length === 0) {
       addStatus(`✗ No targets for ${selectedMode} ${selectedDifficulty}`);

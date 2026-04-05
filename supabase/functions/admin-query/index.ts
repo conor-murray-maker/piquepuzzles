@@ -735,13 +735,19 @@ Deno.serve(async (req) => {
           else empiricalOnly++;
           const mode = d.game_mode as string;
           if (confByMode[mode]) { confByMode[mode].sum += d.confidence; confByMode[mode].count++; }
-          const dds = d.dds_blended;
-          if (dds < 26) byDiff.easy++;
-          else if (dds < 51) byDiff.medium++;
-          else if (dds < 76) byDiff.hard++;
-          else if (dds < 101) byDiff.expert++;
-          else if (dds < 131) byDiff.master++;
-          else byDiff.grandmaster++;
+          if (d.game_mode === 'realm') {
+            const gridDiff: Record<number, string> = { 5: 'easy', 6: 'medium', 7: 'hard', 8: 'expert', 9: 'master', 10: 'grandmaster' };
+            const rd = gridDiff[d.min_moves] || 'medium';
+            byDiff[rd]++;
+          } else {
+            const dds = d.dds_blended;
+            if (dds < 26) byDiff.easy++;
+            else if (dds < 51) byDiff.medium++;
+            else if (dds < 76) byDiff.hard++;
+            else if (dds < 101) byDiff.expert++;
+            else if (dds < 131) byDiff.master++;
+            else byDiff.grandmaster++;
+          }
         }
         const n = allDeals.length || 1;
         const totalDeals = allDeals.length;
@@ -997,17 +1003,23 @@ Deno.serve(async (req) => {
         }
 
         const diffBands = [
-          { label: 'Easy', min: 0, max: 25 },
-          { label: 'Medium', min: 26, max: 50 },
-          { label: 'Hard', min: 51, max: 75 },
-          { label: 'Expert', min: 76, max: 100 },
-          { label: 'Master', min: 101, max: 130 },
-          { label: 'Grandmaster', min: 131, max: 150 },
+          { label: 'Easy', min: 0, max: 25, realmGrid: 5 },
+          { label: 'Medium', min: 26, max: 50, realmGrid: 6 },
+          { label: 'Hard', min: 51, max: 75, realmGrid: 7 },
+          { label: 'Expert', min: 76, max: 100, realmGrid: 8 },
+          { label: 'Master', min: 101, max: 130, realmGrid: 9 },
+          { label: 'Grandmaster', min: 131, max: 150, realmGrid: 10 },
         ];
+        const filterDealsByBand = (deals: any[], mode: string, band: typeof diffBands[0]) => {
+          if (mode === 'realm') {
+            return deals.filter((d: any) => d.game_mode === mode && d.min_moves === band.realmGrid);
+          }
+          return deals.filter((d: any) => d.game_mode === mode && d.dds_blended >= band.min && d.dds_blended <= band.max);
+        };
         const poolConsumption: Array<any> = [];
         for (const mode of gameModes) {
           for (const band of diffBands) {
-            const modeDeals = allDeals.filter((d: any) => d.game_mode === mode && d.dds_blended >= band.min && d.dds_blended <= band.max);
+            const modeDeals = filterDealsByBand(allDeals, mode, band);
             const unplayedByAny = modeDeals.filter((d: any) => d.pool_attempts === 0);
             const playedByAtLeast1 = modeDeals.filter((d: any) => playedByUser[d.id]?.size > 0);
             const avgAttempts = modeDeals.length > 0 ? +(modeDeals.reduce((s: number, d: any) => s + d.pool_attempts, 0) / modeDeals.length).toFixed(1) : 0;
@@ -1033,7 +1045,7 @@ Deno.serve(async (req) => {
         const poolDepth: Array<any> = [];
         for (const mode of gameModes) {
           for (const band of diffBands) {
-            const modeDeals = allDeals.filter((d: any) => d.game_mode === mode && d.dds_blended >= band.min && d.dds_blended <= band.max);
+            const modeDeals = filterDealsByBand(allDeals, mode, band);
             const unplayedByAny = modeDeals.filter((d: any) => d.pool_attempts === 0);
             const avgAttempts = modeDeals.length > 0 ? +(modeDeals.reduce((s: number, d: any) => s + d.pool_attempts, 0) / modeDeals.length).toFixed(1) : 0;
             const sorted = [...modeDeals].sort((a: any, b: any) => a.pool_attempts - b.pool_attempts);
@@ -1375,14 +1387,14 @@ Deno.serve(async (req) => {
       }
 
       case "pool_counts": {
-        // Return deal counts grouped by game_mode and DDS band
+        // Return deal counts grouped by game_mode and difficulty band
         let allDeals: any[] = [];
         let pg = 0;
         const sz = 1000;
         while (true) {
           const { data: batch } = await adminClient
             .from("deals")
-            .select("game_mode, dds_blended")
+            .select("game_mode, dds_blended, min_moves")
             .range(pg * sz, (pg + 1) * sz - 1);
           if (!batch || batch.length === 0) break;
           allDeals = allDeals.concat(batch);
@@ -1390,18 +1402,24 @@ Deno.serve(async (req) => {
           pg++;
         }
 
+        const realmGridToDiff: Record<number, string> = { 5: 'easy', 6: 'medium', 7: 'hard', 8: 'expert', 9: 'master', 10: 'grandmaster' };
         // Count by mode + band
         const counts: Record<string, Record<string, number>> = {};
         for (const d of allDeals) {
           const mode = d.game_mode as string;
           if (!counts[mode]) counts[mode] = { easy: 0, medium: 0, hard: 0, expert: 0, master: 0, grandmaster: 0 };
-          const dds = d.dds_blended;
-          if (dds < 26) counts[mode].easy++;
-          else if (dds < 51) counts[mode].medium++;
-          else if (dds < 76) counts[mode].hard++;
-          else if (dds < 101) counts[mode].expert++;
-          else if (dds < 131) counts[mode].master++;
-          else counts[mode].grandmaster++;
+          if (mode === 'realm') {
+            const diff = realmGridToDiff[d.min_moves] || 'medium';
+            counts[mode][diff]++;
+          } else {
+            const dds = d.dds_blended;
+            if (dds < 26) counts[mode].easy++;
+            else if (dds < 51) counts[mode].medium++;
+            else if (dds < 76) counts[mode].hard++;
+            else if (dds < 101) counts[mode].expert++;
+            else if (dds < 131) counts[mode].master++;
+            else counts[mode].grandmaster++;
+          }
         }
         return json(counts);
       }

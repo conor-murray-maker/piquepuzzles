@@ -92,6 +92,10 @@ export function useGamePersistence() {
 
     const effectiveDealUuid = dealUuid || (gameState as any).dealUuid || undefined;
 
+    if (!effectiveDealUuid) {
+      console.warn('[useGamePersistence] deal_uuid missing — server will fall back to seed-based lookup');
+    }
+
     try {
       const { data, error } = await invokeWithRetry({
         dealSeed: (gameState as any).seed ?? 0,

@@ -26,5 +26,27 @@ export function getRealmDifficultyFromGridSize(gridSize: number): string {
     case 9: return 'Master';
     case 10: return 'Grandmaster';
     default: return 'Medium';
+}
+
+/**
+ * When true and a Realm deal has 30+ empirical samples, difficulty label
+ * is recalculated from getDifficultyLabel(dds_blended) instead of grid size.
+ * Default: false. Enable via admin deal detail view after manual review.
+ */
+export const USE_EMPIRICAL_REALM_DIFFICULTY = false;
+
+/**
+ * Returns the appropriate difficulty label for a Realm deal,
+ * considering the empirical override flag.
+ */
+export function getRealmDifficulty(
+  gridSize: number,
+  ddsBlended: number,
+  sampleCount: number = 0,
+  useEmpirical: boolean = USE_EMPIRICAL_REALM_DIFFICULTY
+): string {
+  if (useEmpirical && sampleCount >= 30) {
+    return getDifficultyLabel(ddsBlended);
   }
+  return getRealmDifficultyFromGridSize(gridSize);
 }

@@ -359,7 +359,8 @@ export function StarterPoolGenerator() {
     const startTime = Date.now();
     let timeoutDiscards = 0;
 
-    while (totalTried < MAX_CANDIDATES && !abortRef.current) {
+    const maxCandidates = MAX_CANDIDATES * batchMultiplier;
+    while (totalTried < maxCandidates && !abortRef.current) {
       const allMet = targets.every(t => counts[t.band] >= t.target);
       if (allMet) {
         addStatus("✓ All targets met!");

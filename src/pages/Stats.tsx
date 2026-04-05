@@ -212,6 +212,7 @@ function StatsContent({ games, stats, modeIQ }: {
 
 export default function Stats() {
   const stats = usePlayerStats();
+  const [selectedTab, setSelectedTab] = useState('all');
 
   const klondikeGames = useMemo(() => stats.games.filter((g: any) => !g.game_mode || g.game_mode === 'klondike'), [stats.games]);
   const freecellGames = useMemo(() => stats.games.filter((g: any) => g.game_mode === 'freecell'), [stats.games]);

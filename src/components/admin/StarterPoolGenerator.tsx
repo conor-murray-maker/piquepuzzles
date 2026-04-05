@@ -88,6 +88,13 @@ const TIMEOUT_OPTIONS = [
   { value: "10000", label: "10s" },
   { value: "30000", label: "30s (Master)" },
 ];
+const BATCH_SIZE_OPTIONS = [
+  { value: "1", label: "1× (default)" },
+  { value: "2", label: "2× targets" },
+  { value: "5", label: "5× targets" },
+  { value: "10", label: "10× targets" },
+  { value: "20", label: "20× targets" },
+];
 
 /** Fill All batch definitions */
 interface FillAllBatch {

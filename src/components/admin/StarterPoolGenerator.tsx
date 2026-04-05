@@ -385,33 +385,12 @@ export function StarterPoolGenerator() {
 
           const candidateStart = performance.now();
           let deal;
-          let realmSolution: [number, number][] | undefined;
           if (isRealm) {
-            const genOpts: RealmGenOptions = {
+            deal = engine.generateDeal(seed, {
               gridSize: realmGridSize,
               skipSpatialSurprise: realmSkipSurprise,
               timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
-            };
-            const useLargeGridStrategy = realmGridSize && realmGridSize >= 10;
-
-            if (useLargeGridStrategy && selectedStrategy === 'solution-first') {
-              // Solution-first only
-              const puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
-              if (puzzle) realmSolution = puzzle.solution;
-              deal = { seed, gameMode: 'realm' as const, data: puzzle };
-            } else if (useLargeGridStrategy && selectedStrategy === 'hybrid') {
-              // Try solution-first, fall back to legacy
-              let puzzle = generateRealmPuzzleSolutionFirst(seed, genOpts);
-              if (!puzzle) {
-                puzzle = generateRealmPuzzle(seed, genOpts);
-              }
-              if (puzzle) realmSolution = puzzle.solution;
-              deal = { seed, gameMode: 'realm' as const, data: puzzle };
-            } else {
-              // Legacy for all sizes, or small grids
-              deal = engine.generateDeal(seed, genOpts);
-              if (deal.data) realmSolution = (deal.data as any).solution;
-            }
+            });
           } else {
             deal = engine.generateDeal(seed);
           }
@@ -602,18 +581,6 @@ export function StarterPoolGenerator() {
             </SelectContent>
           </Select>
 
-          {selectedMode === "realm" && (
-            <Select value={selectedStrategy} onValueChange={(v) => setSelectedStrategy(v as GenerationStrategy)} disabled={running}>
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="Strategy" />
-              </SelectTrigger>
-              <SelectContent>
-                {STRATEGY_OPTIONS.map(s => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
 
           <Button onClick={run} disabled={running} className="gap-2">
             {running && !fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}

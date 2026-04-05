@@ -207,7 +207,7 @@ export function StarterPoolGenerator() {
   const [selectedMode, setSelectedMode] = useState<string>("klondike");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
   const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
-  const [selectedStrategy, setSelectedStrategy] = useState<GenerationStrategy>("hybrid");
+  const [selectedStrategy] = useState<string>("legacy");
   const [running, setRunning] = useState(false);
   const [candidatesTried, setCandidatesTried] = useState(0);
   const [starterFound, setStarterFound] = useState(0);
@@ -294,7 +294,7 @@ export function StarterPoolGenerator() {
       addStatus(`[${i + 1}/${batchesToRun.length}] Filling ${label} (need ${needed})...`);
 
       const inserted = await generateBatch(
-        target, batch.strategy, batch.timeoutMs, needed,
+        target, batch.timeoutMs, needed,
         abortRef, addStatus, insertDeals,
       );
 

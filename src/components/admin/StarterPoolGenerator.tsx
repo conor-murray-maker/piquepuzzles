@@ -1,8 +1,10 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAdminAction } from "@/hooks/useAdminQuery";
 import { useToast } from "@/hooks/use-toast";
 import { KlondikeEngine } from "@/engines/KlondikeEngine";
@@ -12,7 +14,7 @@ import { PuzzleEngine } from "@/engines/PuzzleEngine";
 import { generateSeed } from "@/game/deck";
 import { type RealmGenOptions } from "@/game/realm";
 import { calculateDealConfidence } from "@/lib/wilsonConfidence";
-import { Database, Loader2, CheckCircle, XCircle, Zap } from "lucide-react";
+import { Database, Loader2, CheckCircle, XCircle, Zap, ChevronDown, AlertTriangle } from "lucide-react";
 
 interface VerifiedDeal {
   seed: number;
@@ -69,16 +71,28 @@ const TARGETS_BY_MODE: Record<string, Target[]> = {
   ],
 };
 
-const MAX_CANDIDATES = 8000;
-
-const DIFFICULTY_OPTIONS = [
-  { value: "all", label: "All Difficulties" },
-  { value: "easy", label: "Easy only" },
-  { value: "medium", label: "Medium only" },
-  { value: "hard", label: "Hard only" },
-  { value: "expert", label: "Expert only" },
-  { value: "master", label: "Master only" },
+const ALL_MODES = [
+  { value: "klondike", label: "Klondike" },
+  { value: "freecell", label: "FreeCell" },
+  { value: "realm", label: "Realm" },
 ];
+
+const ALL_DIFFICULTIES = [
+  { value: "easy", label: "Easy" },
+  { value: "medium", label: "Medium" },
+  { value: "hard", label: "Hard" },
+  { value: "expert", label: "Expert" },
+  { value: "master", label: "Master" },
+];
+
+/** Which difficulties are valid for each mode */
+const VALID_DIFFICULTIES: Record<string, string[]> = {
+  klondike: ["easy", "medium"],
+  freecell: ["easy", "medium"],
+  realm: ["easy", "medium", "hard", "expert", "master"],
+};
+
+const MAX_CANDIDATES = 8000;
 
 const TIMEOUT_OPTIONS = [
   { value: "0", label: "None" },
@@ -129,7 +143,7 @@ async function generateBatch(
   const simCount = target.simCount;
   const collected: VerifiedDeal[] = [];
   let tried = 0;
-  const maxTries = Math.min(MAX_CANDIDATES, needed * 100); // cap effort
+  const maxTries = Math.min(MAX_CANDIDATES, needed * 100);
 
   while (tried < maxTries && collected.length < needed && !abortRef.current) {
     for (let b = 0; b < 5 && tried < maxTries && collected.length < needed && !abortRef.current; b++) {
@@ -191,7 +205,6 @@ async function generateBatch(
         // skip
       }
     }
-    // yield to event loop
     await new Promise<void>(resolve => setTimeout(resolve, 0));
   }
 
@@ -200,14 +213,64 @@ async function generateBatch(
   return insertDeals(collected);
 }
 
+/* ─── Multi-select dropdown component ─── */
+function MultiSelect({
+  options,
+  selected,
+  onChange,
+  disabled,
+  allLabel,
+  width = "w-48",
+}: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (vals: string[]) => void;
+  disabled?: boolean;
+  allLabel: string;
+  width?: string;
+}) {
+  const summary = selected.length === options.length
+    ? allLabel
+    : selected.length === 0
+      ? "None"
+      : options.filter(o => selected.includes(o.value)).map(o => o.label).join(", ");
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" disabled={disabled} className={`${width} justify-between text-sm font-normal`}>
+          <span className="truncate">{summary}</span>
+          <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-1" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-2" align="start">
+        {options.map(opt => (
+          <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm">
+            <Checkbox
+              checked={selected.includes(opt.value)}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  onChange([...selected, opt.value]);
+                } else {
+                  onChange(selected.filter(v => v !== opt.value));
+                }
+              }}
+            />
+            {opt.label}
+          </label>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function StarterPoolGenerator() {
   const action = useAdminAction();
   const { toast } = useToast();
-  const [selectedMode, setSelectedMode] = useState<string>("klondike");
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
+  const [selectedModes, setSelectedModes] = useState<string[]>(["klondike", "freecell", "realm"]);
+  const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>(["easy", "medium", "hard", "expert", "master"]);
   const [selectedTimeout, setSelectedTimeout] = useState<string>("2000");
   const [selectedBatchMultiplier, setSelectedBatchMultiplier] = useState<string>("1");
-  const [selectedStrategy] = useState<string>("legacy");
   const [running, setRunning] = useState(false);
   const [candidatesTried, setCandidatesTried] = useState(0);
   const [starterFound, setStarterFound] = useState(0);
@@ -218,8 +281,22 @@ export function StarterPoolGenerator() {
   const abortRef = useRef(false);
 
   const addStatus = useCallback((line: string) => {
-    setStatusLines(prev => [...prev.slice(-19), line]);
+    setStatusLines(prev => [...prev.slice(-29), line]);
   }, []);
+
+  // Filter difficulty options to those valid for at least one selected mode
+  const availableDifficulties = useMemo(() => {
+    const validSet = new Set<string>();
+    for (const mode of selectedModes) {
+      for (const d of (VALID_DIFFICULTIES[mode] ?? [])) validSet.add(d);
+    }
+    return ALL_DIFFICULTIES.filter(d => validSet.has(d.value));
+  }, [selectedModes]);
+
+  // Show Master timeout warning
+  const showMasterWarning = selectedDifficulties.includes("master") &&
+    selectedModes.includes("realm") &&
+    parseInt(selectedTimeout) < 30000;
 
   const insertDeals = useCallback(async (deals: VerifiedDeal[]): Promise<number> => {
     let totalInserted = 0;
@@ -257,7 +334,6 @@ export function StarterPoolGenerator() {
       return;
     }
 
-    // Determine which batches need filling
     const batchesToRun: { batch: FillAllBatch; target: Target; needed: number }[] = [];
     for (const batch of FILL_ALL_BATCHES) {
       const targets = TARGETS_BY_MODE[batch.mode];
@@ -315,6 +391,11 @@ export function StarterPoolGenerator() {
   }, [action, addStatus, insertDeals, toast]);
 
   const run = useCallback(async () => {
+    if (selectedModes.length === 0 || selectedDifficulties.length === 0) {
+      toast({ title: "Nothing selected", description: "Select at least one mode and difficulty." });
+      return;
+    }
+
     setRunning(true);
     setCandidatesTried(0);
     setStarterFound(0);
@@ -323,212 +404,183 @@ export function StarterPoolGenerator() {
     setResult(null);
     abortRef.current = false;
 
-    const allTargets = TARGETS_BY_MODE[selectedMode];
     const batchMultiplier = parseInt(selectedBatchMultiplier, 10);
-    const baseTargets = selectedDifficulty === "all"
-      ? allTargets
-      : allTargets.filter(t => t.band === selectedDifficulty);
+    const timeoutMs = parseInt(selectedTimeout, 10);
 
-    // Apply batch multiplier to targets
-    const targets = baseTargets.map(t => ({ ...t, target: t.target * batchMultiplier }));
+    // Build list of (mode, target) combos to run sequentially
+    const combos: { mode: string; target: Target }[] = [];
+    for (const mode of selectedModes) {
+      const allTargets = TARGETS_BY_MODE[mode] ?? [];
+      for (const t of allTargets) {
+        if (selectedDifficulties.includes(t.band)) {
+          combos.push({ mode, target: { ...t, target: t.target * batchMultiplier } });
+        }
+      }
+    }
 
-    if (targets.length === 0) {
-      addStatus(`✗ No targets for ${selectedMode} ${selectedDifficulty}`);
+    if (combos.length === 0) {
+      addStatus("✗ No valid mode/difficulty combinations selected.");
       setRunning(false);
       return;
     }
 
-    const collected: VerifiedDeal[] = [];
-    const counts: Record<string, number> = {};
-    for (const t of targets) counts[t.band] = 0;
+    const totalTarget = combos.reduce((s, c) => s + c.target.target, 0);
+    addStatus(`Starting generation: ${combos.length} batch(es), ${totalTarget} total target deals.`);
+    addStatus(`Timeout: ${timeoutMs > 0 ? `${timeoutMs}ms` : 'none'} | Batch multiplier: ${batchMultiplier}×`);
 
-    const totalTarget = targets.reduce((s, t) => s + t.target, 0);
-    let totalTried = 0;
-    let starterCount = 0;
-    let bankedCount = 0;
-    const timeoutMs = parseInt(selectedTimeout, 10);
+    let grandTotalInserted = 0;
+    let grandTotalStarter = 0;
+    let grandTotalTried = 0;
+    let grandTotalBanked = 0;
 
-    const isRealm = selectedMode === "realm";
-    addStatus(`Starting ${selectedMode} deal generation (${selectedDifficulty})...`);
-    addStatus(`Strategy: ${isRealm ? selectedStrategy : 'n/a (card game)'}`);
-    addStatus(`Targets: ${targets.map(t => `${t.target} ${t.band}${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}`).join(", ")} (${totalTarget} total)`);
-    if (timeoutMs > 0) addStatus(`Timeout per candidate: ${timeoutMs}ms`);
-
-    const engine = targets[0].engine;
-    const simCount = targets[0].simCount;
-    const startTime = Date.now();
-    let timeoutDiscards = 0;
-
-    const maxCandidates = MAX_CANDIDATES * batchMultiplier;
-    while (totalTried < maxCandidates && !abortRef.current) {
-      const allMet = targets.every(t => counts[t.band] >= t.target);
-      if (allMet) {
-        addStatus("✓ All targets met!");
+    for (let ci = 0; ci < combos.length; ci++) {
+      if (abortRef.current) {
+        addStatus("⚠ Stopped by user.");
         break;
       }
 
-      for (let b = 0; b < 5 && totalTried < maxCandidates && !abortRef.current; b++) {
-        totalTried++;
-        const seed = generateSeed();
+      const { mode, target } = combos[ci];
+      const isRealm = mode === "realm";
+      const label = `${mode} ${target.band}${target.gridSizes ? ` (${target.gridSizes.join('/')}×)` : ''}`;
+      addStatus(`\n━━━ [${ci + 1}/${combos.length}] ${label} — target: ${target.target} ━━━`);
 
-        try {
-          // For Realm, pick a random target band that still needs deals to determine grid size
-          let realmGridSize: number | undefined;
-          let realmSkipSurprise = false;
-          let targetBand: Target | undefined;
+      const engine = target.engine;
+      const simCount = target.simCount;
+      const collected: VerifiedDeal[] = [];
+      let tried = 0;
+      let starterCount = 0;
+      const startTime = Date.now();
+      const maxCandidates = MAX_CANDIDATES * batchMultiplier;
 
-          if (isRealm) {
-            // Pick a random unfilled target
-            const unfilled = targets.filter(t => counts[t.band] < t.target);
-            if (unfilled.length === 0) continue;
-            targetBand = unfilled[Math.floor(Math.random() * unfilled.length)];
-            if (targetBand.gridSizes) {
-              realmGridSize = targetBand.gridSizes[Math.floor(Math.random() * targetBand.gridSizes.length)];
+      while (tried < maxCandidates && collected.length < target.target && !abortRef.current) {
+        for (let b = 0; b < 5 && tried < maxCandidates && collected.length < target.target && !abortRef.current; b++) {
+          tried++;
+          const seed = generateSeed();
+
+          try {
+            let realmGridSize: number | undefined;
+            let realmSkipSurprise = false;
+
+            if (isRealm && target.gridSizes) {
+              realmGridSize = target.gridSizes[Math.floor(Math.random() * target.gridSizes.length)];
+              realmSkipSurprise = target.skipSpatialSurprise ?? false;
             }
-            realmSkipSurprise = targetBand.skipSpatialSurprise ?? false;
-          }
 
-          const candidateStart = performance.now();
-          let deal;
-          if (isRealm) {
-            deal = engine.generateDeal(seed, {
-              gridSize: realmGridSize,
-              skipSpatialSurprise: realmSkipSurprise,
-              timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
+            let deal;
+            if (isRealm) {
+              deal = engine.generateDeal(seed, {
+                gridSize: realmGridSize,
+                skipSpatialSurprise: realmSkipSurprise,
+                timeoutMs: timeoutMs > 0 ? timeoutMs : undefined,
+              });
+            } else {
+              deal = engine.generateDeal(seed);
+            }
+
+            const verifyResult = engine.verifySolvable(deal, simCount);
+            if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
+
+            let dds = verifyResult.complexityScore;
+            const pathDiv = verifyResult.pathDiversityScore;
+            const uniquePaths = verifyResult.uniqueWinningPaths;
+
+            if (!isRealm) dds = applyPathDiversityModifier(dds, pathDiv);
+
+            // For Realm, skip DDS range check — grid size determines difficulty
+            if (!isRealm && (dds < target.ddsMin || dds > target.ddsMax)) continue;
+
+            let confidence: number;
+            if (isRealm) {
+              confidence = 1.0;
+            } else {
+              const confResult = calculateDealConfidence({
+                wins: verifyResult.wins,
+                totalSimulations: verifyResult.simulations,
+                dds,
+              });
+              confidence = confResult.confidence;
+            }
+
+            collected.push({
+              seed,
+              game_mode: mode,
+              draw_mode: isRealm ? 0 : 3,
+              min_moves: verifyResult.minSolutionLength,
+              dds_initial: dds,
+              dds_blended: dds,
+              simulation_count: isRealm ? 1 : verifyResult.simulations,
+              simulation_wins: isRealm ? 0 : verifyResult.wins,
+              confidence,
+              tier: "fresh",
+              is_calibration: false,
+              reserved_for: target.band === "easy" ? "onboarding" : null,
+              unique_winning_paths: isRealm ? 1 : uniquePaths,
+              path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
             });
-          } else {
-            deal = engine.generateDeal(seed);
+
+            starterCount++;
+          } catch {
+            // skip
           }
-
-          const verifyResult = engine.verifySolvable(deal, simCount);
-
-          if (!verifyResult.solvable || verifyResult.minSolutionLength <= 0) continue;
-
-          let dds = verifyResult.complexityScore;
-          const pathDiv = verifyResult.pathDiversityScore;
-          const uniquePaths = verifyResult.uniqueWinningPaths;
-
-          if (!isRealm) {
-            dds = applyPathDiversityModifier(dds, pathDiv);
-          }
-
-          let confidence: number;
-          if (isRealm) {
-            confidence = 1.0;
-          } else {
-            const confResult = calculateDealConfidence({
-              wins: verifyResult.wins,
-              totalSimulations: verifyResult.simulations,
-              dds,
-            });
-            confidence = confResult.confidence;
-          }
-
-          let reservedFor: string | null = null;
-
-          if (isRealm && targetBand) {
-            // For Realm, count toward the band we specifically generated for (grid size determines difficulty)
-            if (counts[targetBand.band] < targetBand.target) {
-              counts[targetBand.band]++;
-              if (targetBand.band === "easy") reservedFor = "onboarding";
-            }
-          } else {
-            // For card games, match by DDS range
-            for (const t of targets) {
-              if (dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] < t.target) {
-                counts[t.band]++;
-                if (t.band === "easy") reservedFor = "onboarding";
-                break;
-              }
-            }
-          }
-
-          collected.push({
-            seed,
-            game_mode: selectedMode,
-            draw_mode: isRealm ? 0 : 3,
-            min_moves: verifyResult.minSolutionLength,
-            dds_initial: dds,
-            dds_blended: dds,
-            simulation_count: isRealm ? 1 : verifyResult.simulations,
-            simulation_wins: isRealm ? 0 : verifyResult.wins,
-            confidence,
-            tier: "fresh",
-            is_calibration: false,
-            reserved_for: reservedFor,
-            unique_winning_paths: isRealm ? 1 : uniquePaths,
-            path_diversity_score: isRealm ? 0 : Math.round(pathDiv * 1000) / 1000,
-          });
-
-          bankedCount++;
-          // Count deals that matched a target band
-          const matchedTarget = isRealm && targetBand
-            ? counts[targetBand.band] <= targetBand.target
-            : targets.some(t => dds >= t.ddsMin && dds <= t.ddsMax && counts[t.band] <= t.target);
-          if (matchedTarget) starterCount++;
-        } catch {
-          // Skip failed attempt
         }
+
+        grandTotalTried = grandTotalTried - (grandTotalTried % 1) + tried; // approx update
+        setCandidatesTried(prev => prev + 0); // trigger re-render via status lines
+
+        if (tried % 5 === 0) {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          const rate = tried > 0 ? ((collected.length / tried) * 100).toFixed(1) : "0";
+          addStatus(`  [${tried}] ${elapsed}s | ${collected.length}/${target.target} | Rate: ${rate}%`);
+        }
+
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
       }
 
-      setCandidatesTried(totalTried);
-      setStarterFound(starterCount);
-      setTotalBanked(bankedCount);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-      if (totalTried % 5 === 0) {
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        const rate = totalTried > 0 ? ((bankedCount / totalTried) * 100).toFixed(1) : "0";
-        const remaining = starterCount > 0
-          ? ((totalTarget - starterCount) / (starterCount / (Date.now() - startTime)) / 1000).toFixed(0)
-          : "?";
-        const parts = targets.map(t => `${t.band}: ${counts[t.band]}/${t.target}`);
-        const timeoutStr = timeoutDiscards > 0 ? ` Timeout=${timeoutDiscards}` : "";
-        addStatus(`[${totalTried}] ${elapsed}s | Rate: ${rate}% | ETA: ${remaining}s — ${parts.join(", ")}${timeoutStr}`);
+      if (collected.length > 0) {
+        addStatus(`  Found ${collected.length} deals in ${elapsed}s. Inserting...`);
+        const inserted = await insertDeals(collected);
+        grandTotalInserted += inserted;
+        grandTotalBanked += collected.length;
+        grandTotalStarter += starterCount;
+        addStatus(`  ✓ ${label}: ${inserted} inserted`);
+      } else {
+        addStatus(`  ✗ ${label}: No deals found after ${tried} candidates (${elapsed}s)`);
       }
 
-      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      // Update counters
+      setCandidatesTried(prev => prev + tried);
+      setStarterFound(prev => prev + starterCount);
+      setTotalBanked(prev => prev + collected.length);
     }
 
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-    if (collected.length === 0) {
-      addStatus(`✗ No verified deals found after ${totalTried} candidates (${elapsed}s)`);
-      setRunning(false);
-      return;
-    }
-
-    addStatus(`Found ${bankedCount} deals in ${elapsed}s. Inserting...`);
-    if (timeoutDiscards > 0) addStatus(`⚠ ${timeoutDiscards} candidates timed out`);
-
-    const totalInserted = await insertDeals(collected);
-
-    setResult({ inserted: totalInserted, total: collected.length });
-    addStatus(`✓ Total inserted: ${totalInserted} deals`);
-    toast({ title: `${selectedMode} pool seeded`, description: `${totalInserted} verified deals inserted` });
+    setResult({ inserted: grandTotalInserted, total: grandTotalBanked });
+    const finalMsg = abortRef.current
+      ? `Stopped early. ${grandTotalInserted} deals inserted across completed batches.`
+      : `Done. ${grandTotalInserted} deals inserted across ${combos.length} batches.`;
+    addStatus(`\n✓ ${finalMsg}`);
+    toast({ title: "Generation complete", description: finalMsg });
 
     setRunning(false);
-  }, [action, addStatus, toast, selectedMode, selectedDifficulty, selectedTimeout, selectedStrategy, insertDeals]);
+  }, [addStatus, toast, selectedModes, selectedDifficulties, selectedTimeout, selectedBatchMultiplier, insertDeals]);
 
-  const allTargets = TARGETS_BY_MODE[selectedMode];
-  const targets = selectedDifficulty === "all"
-    ? allTargets
-    : allTargets.filter(t => t.band === selectedDifficulty);
-  const totalTarget = targets.reduce((s, t) => s + t.target, 0);
-  const progress = Math.min(100, totalTarget > 0 ? (starterFound / totalTarget) * 100 : 0);
-
-  const difficultyOptions = selectedMode === "realm"
-    ? DIFFICULTY_OPTIONS
-    : DIFFICULTY_OPTIONS.filter(d => d.value === "all" || d.value === "easy" || d.value === "medium");
-
-  const modeDescription = () => {
-    if (selectedMode === "realm") {
-      if (selectedDifficulty === "all") return "Realm: 50 Easy (5×), 40 Medium (6×), 30 Hard (7-8×), 20 Expert (9×), 15 Master (10×).";
-      const t = targets[0];
-      if (!t) return "";
-      return `Realm ${t.band}: ${t.target} deals${t.gridSizes ? ` (${t.gridSizes.join('/')}×)` : ''}. Confidence=1.0 (unique solution).`;
+  // Compute total target for progress bar
+  const totalTarget = useMemo(() => {
+    const batchMultiplier = parseInt(selectedBatchMultiplier, 10);
+    let total = 0;
+    for (const mode of selectedModes) {
+      const allTargets = TARGETS_BY_MODE[mode] ?? [];
+      for (const t of allTargets) {
+        if (selectedDifficulties.includes(t.band)) {
+          total += t.target * batchMultiplier;
+        }
+      }
     }
-    return `${selectedMode}: ${targets.map(t => `${t.target} ${t.band}`).join(" + ")} starter deals with Wilson confidence scoring.`;
-  };
+    return total;
+  }, [selectedModes, selectedDifficulties, selectedBatchMultiplier]);
+
+  const progress = Math.min(100, totalTarget > 0 ? (starterFound / totalTarget) * 100 : 0);
 
   return (
     <Card>
@@ -540,7 +592,7 @@ export function StarterPoolGenerator() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Generates solver-verified deals per game mode. Select a mode and generate, or fill all pools at once.
+          Generates solver-verified deals per game mode. Select modes and difficulties to generate, or fill all pools at once.
         </p>
 
         {/* Fill All Pools */}
@@ -549,32 +601,28 @@ export function StarterPoolGenerator() {
             {fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
             {fillAllRunning ? "Filling All Pools..." : "Fill All Pools"}
           </Button>
-          <p className="text-xs text-muted-foreground">Auto-fills every mode/difficulty below target with optimal strategies.</p>
+          <p className="text-xs text-muted-foreground">Auto-fills every mode/difficulty below target. Bypasses selectors.</p>
         </div>
 
         {/* Manual controls */}
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={selectedMode} onValueChange={(v) => { setSelectedMode(v); setSelectedDifficulty("all"); }} disabled={running}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="klondike">Klondike</SelectItem>
-              <SelectItem value="freecell">FreeCell</SelectItem>
-              <SelectItem value="realm">Realm</SelectItem>
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={ALL_MODES}
+            selected={selectedModes}
+            onChange={setSelectedModes}
+            disabled={running}
+            allLabel="All Modes"
+            width="w-40"
+          />
 
-          <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty} disabled={running}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {difficultyOptions.map(d => (
-                <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={availableDifficulties}
+            selected={selectedDifficulties.filter(d => availableDifficulties.some(ad => ad.value === d))}
+            onChange={setSelectedDifficulties}
+            disabled={running}
+            allLabel="All Difficulties"
+            width="w-52"
+          />
 
           <Select value={selectedTimeout} onValueChange={setSelectedTimeout} disabled={running}>
             <SelectTrigger className="w-44">
@@ -598,7 +646,7 @@ export function StarterPoolGenerator() {
             </SelectContent>
           </Select>
 
-          <Button onClick={run} disabled={running} className="gap-2">
+          <Button onClick={run} disabled={running || selectedModes.length === 0 || selectedDifficulties.length === 0} className="gap-2">
             {running && !fillAllRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
             {running && !fillAllRunning ? "Generating..." : "Generate"}
           </Button>
@@ -610,7 +658,16 @@ export function StarterPoolGenerator() {
           )}
         </div>
 
-        <p className="text-xs text-muted-foreground">{modeDescription()}</p>
+        {showMasterWarning && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 rounded px-3 py-2">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            Master (10×10) selected — 30s timeout recommended for reliable generation.
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Target: {totalTarget} deals across {selectedModes.length} mode(s), {selectedDifficulties.filter(d => availableDifficulties.some(ad => ad.value === d)).length} difficulty(ies).
+        </p>
 
         {(running || result) && !fillAllRunning && (
           <div className="space-y-2">
@@ -643,7 +700,7 @@ export function StarterPoolGenerator() {
             {result.inserted > 0 ? (
               <>
                 <CheckCircle className="h-4 w-4 text-emerald-600" />
-                <span>Inserted {result.inserted} verified deals{!fillAllRunning && ` (${starterFound} starter)`}</span>
+                <span>Inserted {result.inserted} verified deals</span>
               </>
             ) : (
               <>

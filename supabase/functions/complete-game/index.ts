@@ -162,6 +162,19 @@ function ddsToLabel(dds: number): string {
   return 'Grandmaster';
 }
 
+/** Realm difficulty from grid size (min_moves = grid size for Realm) */
+function realmDifficultyFromGridSize(gridSize: number): string {
+  switch (gridSize) {
+    case 5: return 'Easy';
+    case 6: return 'Medium';
+    case 7: return 'Hard';
+    case 8: return 'Expert';
+    case 9: return 'Master';
+    case 10: return 'Grandmaster';
+    default: return 'Medium';
+  }
+}
+
 function getTierName(rating: number): string {
   if (rating < 1100) return 'Bronze';
   if (rating < 1300) return 'Silver';
@@ -602,7 +615,11 @@ Deno.serve(async (req) => {
     // Build the atomic SQL transaction
     const nowISO = new Date().toISOString();
     const dealUuidForInsert = deal?.id || null;
-    const difficulty = ddsToLabel(dds);
+    // Realm: derive difficulty from grid size (min_moves = N for Realm); others: from DDS
+    const dealMinMoves = deal ? (deal.min_moves as number) : 0;
+    const difficulty = gameMode === 'realm' && dealMinMoves >= 5 && dealMinMoves <= 10
+      ? realmDifficultyFromGridSize(dealMinMoves)
+      : ddsToLabel(dds);
 
     // We need to compute composite IQ inside the transaction to avoid races.
     // We'll do it by first upserting mode rating, then computing the average.

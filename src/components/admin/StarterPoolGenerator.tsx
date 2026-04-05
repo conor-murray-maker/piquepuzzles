@@ -67,7 +67,8 @@ const TARGETS_BY_MODE: Record<string, Target[]> = {
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "medium", ddsMin: 15, ddsMax: 55, target: 40, gridSizes: [6] },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "hard", ddsMin: 30, ddsMax: 80, target: 30, gridSizes: [7, 8] },
     { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "expert", ddsMin: 60, ddsMax: 100, target: 20, gridSizes: [9] },
-    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "master", ddsMin: 75, ddsMax: 100, target: 15, gridSizes: [10] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "master", ddsMin: 75, ddsMax: 130, target: 15, gridSizes: [10] },
+    { gameMode: "realm", engine: RealmEngine, simCount: 1, band: "grandmaster", ddsMin: 100, ddsMax: 150, target: 10, gridSizes: [10] },
   ],
 };
 
@@ -83,13 +84,14 @@ const ALL_DIFFICULTIES = [
   { value: "hard", label: "Hard" },
   { value: "expert", label: "Expert" },
   { value: "master", label: "Master" },
+  { value: "grandmaster", label: "Grandmaster" },
 ];
 
 /** Which difficulties are valid for each mode */
 const VALID_DIFFICULTIES: Record<string, string[]> = {
   klondike: ["easy", "medium"],
   freecell: ["easy", "medium"],
-  realm: ["easy", "medium", "hard", "expert", "master"],
+  realm: ["easy", "medium", "hard", "expert", "master", "grandmaster"],
 };
 
 const MAX_CANDIDATES = 8000;

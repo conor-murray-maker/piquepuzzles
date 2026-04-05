@@ -3,6 +3,7 @@ import { EngineRegistry } from '@/engines/EngineRegistry';
 import { GameMode } from '@/engines/PuzzleEngine';
 import { DDSService } from './DDSService';
 import { generateSeed } from '@/game/deck';
+import { getRealmDifficultyFromGridSize } from '@/lib/difficulty';
 
 export interface VerifiedDeal {
   dealUuid: string;
@@ -62,6 +63,11 @@ function ddsToLabel(dds: number): string {
 }
 
 function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
+  // Realm: derive difficulty from grid size (min_moves = N); others: from DDS
+  const difficulty = deal.game_mode === 'realm' && deal.min_moves >= 5 && deal.min_moves <= 10
+    ? getRealmDifficultyFromGridSize(deal.min_moves)
+    : ddsToLabel(deal.dds_blended);
+
   return {
     dealUuid: deal.id,
     seed: deal.seed,
@@ -70,7 +76,7 @@ function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
     minMoves: deal.min_moves,
     ddsInitial: deal.dds_initial,
     ddsBlended: deal.dds_blended,
-    difficulty: ddsToLabel(deal.dds_blended),
+    difficulty,
     difficultyScore: deal.dds_blended,
     drawMode: deal.draw_mode,
   };

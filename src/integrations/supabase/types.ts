@@ -275,6 +275,7 @@ export type Database = {
           dds_blended: number
           dds_empirical: number | null
           dds_initial: number
+          deduction_solvable: boolean | null
           draw_mode: number
           game_mode: string
           id: string
@@ -300,6 +301,7 @@ export type Database = {
           dds_blended?: number
           dds_empirical?: number | null
           dds_initial?: number
+          deduction_solvable?: boolean | null
           draw_mode?: number
           game_mode?: string
           id?: string
@@ -325,6 +327,7 @@ export type Database = {
           dds_blended?: number
           dds_empirical?: number | null
           dds_initial?: number
+          deduction_solvable?: boolean | null
           draw_mode?: number
           game_mode?: string
           id?: string

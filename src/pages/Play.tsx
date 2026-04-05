@@ -49,6 +49,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   } | null>(null);
   const hasPopped = useRef(false);
   const popInFlight = useRef(false);
+  const gameEndInFlight = useRef(false);
 
   // Pop deal from pool on mount (only for regular games, not challenges/daily)
   useEffect(() => {
@@ -88,6 +89,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }, [onActiveGameChange]);
 
   const handleGameEnd = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
+    if (gameEndInFlight.current) return;
+    gameEndInFlight.current = true;
     const seed = (state as any).seed as number | undefined;
     const dealUuid = (state as any).dealUuid as string | undefined;
     setLastResult({
@@ -138,6 +141,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode]);
 
   const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
+    if (gameEndInFlight.current) return;
+    gameEndInFlight.current = true;
     const lostState = { ...state, isWon: false };
     const seed = (state as any).seed as number | undefined;
     const dealUuid = (state as any).dealUuid as string | undefined;
@@ -178,6 +183,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }, [saveGameResult, setPhase, gameMode, profile, dailyDate, dailyDealId, user, drawMode]);
 
   const handlePlayAgain = useCallback(async () => {
+    gameEndInFlight.current = false;
     if (gameMode === 'realm') clearRealmStorage();
     else if (gameMode === 'freecell') clearFreeCellStorage();
     else clearStorage();

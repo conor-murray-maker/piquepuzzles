@@ -1,4 +1,5 @@
 import type { DealFilterState } from "./DealFilters";
+import { getRealmDifficultyFromGridSize } from "@/lib/difficulty";
 
 export interface DealRow {
   id: string;
@@ -16,15 +17,23 @@ export interface DealRow {
   simulation_count: number;
   simulation_wins: number;
   is_calibration: boolean;
+  min_moves: number;
 }
 
-function getDifficultyBand(dds: number): string {
+function getDifficultyBandDds(dds: number): string {
   if (dds < 26) return "easy";
   if (dds < 51) return "medium";
   if (dds < 76) return "hard";
   if (dds < 101) return "expert";
   if (dds < 131) return "master";
   return "grandmaster";
+}
+
+function getDifficultyBand(deal: DealRow): string {
+  if (deal.game_mode === "realm") {
+    return getRealmDifficultyFromGridSize(deal.min_moves).toLowerCase();
+  }
+  return getDifficultyBandDds(deal.dds_blended);
 }
 
 function getDdsSource(poolAttempts: number): string {
@@ -42,7 +51,7 @@ function getConfidenceBand(conf: number): string {
 export function applyFilters(deals: DealRow[], filters: DealFilterState): DealRow[] {
   return deals.filter(d => {
     if (filters.gameMode !== "all" && d.game_mode !== filters.gameMode) return false;
-    if (filters.difficulty !== "all" && getDifficultyBand(d.dds_blended) !== filters.difficulty) return false;
+    if (filters.difficulty !== "all" && getDifficultyBand(d) !== filters.difficulty) return false;
     if (filters.ddsSource !== "all" && getDdsSource(d.pool_attempts) !== filters.ddsSource) return false;
 
     if (filters.confidence !== "all") {
@@ -109,13 +118,9 @@ export function computeHealthStats(deals: DealRow[]) {
     else if (d.confidence >= 0.7) byConfBand.Medium++;
     else byConfBand.Low++;
 
-    const dds = d.dds_blended;
-    if (dds < 26) byBand.Easy++;
-    else if (dds < 51) byBand.Medium++;
-    else if (dds < 76) byBand.Hard++;
-    else if (dds < 101) byBand.Expert++;
-    else if (dds < 131) byBand.Master++;
-    else byBand.Grandmaster++;
+    const band = getDifficultyBand(d);
+    const label = band.charAt(0).toUpperCase() + band.slice(1);
+    if (label in byBand) byBand[label]++;
   }
 
   return {

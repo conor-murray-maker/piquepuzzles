@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
         tier: 'fresh',
         is_calibration: false,
         ...(body.deduction_solvable != null ? { deduction_solvable: body.deduction_solvable } : {}),
+        ...(body.region_map ? { region_map: body.region_map } : {}),
       }, { onConflict: 'seed,game_mode,draw_mode' })
       .select('id')
       .single();

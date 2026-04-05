@@ -786,27 +786,32 @@ function generateGameId(): string {
 }
 
 /**
- * Rebuild a Realm puzzle directly from stored crown positions.
- * Deterministic: same crownPositions + seed always produce the same layout.
- * Bypasses generateRealmPuzzle entirely — completes in <100ms for any grid size.
+ * Rebuild a Realm puzzle directly from a stored region map.
+ * The region map is the ground truth — no region-growing step needed.
+ * Completes in <10ms for any grid size.
  */
-export function rebuildFromCrownPositions(
-  crownPositions: { row: number; col: number }[],
+export function rebuildFromRegionMap(
+  regionMap: number[][],
   seed: number
 ): RealmState {
-  const n = crownPositions.length;
+  const n = regionMap.length;
   const rand = seededRandom(seed);
-  const crowns: [number, number][] = crownPositions.map(cp => [cp.row, cp.col]);
-
   const startMs = performance.now();
 
-  // Grow regions deterministically from crown positions
-  const regResult = growRegionsFromCrowns(crowns, n, rand);
-  if (!regResult) {
-    throw new Error(`[Realm] rebuildFromCrownPositions failed to grow regions for ${n}x${n}`);
+  // Build regions array from the stored region map
+  const regions: number[][] = Array.from({ length: n }, () => []);
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      regions[regionMap[r][c]].push(r * n + c);
+    }
   }
 
-  const { regionMap, regions } = regResult;
+  // Find the unique solution
+  const solverResult = findAllSolutions(regionMap, n, 2);
+  if (solverResult === 'timeout' || solverResult.length !== 1) {
+    throw new Error(`[Realm] rebuildFromRegionMap: expected exactly 1 solution for ${n}x${n}, got ${solverResult === 'timeout' ? 'timeout' : solverResult.length}`);
+  }
+  const solution = solverResult[0];
 
   // Compute DDS and deduction for metadata
   const deduction = solveByDeduction(regionMap, n);
@@ -817,19 +822,18 @@ export function rebuildFromCrownPositions(
   const regionColors = assignColors(n, rand);
 
   const elapsed = (performance.now() - startMs).toFixed(1);
-  console.log(`[Realm] Rebuilt ${n}x${n} from crown_positions in ${elapsed}ms. DDS=${dds}`);
+  console.log(`[Realm] Rebuilt ${n}x${n} from region_map in ${elapsed}ms. DDS=${dds}`);
 
-  const solution: [number, number][] = crowns;
   const deal: RealmDeal = { regionMap, regions, solution, size: n, dds, deduction, regionColors, spatialSurprise: 0 };
   return createRealmStateFromDeal(deal, seed);
 }
 
-export function createRealmGame(seed?: number, gridSize?: number, crownPositions?: { row: number; col: number }[]): RealmState {
+export function createRealmGame(seed?: number, gridSize?: number, regionMap?: number[][]): RealmState {
   const actualSeed = seed ?? generateSeed();
 
-  // Fast path: rebuild directly from stored crown positions (Grandmaster deals)
-  if (crownPositions && crownPositions.length > 0) {
-    return rebuildFromCrownPositions(crownPositions, actualSeed);
+  // Fast path: rebuild directly from stored region map (Master/Grandmaster deals)
+  if (regionMap && regionMap.length > 0) {
+    return rebuildFromRegionMap(regionMap, actualSeed);
   }
 
   const deal = generateRealmPuzzle(actualSeed, gridSize ? { gridSize } : undefined);

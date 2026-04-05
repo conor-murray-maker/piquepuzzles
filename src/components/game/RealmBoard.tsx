@@ -57,7 +57,7 @@ interface RealmBoardProps {
   initialSeed?: number;
   dealUuid?: string;
   gridSize?: number;
-  crownPositions?: { row: number; col: number }[] | null;
+  regionMap?: number[][] | null;
 }
 
 const DRAG_HOLD_MS = 150;
@@ -100,29 +100,29 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
   );
 }
 
-export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initialSeed, dealUuid, gridSize, crownPositions }: RealmBoardProps) {
-  // Large grids without crown positions cannot reconstruct in reasonable time — skip immediately
-  const isLargeGridWithoutCrowns = initialSeed !== undefined && (gridSize ?? 0) >= 10 && !crownPositions;
+export function RealmBoard({ onGameEnd, onGiveUp, onReconstructionFailed, initialSeed, dealUuid, gridSize, regionMap }: RealmBoardProps) {
+  // Large grids without region_map cannot reconstruct in reasonable time — skip immediately
+  const isLargeGridWithoutRegionMap = initialSeed !== undefined && (gridSize ?? 0) >= 10 && !regionMap;
 
   const [state, setState] = useState<RealmState | null>(() => {
-    if (isLargeGridWithoutCrowns) return null;
+    if (isLargeGridWithoutRegionMap) return null;
 
     if (initialSeed !== undefined) {
-      const fresh = createRealmGame(initialSeed, gridSize, crownPositions ?? undefined);
+      const fresh = createRealmGame(initialSeed, gridSize, regionMap ?? undefined);
       return { ...fresh, dealUuid };
     }
     const saved = loadFromStorage();
     if (saved) return saved.state;
-    const fresh = createRealmGame(undefined, gridSize, crownPositions ?? undefined);
+    const fresh = createRealmGame(undefined, gridSize, regionMap ?? undefined);
     return { ...fresh, dealUuid };
   });
 
-  // Immediately fail for large grids without crown positions — don't attempt reconstruction
+  // Immediately fail for large grids without region_map — don't attempt reconstruction
   useEffect(() => {
-    if (!isLargeGridWithoutCrowns || state !== null) return;
-    console.warn(`[Realm] Large grid (${gridSize}) without crown_positions — skipping to next deal`);
+    if (!isLargeGridWithoutRegionMap || state !== null) return;
+    console.warn(`[Realm] Large grid (${gridSize}) without region_map — skipping to next deal`);
     onReconstructionFailed?.();
-  }, [isLargeGridWithoutCrowns, state, gridSize, onReconstructionFailed]);
+  }, [isLargeGridWithoutRegionMap, state, gridSize, onReconstructionFailed]);
   const [history, setHistory] = useState<RealmState[]>(() => {
     if (initialSeed !== undefined) return [];
     const saved = loadFromStorage();

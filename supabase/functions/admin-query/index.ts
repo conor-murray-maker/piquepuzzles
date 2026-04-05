@@ -1354,7 +1354,7 @@ Deno.serve(async (req) => {
           reserved_for: d.reserved_for || null,
           unique_winning_paths: d.unique_winning_paths || 0,
           path_diversity_score: d.path_diversity_score || 0,
-          ...(d.crown_positions ? { crown_positions: d.crown_positions } : {}),
+          ...(d.region_map ? { region_map: d.region_map } : {}),
           ...(d.deduction_solvable != null ? { deduction_solvable: d.deduction_solvable } : {}),
         }));
 

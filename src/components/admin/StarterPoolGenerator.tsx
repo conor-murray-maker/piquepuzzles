@@ -367,7 +367,7 @@ export function StarterPoolGenerator() {
         break;
       }
 
-      for (let b = 0; b < 5 && totalTried < MAX_CANDIDATES && !abortRef.current; b++) {
+      for (let b = 0; b < 5 && totalTried < maxCandidates && !abortRef.current; b++) {
         totalTried++;
         const seed = generateSeed();
 

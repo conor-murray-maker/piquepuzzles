@@ -90,31 +90,23 @@ const TIMEOUT_OPTIONS = [
   { value: "10000", label: "10s" },
 ];
 
-const STRATEGY_OPTIONS: { value: GenerationStrategy; label: string; description: string }[] = [
-  { value: "hybrid", label: "Hybrid (default)", description: "Solution-first for ≥10, legacy fallback" },
-  { value: "solution-first", label: "Solution-first", description: "Crown-first for ≥10, legacy for <10" },
-  { value: "legacy", label: "Legacy", description: "Original random-region approach for all sizes" },
-];
-
-/** Fill All batch definitions with per-band strategy + timeout */
+/** Fill All batch definitions */
 interface FillAllBatch {
   mode: string;
   band: string;
-  strategy: GenerationStrategy;
   timeoutMs: number;
 }
 
 const FILL_ALL_BATCHES: FillAllBatch[] = [
-  { mode: "realm", band: "easy", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "realm", band: "medium", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "realm", band: "hard", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "realm", band: "expert", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "realm", band: "master", strategy: "hybrid", timeoutMs: 5000 },
-  { mode: "realm", band: "grandmaster", strategy: "solution-first", timeoutMs: 10000 },
-  { mode: "klondike", band: "easy", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "klondike", band: "medium", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "freecell", band: "easy", strategy: "legacy", timeoutMs: 2000 },
-  { mode: "freecell", band: "medium", strategy: "legacy", timeoutMs: 2000 },
+  { mode: "realm", band: "easy", timeoutMs: 2000 },
+  { mode: "realm", band: "medium", timeoutMs: 2000 },
+  { mode: "realm", band: "hard", timeoutMs: 2000 },
+  { mode: "realm", band: "expert", timeoutMs: 2000 },
+  { mode: "realm", band: "master", timeoutMs: 5000 },
+  { mode: "klondike", band: "easy", timeoutMs: 2000 },
+  { mode: "klondike", band: "medium", timeoutMs: 2000 },
+  { mode: "freecell", band: "easy", timeoutMs: 2000 },
+  { mode: "freecell", band: "medium", timeoutMs: 2000 },
 ];
 
 /** Generate deals for a single target band, returning inserted count */

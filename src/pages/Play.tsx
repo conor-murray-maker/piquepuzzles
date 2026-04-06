@@ -245,14 +245,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
   // Show loading while fetching deal from pool
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Finding your next puzzle...</span>
-        </div>
-      </div>
-    );
+    return <PiqueLoader variant="fullscreen" message="Finding your next puzzle..." />;
+  }
+
+  if (gamePhase === 'completing') {
+    return <CompletingScreen resultType={completingResultType} />;
   }
 
   if (gamePhase === 'postgame' && lastResult) {

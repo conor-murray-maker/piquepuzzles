@@ -148,9 +148,10 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   // Hint state
   const [hintLoading, setHintLoading] = useState(false);
   const [hintCalculating, setHintCalculating] = useState(false);
-  const [hintEngine, setHintEngine] = useState<'heuristic' | 'fallback' | null>(null);
+  const [hintEngine, setHintEngine] = useState<'heuristic' | 'mcts' | 'fallback' | null>(null);
   const [hintJustUsed, setHintJustUsed] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const mcts = useMCTSWorker();
   const lastMoveTimeRef = useRef(Date.now());
   const { profile: authProfile } = useAuth();
 

@@ -168,9 +168,10 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   // Hint state
   const [hintLoading, setHintLoading] = useState(false);
   const [hintCalculating, setHintCalculating] = useState(false);
-  const [hintEngine, setHintEngine] = useState<'heuristic' | 'fallback' | null>(null);
+  const [hintEngine, setHintEngine] = useState<'heuristic' | 'mcts' | 'fallback' | null>(null);
   const [hintJustUsed, setHintJustUsed] = useState(false);
   const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
+  const mcts = useMCTSWorker();
   const { profile: authProfile } = useAuth();
 
   useEffect(() => {

@@ -27,6 +27,7 @@ import { Timer, Hash, Trophy, Layers, X, ArrowLeft, RotateCcw, Flame } from 'luc
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { haptic } from '@/lib/haptics';
+import { HintBanner } from './HintBanner';
 import {
   AlertDialog,
   AlertDialogContent,

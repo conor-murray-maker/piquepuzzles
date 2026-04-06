@@ -639,6 +639,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
         </AnimatePresence>
       </motion.div>
 
+      <HintBanner message={hintMessage} duration={3000} />
+
       {/* Action bar */}
       <GameActionBar
         onHint={handleHint}

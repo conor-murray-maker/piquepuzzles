@@ -374,6 +374,19 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     return () => dragManager.setOnChange(() => {});
   }, []);
 
+  const clearHint = useCallback(() => {
+    setHintTarget(null);
+    setHintMessage(null);
+    setHintEngine(null);
+    setHintJustUsed(false);
+    setIsDeadEnd(false);
+    setUndoPulse(false);
+    if (hintTimeoutRef.current) {
+      clearTimeout(hintTimeoutRef.current);
+      hintTimeoutRef.current = undefined;
+    }
+  }, []);
+
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
     haptic.medium();
@@ -382,11 +395,6 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     setHistory(h => h.slice(0, -1));
     setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
   }, [history, clearHint]);
-
-  const clearHint = useCallback(() => {
-    setHintTarget(null);
-    setHintMessage(null);
-  }, []);
 
   const handleHint = useCallback(() => {
     if (hintLoading || hintCalculating) return;

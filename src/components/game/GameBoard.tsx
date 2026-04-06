@@ -386,15 +386,6 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     return () => dragManager.setOnChange(() => {});
   }, []);
 
-  const handleUndo = useCallback(() => {
-    if (history.length === 0) return;
-    haptic.medium();
-    clearHint();
-    const prev = history[history.length - 1];
-    setHistory(h => h.slice(0, -1));
-    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
-  }, [history, clearHint]);
-
   const clearHint = useCallback(() => {
     setHintTarget(null);
     setHintMessage(null);
@@ -407,6 +398,15 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
       hintTimeoutRef.current = undefined;
     }
   }, []);
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    haptic.medium();
+    clearHint();
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
+  }, [history, clearHint]);
 
   const handleHint = useCallback(() => {
     if (hintLoading || hintCalculating) return;

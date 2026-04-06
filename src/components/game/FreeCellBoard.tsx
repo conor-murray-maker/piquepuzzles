@@ -166,10 +166,10 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const cardH = Math.round(cardW * 1.4);
 
-  // MCTS integration
-  const mcts = useMCTSWorker();
-  const [winProbability, setWinProbability] = useState<number | null>(null);
+  // Hint state
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintCalculating, setHintCalculating] = useState(false);
+  const [hintEngine, setHintEngine] = useState<'heuristic' | 'fallback' | null>(null);
   const [hintJustUsed, setHintJustUsed] = useState(false);
   const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
   const { profile: authProfile } = useAuth();

@@ -28,7 +28,7 @@ import {
 } from './freecell';
 
 // Debug flag — set to true to see hint engine internals
-export const HINT_DEBUG = false;
+export const HINT_DEBUG = true;
 
 export interface HintMove {
   from: string;
@@ -200,7 +200,7 @@ function scoreKlondikeMove(state: KlondikeState, candidate: KlondikeCandidate): 
       // No face-down exposed — check if reverse move is legal
       const movedCardIdx = candidate.cardIndex ?? (state.tableau[fromIdx].length - 1);
       const movedCard = state.tableau[fromIdx][movedCardIdx];
-      if (movedCard && klondikeCanMoveToTableau(movedCard, state.tableau[fromIdx])) {
+      if (movedCard && klondikeCanMoveToTableau(movedCard, resultState.tableau[fromIdx])) {
         // Wait — check if source column is NOT empty after move (if empty, reverse would be pointless K move)
         if (resultState.tableau[fromIdx].length > 0) {
           score -= 200;
@@ -396,7 +396,7 @@ function scoreFreeCellMove(state: FreeCellState, candidate: FreeCellCandidate): 
     if (newEmptyCols === origEmptyCols) {
       const movedCardIdx = candidate.cardIndex ?? (state.tableau[fromIdx].length - 1);
       const movedCard = state.tableau[fromIdx][movedCardIdx];
-      if (movedCard && fcCanMoveToTableau(movedCard, state.tableau[fromIdx]) && resultState.tableau[fromIdx].length > 0) {
+      if (movedCard && fcCanMoveToTableau(movedCard, resultState.tableau[fromIdx]) && resultState.tableau[fromIdx].length > 0) {
         score -= 200;
       }
     }

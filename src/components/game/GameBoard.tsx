@@ -486,7 +486,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
       }, 3000);
     };
 
-    if (hintResult && hintResult.score > 0) {
+    if (hintResult && hintResult.score >= 50) {
       // Phase 1 success: heuristic found a good move — reveal after 800ms
       if (HINT_DEBUG) {
         console.log(`[HINT] Phase: HEURISTIC | Score: ${hintResult.score} | Time: ${heuristicTime.toFixed(1)}ms`);
@@ -543,7 +543,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
       } else {
         // MCTS not available — reveal dead end or best heuristic after extended delay
         setTimeout(() => {
-          if (hintResult && hintResult.score > 0) {
+          if (hintResult && hintResult.score >= 50) {
             revealHint(hintResult, 'heuristic');
           } else {
             revealDeadEnd();

@@ -10,6 +10,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { AddToHomeScreen } from "@/components/onboarding/AddToHomeScreen";
 import { GuestBanner, GuestSignInModal } from "@/components/onboarding/GuestSignInPrompt";
 import { Suspense, lazy, useState } from "react";
+import { PiqueLoader } from "@/components/PiqueLoader";
 
 // Eager load landing/auth (critical path)
 import Landing from "./pages/Landing.tsx";
@@ -30,11 +31,7 @@ const Admin = lazy(() => import("./pages/Admin.tsx"));
 const queryClient = new QueryClient();
 
 function LoadingFallback() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  return <PiqueLoader variant="fullscreen" message="Loading..." />;
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

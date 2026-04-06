@@ -656,7 +656,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
       {/* Win probability bar */}
       <WinProbabilityBar
         probability={winProbability}
-        visible={mcts.available && !state.isWon && state.moves >= 5}
+        visible={!state.isWon}
+        foundationCount={state.foundation.reduce((sum, pile) => sum + pile.length, 0)}
       />
 
       {/* Game area */}

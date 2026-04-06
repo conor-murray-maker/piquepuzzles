@@ -42,7 +42,7 @@ export function GameActionBar({ onHint, onUndo, undoDisabled, moveCount, hintLoa
         <span className={`text-xs font-medium text-foreground ${hintLoading ? 'animate-pulse' : ''}`}>
           {hintLoading ? 'Thinking...' : 'Hint'}
         </span>
-        <span className="text-[10px] text-muted-foreground">MCTS</span>
+        
       </button>
     </div>
   );

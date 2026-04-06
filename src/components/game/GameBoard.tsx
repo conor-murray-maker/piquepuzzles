@@ -688,10 +688,11 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         </div>
       </div>
 
-      {/* Win probability bar */}
+      {/* Foundation progress bar */}
       <WinProbabilityBar
         probability={winProbability}
-        visible={mcts.available && !state.isWon && state.moves >= 5}
+        visible={!state.isWon}
+        foundationCount={state.foundation.reduce((sum, pile) => sum + pile.length, 0)}
       />
 
       {/* Game area */}

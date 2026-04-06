@@ -1,17 +1,23 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lightbulb } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { HINT_DEBUG } from '@/game/hintEvaluator';
 
 interface HintBannerProps {
   message: string | null;
   duration?: number; // ms
+  isCalculating?: boolean;
+  engine?: 'heuristic' | 'fallback' | null;
 }
 
-export function HintBanner({ message, duration = 3000 }: HintBannerProps) {
+export function HintBanner({ message, duration = 3000, isCalculating, engine }: HintBannerProps) {
   const [progress, setProgress] = useState(1);
 
+  const displayMsg = isCalculating ? 'Calculating optimal move...' : message;
+
   useEffect(() => {
-    if (!message) { setProgress(1); return; }
+    if (!displayMsg) { setProgress(1); return; }
+    if (isCalculating) { setProgress(1); return; }
     setProgress(1);
     const start = Date.now();
     const tick = () => {
@@ -22,11 +28,13 @@ export function HintBanner({ message, duration = 3000 }: HintBannerProps) {
     };
     const raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [message, duration]);
+  }, [displayMsg, duration, isCalculating]);
+
+  const showBanner = !!displayMsg || isCalculating;
 
   return (
     <AnimatePresence>
-      {message && (
+      {showBanner && (
         <motion.div
           className="fixed left-3 right-3 z-50 flex items-center gap-3 rounded-xl bg-card/95 border border-border backdrop-blur-sm px-4 py-3 shadow-lg"
           style={{ bottom: 'calc(56px + 80px + var(--safe-area-bottom, 0px))' }}
@@ -36,19 +44,48 @@ export function HintBanner({ message, duration = 3000 }: HintBannerProps) {
           transition={{ duration: 0.2 }}
         >
           <Lightbulb className="w-5 h-5 text-primary flex-shrink-0" />
-          <span className="text-sm font-medium flex-1">{message}</span>
-          {/* Progress dots */}
+          <span className="text-sm font-medium flex-1">
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={isCalculating ? 'calc' : displayMsg}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="inline-block"
+              >
+                {displayMsg}
+                {HINT_DEBUG && engine && !isCalculating && (
+                  <span className="ml-2 text-[10px] text-muted-foreground font-mono uppercase">[{engine}]</span>
+                )}
+              </motion.span>
+            </AnimatePresence>
+          </span>
+          {/* Progress dots or calculating animation */}
           <div className="flex items-center gap-1">
-            {[0, 1, 2].map(i => (
-              <div
-                key={i}
-                className="w-1.5 h-1.5 rounded-full transition-opacity duration-300"
-                style={{
-                  backgroundColor: 'hsl(var(--primary))',
-                  opacity: progress > (2 - i) / 3 ? 1 : 0.2,
-                }}
-              />
-            ))}
+            {isCalculating ? (
+              // Pulsing dots for calculating state
+              [0, 1, 2].map(i => (
+                <motion.div
+                  key={i}
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: 'hsl(var(--primary))' }}
+                  animate={{ opacity: [0.2, 1, 0.2] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                />
+              ))
+            ) : (
+              [0, 1, 2].map(i => (
+                <div
+                  key={i}
+                  className="w-1.5 h-1.5 rounded-full transition-opacity duration-300"
+                  style={{
+                    backgroundColor: 'hsl(var(--primary))',
+                    opacity: progress > (2 - i) / 3 ? 1 : 0.2,
+                  }}
+                />
+              ))
+            )}
           </div>
         </motion.div>
       )}

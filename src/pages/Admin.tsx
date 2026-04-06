@@ -11,7 +11,8 @@ import { AdminStreaks } from "@/components/admin/AdminStreaks";
 import { AdminSystem } from "@/components/admin/AdminSystem";
 import { AdminReleases } from "@/components/admin/AdminReleases";
 import { AdminFeedback } from "@/components/admin/AdminFeedback";
-import { LayoutDashboard, Users, Database, Gamepad2, Flame, Settings, Loader2, BookOpen, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, Database, Gamepad2, Flame, Settings, BookOpen, MessageSquare } from "lucide-react";
+import { PiqueLoader } from "@/components/PiqueLoader";
 
 export default function Admin() {
   const { user, loading } = useAuth();
@@ -44,11 +45,7 @@ export default function Admin() {
   }, [user, loading, navigate]);
 
   if (loading || isAdmin === null) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PiqueLoader variant="fullscreen" message="Loading admin..." />;
   }
 
   const tabs = [

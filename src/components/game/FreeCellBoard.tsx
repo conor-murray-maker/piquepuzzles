@@ -725,7 +725,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
             {state.tableau.map((col, colIdx) => (
               <div
                 key={colIdx}
-                className={`relative flex-shrink-0 ${isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                className={`relative flex-shrink-0 ${isHinted(`tableau-${colIdx}`) ? hintRingClass + ' rounded-lg z-10' : isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
                 style={{ width: cardW, minHeight: cardH + 20 }}
                 data-drop-target={`tableau-${colIdx}`}
               >

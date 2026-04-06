@@ -370,7 +370,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
     const isFoundationDrop = targetId.startsWith('foundation-') && newState !== null;
     applyMove(newState, isFoundationDrop);
-  }, [state, applyMove, autoCompleting]);
+  }, [state, applyMove, autoCompleting, clearHint]);
 
   const dragConfig = useMemo(() => ({
     onDrop: handleDrop,

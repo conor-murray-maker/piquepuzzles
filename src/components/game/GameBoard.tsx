@@ -396,57 +396,61 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     setHintMessage(null);
   }, []);
 
-  const handleHint = useCallback(async () => {
-    if (hintLoading) return;
+  const handleHint = useCallback(() => {
+    if (hintLoading || hintCalculating) return;
     haptic.light();
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
     setHintJustUsed(true);
-    setTimeout(() => setHintJustUsed(false), 3000);
 
-    if (mcts.available) {
-      setHintLoading(true);
-      const mctsResult = await mcts.requestHint(state, 'klondike', 50);
-      setHintLoading(false);
+    // Show "Calculating optimal move..." banner
+    setHintCalculating(true);
+    setHintLoading(true);
 
-      if (mctsResult?.bestMove) {
-        const move = mctsResult.bestMove;
-        setHintTarget({ from: move.from, to: move.to });
-        setHintMessage(move.description || `Move to ${move.to}`);
+    // Evaluate synchronously (fast, <50ms)
+    const hintResult = getKlondikeHint(state);
 
-        if (mctsResult.winRate !== undefined) {
-          setWinProbability(mctsResult.winRate);
+    // Minimum 800ms display for calculating state
+    const minDelay = 800;
+    const startTime = Date.now();
+
+    setTimeout(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, minDelay - elapsed);
+
+      setTimeout(() => {
+        setHintCalculating(false);
+        setHintLoading(false);
+
+        if (hintResult) {
+          setHintTarget({ from: hintResult.from, to: hintResult.to });
+          setHintMessage(hintResult.description);
+          setHintEngine(hintResult.engine);
+        } else {
+          // Fallback to basic hint (stuck state)
+          const result = getProgressiveHint(state, history);
+          if ('noHint' in result) {
+            setHintMessage(result.message);
+            setHintEngine('fallback');
+          } else {
+            setHintTarget(result);
+            setHintMessage(result.description);
+            setHintEngine('fallback');
+          }
+          if (HINT_DEBUG) console.log('[HINT] Engine: FALLBACK');
         }
 
-        setTimeout(clearHint, 3000);
-        return;
-      }
-    }
+        // 3s hint duration starts NOW (when result is revealed)
+        setHintJustUsed(true);
+        setTimeout(() => {
+          setHintJustUsed(false);
+          clearHint();
+          setHintEngine(null);
+        }, 3000);
+      }, remaining);
+    }, 0);
+  }, [state, history, hintLoading, hintCalculating, clearHint]);
 
-    // Fallback to basic hint
-    const result = getProgressiveHint(state, history);
-    if ('noHint' in result) {
-      setHintMessage(result.message);
-      setTimeout(clearHint, 3000);
-    } else {
-      setHintTarget(result);
-      setHintMessage(result.description);
-      setTimeout(clearHint, 3000);
-    }
-  }, [state, history, mcts, hintLoading, clearHint]);
-
-  // Win probability idle trigger
-  useEffect(() => {
-    lastMoveTimeRef.current = Date.now();
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    if (!mcts.available || state.isWon || state.moves < 5) return;
-
-    idleTimerRef.current = setTimeout(async () => {
-      const prob = await mcts.requestWinProbability(state, 'klondike', 30);
-      if (prob !== null) setWinProbability(prob);
-    }, 3000);
-
-    return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); };
-  }, [state.moves, state.isWon, mcts]);
+  // Win probability removed (MCTS disabled)
 
   const handleNewGame = useCallback(() => {
     clearStorage();

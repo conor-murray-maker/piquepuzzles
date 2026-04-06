@@ -5,11 +5,12 @@ import { GameBoard, clearStorage } from '@/components/game/GameBoard';
 import { FreeCellBoard, clearFreeCellStorage } from '@/components/game/FreeCellBoard';
 import { RealmBoard, clearRealmStorage } from '@/components/game/RealmBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
+import { CompletingScreen } from '@/components/game/CompletingScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
-import { Loader2 } from 'lucide-react';
+import { PiqueLoader } from '@/components/PiqueLoader';
 
 interface PlayProps {
   onActiveGameChange?: (active: boolean) => void;
@@ -30,7 +31,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const { user, profile, refreshProfile } = useAuth();
   const { saveGameResult } = useGamePersistence();
   const { popNextDeal } = useDealQueue();
-  const [gamePhase, setGamePhase] = useState<'playing' | 'postgame'>('playing');
+  const [gamePhase, setGamePhase] = useState<'playing' | 'completing' | 'postgame'>('playing');
+  const [completingResultType, setCompletingResultType] = useState<'win' | 'loss' | 'giveup'>('win');
   const [queuedDeal, setQueuedDeal] = useState<QueuedDeal | null>(null);
   const [loading, setLoading] = useState(initialSeed === undefined);
   const [lastResult, setLastResult] = useState<{
@@ -83,9 +85,9 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     });
   }, [challengeId]);
 
-  const setPhase = useCallback((phase: 'playing' | 'postgame') => {
+  const setPhase = useCallback((phase: 'playing' | 'completing' | 'postgame') => {
     setGamePhase(phase);
-    onActiveGameChange?.(phase === 'playing');
+    onActiveGameChange?.(phase === 'playing' || phase === 'completing');
   }, [onActiveGameChange]);
 
   const handleGameEnd = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
@@ -93,6 +95,13 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     gameEndInFlight.current = true;
     const seed = (state as any).seed as number | undefined;
     const dealUuid = (state as any).dealUuid as string | undefined;
+    const resultType = state.isWon ? 'win' : 'loss';
+
+    // Enter completing phase immediately (synchronous)
+    setCompletingResultType(resultType);
+    setPhase('completing');
+    const completingStart = Date.now();
+
     setLastResult({
       won: state.isWon,
       moves: state.moves,
@@ -108,7 +117,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const isDaily = !!dailyDate;
     const result = await saveGameResult(state, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
     setRatingResult(result);
-    setPhase('postgame');
 
     // Save challenge completion
     if (challengeId && user) {
@@ -139,6 +147,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     }
 
     void refreshProfile();
+
+    // Ensure minimum 800ms display of completing screen
+    const elapsed = Date.now() - completingStart;
+    const remaining = Math.max(0, 800 - elapsed);
+    setTimeout(() => setPhase('postgame'), remaining);
   }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile]);
 
   const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
@@ -147,6 +160,12 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const lostState = { ...state, isWon: false };
     const seed = (state as any).seed as number | undefined;
     const dealUuid = (state as any).dealUuid as string | undefined;
+
+    // Enter completing phase immediately
+    setCompletingResultType('giveup');
+    setPhase('completing');
+    const completingStart = Date.now();
+
     setLastResult({
       won: false,
       moves: state.moves,
@@ -161,7 +180,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const isDaily = !!dailyDate;
     const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
     setRatingResult(result);
-    setPhase('postgame');
 
     if (gameMode === 'realm') clearRealmStorage();
     else if (gameMode === 'freecell') clearFreeCellStorage();
@@ -182,6 +200,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     }
 
     void refreshProfile();
+
+    // Ensure minimum 800ms display
+    const elapsed = Date.now() - completingStart;
+    const remaining = Math.max(0, 800 - elapsed);
+    setTimeout(() => setPhase('postgame'), remaining);
   }, [saveGameResult, setPhase, gameMode, dailyDate, dailyDealId, user, drawMode, refreshProfile]);
 
   const handlePlayAgain = useCallback(async () => {
@@ -222,14 +245,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
   // Show loading while fetching deal from pool
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Finding your next puzzle...</span>
-        </div>
-      </div>
-    );
+    return <PiqueLoader variant="fullscreen" message="Finding your next puzzle..." />;
+  }
+
+  if (gamePhase === 'completing') {
+    return <CompletingScreen resultType={completingResultType} />;
   }
 
   if (gamePhase === 'postgame' && lastResult) {

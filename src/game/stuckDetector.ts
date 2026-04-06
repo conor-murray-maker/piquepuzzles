@@ -1,4 +1,4 @@
-import { KlondikeState, FreeCellState } from './types';
+import { KlondikeState, FreeCellState, Card } from './types';
 import { canMoveToFoundation, canMoveToTableau } from './klondike';
 import {
   canMoveToFoundation as fcCanMoveToFoundation,
@@ -17,6 +17,21 @@ export function isKlondikeStuck(state: KlondikeState): boolean {
     if (canMoveToFoundation(card, state.foundation) !== -1) return false;
     for (let i = 0; i < 7; i++) {
       if (canMoveToTableau(card, state.tableau[i])) return false;
+    }
+  }
+
+  // Draw-3 cycling check: when stock is empty and waste has multiple cards,
+  // cycling the waste back to stock and re-drawing exposes buried cards.
+  // Check ALL waste cards for possible moves, not just the top.
+  if (state.drawMode === 3 && state.waste.length > 1) {
+    // In draw-3 with cycling, every 3rd card from the waste becomes accessible.
+    // Check all waste cards since any of them could become the top after cycling.
+    for (let w = 0; w < state.waste.length; w++) {
+      const card = state.waste[w];
+      if (canMoveToFoundation(card, state.foundation) !== -1) return false;
+      for (let i = 0; i < 7; i++) {
+        if (canMoveToTableau(card, state.tableau[i])) return false;
+      }
     }
   }
 
@@ -84,11 +99,47 @@ export function isFreeCellStuck(state: FreeCellState): boolean {
     }
   }
 
-  // Can move to free cell
+  // Can move to free cell — but only if it actually unblocks something
   const hasEmptyCell = state.freeCells.some(c => c === null);
   if (hasEmptyCell) {
     for (let i = 0; i < 8; i++) {
-      if (state.tableau[i].length > 0) return false;
+      const col = state.tableau[i];
+      if (col.length === 0) continue;
+      const topCard = col[col.length - 1];
+
+      // Simulate moving top card to a free cell, then check if any new move opens up
+      const simFreeCells = [...state.freeCells];
+      const emptyCellIdx = simFreeCells.findIndex(c => c === null);
+      simFreeCells[emptyCellIdx] = topCard;
+      const simTableau = state.tableau.map((c, idx) =>
+        idx === i ? c.slice(0, -1) : [...c]
+      );
+
+      const simState: FreeCellState = {
+        ...state,
+        freeCells: simFreeCells,
+        tableau: simTableau,
+      };
+
+      // Check if the card now in freecell or newly exposed card can go somewhere useful
+      // 1. Can the card we just moved go to foundation?
+      if (fcCanMoveToFoundation(topCard, state.foundation) !== -1) return false;
+
+      // 2. Does the newly exposed card (if any) have a useful move?
+      if (simTableau[i].length > 0) {
+        const exposed = simTableau[i][simTableau[i].length - 1];
+        if (fcCanMoveToFoundation(exposed, state.foundation) !== -1) return false;
+        for (let k = 0; k < 8; k++) {
+          if (k === i) continue;
+          if (fcCanMoveToTableau(exposed, simTableau[k])) return false;
+        }
+      }
+
+      // 3. Can the freecell card go to a different tableau column?
+      for (let k = 0; k < 8; k++) {
+        if (k === i) continue;
+        if (fcCanMoveToTableau(topCard, simTableau[k])) return false;
+      }
     }
   }
 

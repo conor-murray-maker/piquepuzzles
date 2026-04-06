@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Skeleton } from '@/components/ui/skeleton';
 import { RATING_TIERS } from '@/game/types';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
@@ -221,8 +222,19 @@ export default function Stats() {
 
   if (stats.loading) {
     return (
-      <div className="bg-background flex items-center justify-center" style={{ minHeight: '100dvh', paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px))' }}>
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="bg-background overflow-y-auto" style={{ height: '100dvh', paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)' }}>
+        <div className="max-w-lg mx-auto px-4 space-y-5" style={{ paddingTop: 'calc(24px + var(--safe-area-top, 0px))' }}>
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+          </div>
+          <Skeleton className="h-40 w-full rounded-xl" />
+        </div>
       </div>
     );
   }

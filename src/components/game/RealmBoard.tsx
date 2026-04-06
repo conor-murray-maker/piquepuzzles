@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint } from '@/game/realm';
+import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint, RealmHintAction } from '@/game/realm';
 import { supabase } from '@/integrations/supabase/client';
 import { CrownIcon } from './CrownIcon';
 import { GameActionBar } from './GameActionBar';
@@ -10,6 +10,7 @@ import { PuzzleIQBadge } from './PuzzleIQBadge';
 import { X, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { haptic } from '@/lib/haptics';
+import { HintBanner } from './HintBanner';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -128,6 +129,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   });
   const [errorCells, setErrorCells] = useState<Set<string>>(new Set());
   const [hintCell, setHintCell] = useState<{ row: number; col: number } | null>(null);
+  const [hintMessage, setHintMessage] = useState<string | null>(null);
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const [winAnimating, setWinAnimating] = useState(false);
   const [crownColors, setCrownColors] = useState<Record<string, string>>({});
@@ -349,18 +351,19 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
 
     const hint = getRealmHint(state);
     if (!hint) {
-      toast('No hints available right now');
+      setHintMessage('No helpful moves found — try undoing');
+      setTimeout(() => setHintMessage(null), 3000);
       return;
     }
 
     setHintCell({ row: hint.row, col: hint.col });
-    setTimeout(() => setHintCell(null), 2000);
-
-    if (hint.action === 'eliminate') {
-      toast('This cell cannot have a crown');
-    } else {
-      toast('A crown belongs here');
-    }
+    const msg = hint.action === 'eliminate'
+      ? "This cell can't have a crown"
+      : hint.action === 'forced'
+      ? 'Logic requires a crown in this region'
+      : 'A crown must go here';
+    setHintMessage(msg);
+    setTimeout(() => { setHintCell(null); setHintMessage(null); }, 3000);
   }, [state, winAnimating]);
 
   const handleGiveUp = useCallback(() => {
@@ -471,7 +474,11 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <div className="flex items-center gap-1.5">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
+            ))}
+          </div>
           <span className="text-sm text-muted-foreground">Loading puzzle...</span>
         </div>
       </div>
@@ -591,11 +598,15 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
                 borderLeft: borderLeft ? `${regionBorderWidth} solid ${color}` : innerBorder,
                 borderBottom: borderBottom ? `${regionBorderWidth} solid ${color}` : innerBorder,
                 borderRight: borderRight ? `${regionBorderWidth} solid ${color}` : innerBorder,
-                boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : 'none',
-                transition: 'border-color 0.3s, box-shadow 0.3s',
+                boxShadow: isError ? 'inset 0 0 0 2px #ef4444'
+                  : isHint ? '0 0 0 3px #FFB800, 0 0 12px rgba(255,184,0,0.4)'
+                  : 'none',
+                opacity: hintCell && !isHint ? 0.4 : 1,
+                transition: 'border-color 0.3s, box-shadow 0.3s, opacity 0.2s',
+                zIndex: isHint ? 10 : 'auto',
               }}
-              animate={isError ? { scale: [1, 1.05, 1] } : {}}
-              transition={{ duration: 0.3 }}
+              animate={isError ? { scale: [1, 1.05, 1] } : isHint ? { scale: [1, 1.05, 1], opacity: [1, 0.7, 1] } : {}}
+              transition={isHint ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
             >
               {cell.state === 'crown' && (
                 <motion.div
@@ -631,6 +642,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
           ))}
         </AnimatePresence>
       </motion.div>
+
+      <HintBanner message={hintMessage} duration={3000} />
 
       {/* Action bar */}
       <GameActionBar

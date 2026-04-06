@@ -27,6 +27,7 @@ import { Timer, Hash, Trophy, Layers, X, ArrowLeft, RotateCcw, Flame } from 'luc
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { haptic } from '@/lib/haptics';
+import { HintBanner } from './HintBanner';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -127,6 +128,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   });
   const [selectedCard, setSelectedCard] = useState<{ source: string; cardIndex: number } | null>(null);
   const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
+  const [hintMessage, setHintMessage] = useState<string | null>(null);
   const [autoCompleting, setAutoCompleting] = useState(false);
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const [showStuckModal, setShowStuckModal] = useState(false);
@@ -387,6 +389,11 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
   }, [history]);
 
+  const clearHint = useCallback(() => {
+    setHintTarget(null);
+    setHintMessage(null);
+  }, []);
+
   const handleHint = useCallback(async () => {
     if (hintLoading) return;
     haptic.light();
@@ -402,13 +409,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
       if (mctsResult?.bestMove) {
         const move = mctsResult.bestMove;
         setHintTarget({ from: move.from, to: move.to });
+        setHintMessage(move.description || `Move to ${move.to}`);
 
-        // Update win probability from hint result
         if (mctsResult.winRate !== undefined) {
           setWinProbability(mctsResult.winRate);
         }
 
-        setTimeout(() => setHintTarget(null), 2000);
+        setTimeout(clearHint, 3000);
         return;
       }
     }
@@ -416,12 +423,14 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     // Fallback to basic hint
     const result = getProgressiveHint(state, history);
     if ('noHint' in result) {
-      toast(result.message);
+      setHintMessage(result.message);
+      setTimeout(clearHint, 3000);
     } else {
       setHintTarget(result);
-      setTimeout(() => setHintTarget(null), 2000);
+      setHintMessage(result.description);
+      setTimeout(clearHint, 3000);
     }
-  }, [state, history, mcts, hintLoading]);
+  }, [state, history, mcts, hintLoading, clearHint]);
 
   // Win probability idle trigger
   useEffect(() => {
@@ -600,11 +609,19 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
+  const isHinted = (source: string) => {
+    if (hintTarget) return hintTarget.from === source || hintTarget.to === source;
+    return false;
+  };
+
   const isHighlighted = (source: string) => {
     if (hintTarget) return hintTarget.from === source || hintTarget.to === source;
     if (selectedCard) return selectedCard.source === source;
     return false;
   };
+
+  const hintRingClass = 'ring-[3px] ring-[#FFB800] shadow-[0_0_12px_rgba(255,184,0,0.4)] animate-pulse';
+  const dimClass = hintTarget ? 'opacity-40 transition-opacity duration-200' : '';
 
   const boardWidth = cardW * COLS + COL_GAP * (COLS - 1);
 
@@ -704,7 +721,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
             {/* Waste */}
             <div
-              className={`flex-shrink-0 relative ${isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : ''}`}
+              className={`flex-shrink-0 relative ${isHinted('waste') ? hintRingClass + ' rounded-lg z-10' : isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
               style={{ width: cardW + (wasteVisible.length - 1) * wasteFanOffset, height: cardH }}
               data-drop-target="waste"
             >
@@ -737,7 +754,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
             {state.foundation.map((pile, i) => (
               <div
                 key={i}
-                className={`flex-shrink-0 ${isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                className={`flex-shrink-0 ${isHinted(`foundation-${i}`) ? hintRingClass + ' rounded-lg z-10' : isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
                 data-drop-target={`foundation-${i}`}
               >
                 {pile.length > 0 ? (
@@ -760,7 +777,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
             {state.tableau.map((col, colIdx) => (
               <div
                 key={colIdx}
-                className={`relative flex-shrink-0 ${isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                className={`relative flex-shrink-0 ${isHinted(`tableau-${colIdx}`) ? hintRingClass + ' rounded-lg z-10' : isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
                 style={{ width: cardW, minHeight: cardH + 20 }}
                 data-drop-target={`tableau-${colIdx}`}
               >
@@ -795,6 +812,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
           </div>
         </div>
       </div>
+
+      <HintBanner message={hintMessage} duration={3000} />
 
       {/* Bottom action bar */}
       {!state.isWon && (

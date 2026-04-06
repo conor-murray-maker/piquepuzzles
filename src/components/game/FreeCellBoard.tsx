@@ -674,7 +674,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
               {state.freeCells.map((card, i) => (
                 <div
                   key={`fc-${i}`}
-                  className={`flex-shrink-0 ${isHighlighted(`freecell-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                  className={`flex-shrink-0 ${isHinted(`freecell-${i}`) ? hintRingClass + ' rounded-lg z-10' : isHighlighted(`freecell-${i}`) ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
                   data-drop-target={`freecell-${i}`}
                 >
                   {card ? (
@@ -696,7 +696,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
               {state.foundation.map((pile, i) => (
                 <div
                   key={`f-${i}`}
-                  className={`flex-shrink-0 ${isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                  className={`flex-shrink-0 ${isHinted(`foundation-${i}`) ? hintRingClass + ' rounded-lg z-10' : isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
                   data-drop-target={`foundation-${i}`}
                 >
                   {pile.length > 0 ? (

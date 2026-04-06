@@ -149,6 +149,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   });
   const [selectedCard, setSelectedCard] = useState<{ source: string; cardIndex: number } | null>(null);
   const [hintTarget, setHintTarget] = useState<{ from: string; to: string } | null>(null);
+  const [hintMessage, setHintMessage] = useState<string | null>(null);
   const [autoCompleting, setAutoCompleting] = useState(false);
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const [showStuckModal, setShowStuckModal] = useState(false);
@@ -376,6 +377,11 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
   }, [history]);
 
+  const clearHint = useCallback(() => {
+    setHintTarget(null);
+    setHintMessage(null);
+  }, []);
+
   const handleHint = useCallback(async () => {
     if (hintLoading) return;
     haptic.light();
@@ -391,10 +397,11 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
       if (mctsResult?.bestMove) {
         const move = mctsResult.bestMove;
         setHintTarget({ from: move.from, to: move.to });
+        setHintMessage(move.description || `Move to ${move.to}`);
         if (mctsResult.winRate !== undefined) {
           setWinProbability(mctsResult.winRate);
         }
-        setTimeout(() => setHintTarget(null), 2000);
+        setTimeout(clearHint, 3000);
         return;
       }
     }
@@ -402,12 +409,14 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     // Fallback to basic hint
     const result = getProgressiveHint(state, history);
     if ('noHint' in result) {
-      toast(result.message);
+      setHintMessage(result.message);
+      setTimeout(clearHint, 3000);
     } else {
       setHintTarget(result);
-      setTimeout(() => setHintTarget(null), 2000);
+      setHintMessage(result.description);
+      setTimeout(clearHint, 3000);
     }
-  }, [state, history, mcts, hintLoading]);
+  }, [state, history, mcts, hintLoading, clearHint]);
 
   // Win probability idle trigger
   useEffect(() => {

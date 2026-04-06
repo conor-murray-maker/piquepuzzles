@@ -394,49 +394,106 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     setHintCalculating(true);
     setHintLoading(true);
 
-    // Evaluate synchronously (fast, <50ms)
+    // Phase 1: Heuristic evaluator (synchronous, <50ms)
+    const heuristicStart = HINT_DEBUG ? performance.now() : 0;
     const hintResult = getFreeCellHint(state);
+    const heuristicTime = HINT_DEBUG ? performance.now() - heuristicStart : 0;
 
-    // Minimum 800ms display for calculating state
-    const minDelay = 800;
-    const startTime = Date.now();
-
-    setTimeout(() => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, minDelay - elapsed);
-
+    const revealHint = (move: { from: string; to: string; description: string }, engine: 'heuristic' | 'mcts' | 'fallback') => {
+      setHintCalculating(false);
+      setHintLoading(false);
+      setHintTarget({ from: move.from, to: move.to });
+      setHintMessage(move.description);
+      setHintEngine(engine);
+      setHintJustUsed(true);
       setTimeout(() => {
-        setHintCalculating(false);
-        setHintLoading(false);
+        setHintJustUsed(false);
+        clearHint();
+        setHintEngine(null);
+      }, 3000);
+    };
 
-        if (hintResult) {
-          setHintTarget({ from: hintResult.from, to: hintResult.to });
-          setHintMessage(hintResult.description);
-          setHintEngine(hintResult.engine);
-        } else {
-          // Fallback to basic hint (stuck state)
-          const result = getProgressiveHint(state, history);
-          if ('noHint' in result) {
-            setHintMessage(result.message);
-            setHintEngine('fallback');
-          } else {
-            setHintTarget(result);
-            setHintMessage(result.description);
-            setHintEngine('fallback');
+    const revealFallback = () => {
+      setHintCalculating(false);
+      setHintLoading(false);
+      const result = getProgressiveHint(state, history);
+      if ('noHint' in result) {
+        setHintMessage(result.message);
+        setHintEngine('fallback');
+      } else {
+        setHintTarget(result);
+        setHintMessage(result.description);
+        setHintEngine('fallback');
+      }
+      if (HINT_DEBUG) console.log('[HINT] Engine: FALLBACK');
+      setHintJustUsed(true);
+      setTimeout(() => {
+        setHintJustUsed(false);
+        clearHint();
+        setHintEngine(null);
+      }, 3000);
+    };
+
+    if (hintResult && hintResult.score > 0) {
+      // Phase 1 success: heuristic found a good move — reveal after 800ms
+      if (HINT_DEBUG) {
+        console.log(`[HINT] Phase: HEURISTIC | Score: ${hintResult.score} | Time: ${heuristicTime.toFixed(1)}ms`);
+      }
+      const minDelay = 800;
+      setTimeout(() => revealHint(hintResult, 'heuristic'), minDelay);
+    } else {
+      // Phase 2: No good heuristic move — trigger MCTS with extended timing
+      if (HINT_DEBUG) {
+        console.log(`[HINT] Phase: MCTS triggered (heuristic best score: ${hintResult?.score ?? 'null'})`);
+      }
+      const mctsStart = Date.now();
+      const minDelay = 2500;
+
+      if (mcts.available) {
+        mcts.requestHint(state, 'freecell', 300).then((mctsResult) => {
+          const elapsed = Date.now() - mctsStart;
+          const remaining = Math.max(0, minDelay - elapsed);
+
+          if (HINT_DEBUG) {
+            console.log(`[HINT] MCTS completed in ${elapsed}ms, candidates: ${mctsResult?.candidateCount}`);
           }
-          if (HINT_DEBUG) console.log('[HINT] Engine: FALLBACK');
-        }
 
-        // 3s hint duration starts NOW (when result is revealed)
-        setHintJustUsed(true);
+          setTimeout(() => {
+            if (mctsResult?.bestMove) {
+              revealHint({
+                from: mctsResult.bestMove.from,
+                to: mctsResult.bestMove.to,
+                description: mctsResult.bestMove.description,
+              }, 'mcts');
+            } else if (hintResult) {
+              revealHint(hintResult, 'heuristic');
+            } else {
+              revealFallback();
+            }
+          }, remaining);
+        }).catch(() => {
+          if (HINT_DEBUG) console.log('[HINT] MCTS failed/timed out — falling back');
+          const elapsed = Date.now() - mctsStart;
+          const remaining = Math.max(0, minDelay - elapsed);
+          setTimeout(() => {
+            if (hintResult) {
+              revealHint(hintResult, 'heuristic');
+            } else {
+              revealFallback();
+            }
+          }, remaining);
+        });
+      } else {
         setTimeout(() => {
-          setHintJustUsed(false);
-          clearHint();
-          setHintEngine(null);
-        }, 3000);
-      }, remaining);
-    }, 0);
-  }, [state, history, hintLoading, hintCalculating, clearHint]);
+          if (hintResult) {
+            revealHint(hintResult, 'heuristic');
+          } else {
+            revealFallback();
+          }
+        }, minDelay);
+      }
+    }
+  }, [state, history, hintLoading, hintCalculating, clearHint, mcts]);
 
   // Win probability removed (MCTS disabled)
 

@@ -140,7 +140,9 @@ function computeScore(input: ScoreInput): ScoreResult {
     total = Math.max(config.winFloor, total);
   }
 
-  total = Math.max(config.lossPenalty + 1, total);
+  // Dynamic loss floor: a win must always score better than a loss
+  const dynamicLossPenalty = worstPossibleWinScore(config, baseCompletion) - 1;
+  total = Math.max(dynamicLossPenalty + 1, total);
 
   const breakdown: { label: string; value: number }[] = [];
   const diffLabel = ddsToLabel(input.dealDDS);

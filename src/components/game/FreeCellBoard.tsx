@@ -865,6 +865,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
           undoDisabled={history.length === 0}
           moveCount={state.moves}
           hintLoading={hintLoading}
+          undoPulse={undoPulse}
         />
       )}
 

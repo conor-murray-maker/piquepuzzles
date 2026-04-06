@@ -156,6 +156,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const [showStuckModal, setShowStuckModal] = useState(false);
   const [stuckDismissedAtMove, setStuckDismissedAtMove] = useState(-1);
   const [autoSendChain, setAutoSendChain] = useState(false);
+  const [isDeadEnd, setIsDeadEnd] = useState(false);
+  const [undoPulse, setUndoPulse] = useState(false);
   const stuckTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
@@ -170,6 +172,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const [hintCalculating, setHintCalculating] = useState(false);
   const [hintEngine, setHintEngine] = useState<'heuristic' | 'mcts' | 'fallback' | null>(null);
   const [hintJustUsed, setHintJustUsed] = useState(false);
+  const hintTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
   const mcts = useMCTSWorker();
   const { profile: authProfile } = useAuth();
@@ -318,6 +321,13 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   // Drag and drop
   const handleDrop = useCallback((source: DragSource, targetId: string | null) => {
     if (!targetId || autoCompleting) return;
+    // Clear any active hint on drag interaction
+    setHintTarget(null);
+    setHintMessage(null);
+    setHintEngine(null);
+    setHintJustUsed(false);
+    setIsDeadEnd(false);
+    setUndoPulse(false);
 
     let newState: FreeCellState | null = null;
 
@@ -371,21 +381,35 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     return () => dragManager.setOnChange(() => {});
   }, []);
 
-  const handleUndo = useCallback(() => {
-    if (history.length === 0) return;
-    haptic.medium();
-    const prev = history[history.length - 1];
-    setHistory(h => h.slice(0, -1));
-    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
-  }, [history]);
-
   const clearHint = useCallback(() => {
     setHintTarget(null);
     setHintMessage(null);
+    setHintEngine(null);
+    setHintJustUsed(false);
+    setIsDeadEnd(false);
+    setUndoPulse(false);
+    if (hintTimeoutRef.current) {
+      clearTimeout(hintTimeoutRef.current);
+      hintTimeoutRef.current = undefined;
+    }
   }, []);
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    haptic.medium();
+    clearHint();
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
+  }, [history, clearHint]);
 
   const handleHint = useCallback(() => {
     if (hintLoading || hintCalculating) return;
+    // If hint is currently showing, clear it (re-tap to dismiss)
+    if (hintTarget || hintMessage) {
+      clearHint();
+      return;
+    }
     haptic.light();
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
     setHintJustUsed(true);
@@ -402,15 +426,30 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     const revealHint = (move: { from: string; to: string; description: string }, engine: 'heuristic' | 'mcts' | 'fallback') => {
       setHintCalculating(false);
       setHintLoading(false);
+      setIsDeadEnd(false);
       setHintTarget({ from: move.from, to: move.to });
       setHintMessage(move.description);
       setHintEngine(engine);
       setHintJustUsed(true);
-      setTimeout(() => {
-        setHintJustUsed(false);
+      hintTimeoutRef.current = setTimeout(() => {
         clearHint();
-        setHintEngine(null);
       }, 3000);
+    };
+
+    const revealDeadEnd = () => {
+      setHintCalculating(false);
+      setHintLoading(false);
+      setIsDeadEnd(true);
+      setHintTarget(null);
+      setHintMessage('No good moves found. Try undoing.');
+      setHintEngine('mcts');
+      setHintJustUsed(true);
+      setUndoPulse(true);
+      setTimeout(() => setUndoPulse(false), 700);
+      hintTimeoutRef.current = setTimeout(() => {
+        clearHint();
+      }, 4000);
+      if (HINT_DEBUG) console.log('[HINT] DEAD END detected — no moves above threshold');
     };
 
     const revealFallback = () => {
@@ -427,22 +466,18 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
       }
       if (HINT_DEBUG) console.log('[HINT] Engine: FALLBACK');
       setHintJustUsed(true);
-      setTimeout(() => {
-        setHintJustUsed(false);
+      hintTimeoutRef.current = setTimeout(() => {
         clearHint();
-        setHintEngine(null);
       }, 3000);
     };
 
     if (hintResult && hintResult.score > 0) {
-      // Phase 1 success: heuristic found a good move — reveal after 800ms
       if (HINT_DEBUG) {
         console.log(`[HINT] Phase: HEURISTIC | Score: ${hintResult.score} | Time: ${heuristicTime.toFixed(1)}ms`);
       }
       const minDelay = 800;
       setTimeout(() => revealHint(hintResult, 'heuristic'), minDelay);
     } else {
-      // Phase 2: No good heuristic move — trigger MCTS with extended timing
       if (HINT_DEBUG) {
         console.log(`[HINT] Phase: MCTS triggered (heuristic best score: ${hintResult?.score ?? 'null'})`);
       }
@@ -455,45 +490,43 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
           const remaining = Math.max(0, minDelay - elapsed);
 
           if (HINT_DEBUG) {
-            console.log(`[HINT] MCTS completed in ${elapsed}ms, candidates: ${mctsResult?.candidateCount}`);
+            console.log(`[HINT] MCTS completed in ${elapsed}ms, candidates: ${mctsResult?.candidateCount}, bestScore: ${mctsResult?.winRate}`);
           }
 
           setTimeout(() => {
-            if (mctsResult?.bestMove) {
+            if (mctsResult?.bestMove && mctsResult.winRate >= 0.1) {
               revealHint({
                 from: mctsResult.bestMove.from,
                 to: mctsResult.bestMove.to,
                 description: mctsResult.bestMove.description,
               }, 'mcts');
+            } else if (mctsResult?.winRate !== undefined && mctsResult.winRate < 0.1) {
+              revealDeadEnd();
             } else if (hintResult) {
               revealHint(hintResult, 'heuristic');
             } else {
-              revealFallback();
+              revealDeadEnd();
             }
           }, remaining);
         }).catch(() => {
-          if (HINT_DEBUG) console.log('[HINT] MCTS failed/timed out — falling back');
+          if (HINT_DEBUG) console.log('[HINT] MCTS failed/timed out — checking for dead end');
           const elapsed = Date.now() - mctsStart;
           const remaining = Math.max(0, minDelay - elapsed);
           setTimeout(() => {
-            if (hintResult) {
-              revealHint(hintResult, 'heuristic');
-            } else {
-              revealFallback();
-            }
+            revealDeadEnd();
           }, remaining);
         });
       } else {
         setTimeout(() => {
-          if (hintResult) {
+          if (hintResult && hintResult.score > 0) {
             revealHint(hintResult, 'heuristic');
           } else {
-            revealFallback();
+            revealDeadEnd();
           }
         }, minDelay);
       }
     }
-  }, [state, history, hintLoading, hintCalculating, clearHint, mcts]);
+  }, [state, history, hintLoading, hintCalculating, hintTarget, hintMessage, clearHint, mcts]);
 
   // Win probability removed (MCTS disabled)
 
@@ -614,8 +647,9 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting || dragManager.isDragging || dragManager.wasDragAction()) return;
+    clearHint();
     handleAutoMove(source, cardIndex);
-  }, [autoCompleting, handleAutoMove]);
+  }, [autoCompleting, handleAutoMove, clearHint]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;
@@ -827,7 +861,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         </div>
       </div>
 
-      <HintBanner message={hintMessage} duration={3000} isCalculating={hintCalculating} engine={hintEngine} />
+      <HintBanner message={hintMessage} duration={isDeadEnd ? 4000 : 3000} isCalculating={hintCalculating} engine={hintEngine} isDeadEnd={isDeadEnd} />
 
       {/* Bottom action bar */}
       {!state.isWon && (
@@ -837,6 +871,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
           undoDisabled={history.length === 0}
           moveCount={state.moves}
           hintLoading={hintLoading}
+          undoPulse={undoPulse}
         />
       )}
 

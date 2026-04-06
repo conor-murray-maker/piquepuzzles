@@ -135,6 +135,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   const [crownColors, setCrownColors] = useState<Record<string, string>>({});
   const [particles, setParticles] = useState<Array<{ x: number; y: number; delay: number; angle: number; id: string }>>([]);
   const [boardPulse, setBoardPulse] = useState(false);
+  const hintTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);
@@ -295,16 +296,25 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
     }, 1200);
   }, [onGameEnd]);
 
+  const clearHint = useCallback(() => {
+    setHintCell(null);
+    setHintMessage(null);
+    if (hintTimeoutRef.current) {
+      clearTimeout(hintTimeoutRef.current);
+      hintTimeoutRef.current = undefined;
+    }
+  }, []);
+
   const handleCellTap = useCallback((row: number, col: number) => {
     if (state.isWon || state.errors >= state.maxErrors || winAnimating) return;
     if (!gameStarted) setGameStarted(true);
+    clearHint();
 
     setHistory(h => [...h, state]);
     const newState = cycleCell(state, row, col);
 
     if (newState.errors > state.errors) {
       haptic.heavy();
-      // Increment undosUsed for error tracking — errors count as undos for scoring
       setState(s => ({ ...newState, undosUsed: (s.undosUsed ?? 0) + 1 }));
       setErrorCells(prev => new Set(prev).add(`${row},${col}`));
       setTimeout(() => {
@@ -319,7 +329,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
           return { ...s, grid };
         });
       }, 1000);
-      return; // skip the default setState below since we already set it
+      return;
     } else {
       haptic.light();
     }
@@ -331,28 +341,35 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
       gameEndedRef.current = true;
       completedGameIdRef.current = state.gameId;
       haptic.success();
-      // Fire win animation immediately, complete-game runs in background
       triggerWinAnimation(newState, row, col);
     }
-  }, [state, gameStarted, winAnimating, triggerWinAnimation]);
+  }, [state, gameStarted, winAnimating, triggerWinAnimation, clearHint]);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0 || winAnimating) return;
     haptic.medium();
+    clearHint();
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
     setState({ ...prev, undosUsed: (prev.undosUsed ?? 0) + 1 });
-  }, [history, winAnimating]);
+  }, [history, winAnimating, clearHint]);
 
   const handleHint = useCallback(() => {
     if (winAnimating) return;
+    // If hint is currently showing, clear it
+    if (hintCell || hintMessage) {
+      clearHint();
+      return;
+    }
     haptic.light();
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
 
     const hint = getRealmHint(state);
     if (!hint) {
       setHintMessage('No helpful moves found — try undoing');
-      setTimeout(() => setHintMessage(null), 3000);
+      hintTimeoutRef.current = setTimeout(() => {
+        setHintMessage(null);
+      }, 3000);
       return;
     }
 
@@ -363,8 +380,11 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
       ? 'Logic requires a crown in this region'
       : 'A crown must go here';
     setHintMessage(msg);
-    setTimeout(() => { setHintCell(null); setHintMessage(null); }, 3000);
-  }, [state, winAnimating]);
+    hintTimeoutRef.current = setTimeout(() => {
+      setHintCell(null);
+      setHintMessage(null);
+    }, 3000);
+  }, [state, winAnimating, hintCell, hintMessage, clearHint]);
 
   const handleGiveUp = useCallback(() => {
     setShowGiveUpDialog(false);

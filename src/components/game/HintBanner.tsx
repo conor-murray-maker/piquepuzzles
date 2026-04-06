@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { HINT_DEBUG } from '@/game/hintEvaluator';
 
@@ -8,9 +8,10 @@ interface HintBannerProps {
   duration?: number; // ms
   isCalculating?: boolean;
   engine?: 'heuristic' | 'mcts' | 'fallback' | null;
+  isDeadEnd?: boolean;
 }
 
-export function HintBanner({ message, duration = 3000, isCalculating, engine }: HintBannerProps) {
+export function HintBanner({ message, duration = 3000, isCalculating, engine, isDeadEnd }: HintBannerProps) {
   const [progress, setProgress] = useState(1);
 
   const displayMsg = isCalculating ? 'Calculating optimal move...' : message;
@@ -32,18 +33,29 @@ export function HintBanner({ message, duration = 3000, isCalculating, engine }: 
 
   const showBanner = !!displayMsg || isCalculating;
 
+  // Dead end styling: amber/warning colours
+  const bannerBg = isDeadEnd
+    ? 'bg-amber-50/95 dark:bg-amber-950/95 border-amber-300 dark:border-amber-700'
+    : 'bg-card/95 border-border';
+  const iconColor = isDeadEnd ? 'text-amber-500' : 'text-primary';
+  const dotColor = isDeadEnd ? 'hsl(38, 92%, 50%)' : 'hsl(var(--primary))';
+
   return (
     <AnimatePresence>
       {showBanner && (
         <motion.div
-          className="fixed left-3 right-3 z-50 flex items-center gap-3 rounded-xl bg-card/95 border border-border backdrop-blur-sm px-4 py-3 shadow-lg"
+          className={`fixed left-3 right-3 z-50 flex items-center gap-3 rounded-xl ${bannerBg} backdrop-blur-sm px-4 py-3 shadow-lg`}
           style={{ bottom: 'calc(56px + 80px + var(--safe-area-bottom, 0px))' }}
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 20, opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
-          <Lightbulb className="w-5 h-5 text-primary flex-shrink-0" />
+          {isDeadEnd ? (
+            <AlertTriangle className={`w-5 h-5 ${iconColor} flex-shrink-0`} />
+          ) : (
+            <Lightbulb className={`w-5 h-5 ${iconColor} flex-shrink-0`} />
+          )}
           <span className="text-sm font-medium flex-1">
             <AnimatePresence mode="wait">
               <motion.span
@@ -69,7 +81,7 @@ export function HintBanner({ message, duration = 3000, isCalculating, engine }: 
                 <motion.div
                   key={i}
                   className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: 'hsl(var(--primary))' }}
+                  style={{ backgroundColor: dotColor }}
                   animate={{ opacity: [0.2, 1, 0.2] }}
                   transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
                 />
@@ -80,7 +92,7 @@ export function HintBanner({ message, duration = 3000, isCalculating, engine }: 
                   key={i}
                   className="w-1.5 h-1.5 rounded-full transition-opacity duration-300"
                   style={{
-                    backgroundColor: 'hsl(var(--primary))',
+                    backgroundColor: dotColor,
                     opacity: progress > (2 - i) / 3 ? 1 : 0.2,
                   }}
                 />

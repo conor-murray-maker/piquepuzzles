@@ -135,6 +135,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   const [showStuckModal, setShowStuckModal] = useState(false);
   const [stuckDismissedAtMove, setStuckDismissedAtMove] = useState(-1);
   const [autoSendChain, setAutoSendChain] = useState(false);
+  const [isDeadEnd, setIsDeadEnd] = useState(false);
+  const [undoPulse, setUndoPulse] = useState(false);
   const stuckTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
@@ -150,6 +152,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   const [hintCalculating, setHintCalculating] = useState(false);
   const [hintEngine, setHintEngine] = useState<'heuristic' | 'mcts' | 'fallback' | null>(null);
   const [hintJustUsed, setHintJustUsed] = useState(false);
+  const hintTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mcts = useMCTSWorker();
   const lastMoveTimeRef = useRef(Date.now());
@@ -338,6 +341,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   // Drag and drop handler
   const handleDrop = useCallback((source: DragSource, targetId: string | null) => {
     if (!targetId || autoCompleting) return;
+    // Clear any active hint on drag interaction
+    setHintTarget(null);
+    setHintMessage(null);
+    setHintEngine(null);
+    setHintJustUsed(false);
+    setIsDeadEnd(false);
+    setUndoPulse(false);
 
     let newState: KlondikeState | null = null;
 
@@ -383,21 +393,35 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     return () => dragManager.setOnChange(() => {});
   }, []);
 
-  const handleUndo = useCallback(() => {
-    if (history.length === 0) return;
-    haptic.medium();
-    const prev = history[history.length - 1];
-    setHistory(h => h.slice(0, -1));
-    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
-  }, [history]);
-
   const clearHint = useCallback(() => {
     setHintTarget(null);
     setHintMessage(null);
+    setHintEngine(null);
+    setHintJustUsed(false);
+    setIsDeadEnd(false);
+    setUndoPulse(false);
+    if (hintTimeoutRef.current) {
+      clearTimeout(hintTimeoutRef.current);
+      hintTimeoutRef.current = undefined;
+    }
   }, []);
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    haptic.medium();
+    clearHint();
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
+  }, [history, clearHint]);
 
   const handleHint = useCallback(() => {
     if (hintLoading || hintCalculating) return;
+    // If hint is currently showing, clear it (re-tap to dismiss)
+    if (hintTarget || hintMessage) {
+      clearHint();
+      return;
+    }
     haptic.light();
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
     setHintJustUsed(true);
@@ -414,16 +438,33 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
     const revealHint = (move: { from: string; to: string; description: string }, engine: 'heuristic' | 'mcts' | 'fallback') => {
       setHintCalculating(false);
       setHintLoading(false);
+      setIsDeadEnd(false);
       setHintTarget({ from: move.from, to: move.to });
       setHintMessage(move.description);
       setHintEngine(engine);
-      // 3s hint duration starts NOW (when result is revealed)
       setHintJustUsed(true);
-      setTimeout(() => {
-        setHintJustUsed(false);
+      // 3s fallback timer — cancelled on player interaction
+      hintTimeoutRef.current = setTimeout(() => {
         clearHint();
-        setHintEngine(null);
       }, 3000);
+    };
+
+    const revealDeadEnd = () => {
+      setHintCalculating(false);
+      setHintLoading(false);
+      setIsDeadEnd(true);
+      setHintTarget(null); // No card highlight
+      setHintMessage('No good moves found. Try undoing.');
+      setHintEngine('mcts');
+      setHintJustUsed(true);
+      // Pulse undo button twice
+      setUndoPulse(true);
+      setTimeout(() => setUndoPulse(false), 700);
+      // 4s fallback for dead end (longer read time)
+      hintTimeoutRef.current = setTimeout(() => {
+        clearHint();
+      }, 4000);
+      if (HINT_DEBUG) console.log('[HINT] DEAD END detected — no moves above threshold');
     };
 
     const revealFallback = () => {
@@ -440,10 +481,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
       }
       if (HINT_DEBUG) console.log('[HINT] Engine: FALLBACK');
       setHintJustUsed(true);
-      setTimeout(() => {
-        setHintJustUsed(false);
+      hintTimeoutRef.current = setTimeout(() => {
         clearHint();
-        setHintEngine(null);
       }, 3000);
     };
 
@@ -468,47 +507,51 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
           const remaining = Math.max(0, minDelay - elapsed);
 
           if (HINT_DEBUG) {
-            console.log(`[HINT] MCTS completed in ${elapsed}ms, candidates: ${mctsResult?.candidateCount}`);
+            console.log(`[HINT] MCTS completed in ${elapsed}ms, candidates: ${mctsResult?.candidateCount}, bestScore: ${mctsResult?.winRate}`);
           }
 
           setTimeout(() => {
-            if (mctsResult?.bestMove) {
+            if (mctsResult?.bestMove && mctsResult.winRate >= 0.1) {
               revealHint({
                 from: mctsResult.bestMove.from,
                 to: mctsResult.bestMove.to,
                 description: mctsResult.bestMove.description,
               }, 'mcts');
+            } else if (mctsResult?.winRate !== undefined && mctsResult.winRate < 0.1) {
+              // Dead end: MCTS found no move above threshold
+              revealDeadEnd();
             } else if (hintResult) {
               // MCTS returned nothing — use best heuristic regardless of score
               revealHint(hintResult, 'heuristic');
             } else {
-              revealFallback();
+              revealDeadEnd();
             }
           }, remaining);
         }).catch(() => {
-          if (HINT_DEBUG) console.log('[HINT] MCTS failed/timed out — falling back');
+          if (HINT_DEBUG) console.log('[HINT] MCTS failed/timed out — checking for dead end');
           const elapsed = Date.now() - mctsStart;
           const remaining = Math.max(0, minDelay - elapsed);
           setTimeout(() => {
             if (hintResult) {
-              revealHint(hintResult, 'heuristic');
+              // Heuristic score was ≤ 0 and MCTS failed — dead end
+              revealDeadEnd();
             } else {
-              revealFallback();
+              revealDeadEnd();
             }
           }, remaining);
         });
       } else {
-        // MCTS not available — reveal best heuristic after extended delay
+        // MCTS not available — reveal dead end or best heuristic after extended delay
         setTimeout(() => {
-          if (hintResult) {
+          if (hintResult && hintResult.score > 0) {
             revealHint(hintResult, 'heuristic');
           } else {
-            revealFallback();
+            revealDeadEnd();
           }
         }, minDelay);
       }
     }
-  }, [state, history, hintLoading, hintCalculating, clearHint, mcts]);
+  }, [state, history, hintLoading, hintCalculating, hintTarget, hintMessage, clearHint, mcts]);
 
   // Win probability removed (MCTS disabled)
 
@@ -544,10 +587,11 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   const handleStockClick = useCallback(() => {
     if (!gameStarted) setGameStarted(true);
+    clearHint();
     pushHistory(state);
     setState(drawFromStock(state));
     setSelectedCard(null);
-  }, [state, pushHistory, gameStarted]);
+  }, [state, pushHistory, gameStarted, clearHint]);
 
   // Single-click auto-move: foundation first, then tableau, then empty col
   const handleAutoMove = useCallback((source: string, cardIndex: number) => {
@@ -630,10 +674,9 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
     if (dragManager.isDragging || dragManager.wasDragAction()) return;
-
-    // Single click: auto-move the card
+    clearHint();
     handleAutoMove(source, cardIndex);
-  }, [autoCompleting, handleAutoMove]);
+  }, [autoCompleting, handleAutoMove, clearHint]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;
@@ -880,7 +923,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         </div>
       </div>
 
-      <HintBanner message={hintMessage} duration={3000} isCalculating={hintCalculating} engine={hintEngine} />
+      <HintBanner message={hintMessage} duration={isDeadEnd ? 4000 : 3000} isCalculating={hintCalculating} engine={hintEngine} isDeadEnd={isDeadEnd} />
 
       {/* Bottom action bar */}
       {!state.isWon && (
@@ -890,6 +933,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
           undoDisabled={history.length === 0}
           moveCount={state.moves}
           hintLoading={hintLoading}
+          undoPulse={undoPulse}
         />
       )}
 

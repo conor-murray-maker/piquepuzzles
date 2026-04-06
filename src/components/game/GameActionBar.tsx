@@ -1,4 +1,5 @@
 import { Lightbulb, Undo2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface GameActionBarProps {
   onHint: () => void;
@@ -6,9 +7,10 @@ interface GameActionBarProps {
   undoDisabled: boolean;
   moveCount: number;
   hintLoading?: boolean;
+  undoPulse?: boolean;
 }
 
-export function GameActionBar({ onHint, onUndo, undoDisabled, moveCount, hintLoading }: GameActionBarProps) {
+export function GameActionBar({ onHint, onUndo, undoDisabled, moveCount, hintLoading, undoPulse }: GameActionBarProps) {
   return (
     <div
       className="fixed left-0 right-0 z-40 bg-card border-t flex items-stretch"
@@ -20,15 +22,19 @@ export function GameActionBar({ onHint, onUndo, undoDisabled, moveCount, hintLoa
       }}
     >
       {/* Undo */}
-      <button
+      <motion.button
         onClick={onUndo}
         disabled={undoDisabled}
         className="flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[56px] transition-opacity disabled:opacity-40"
+        animate={undoPulse ? {
+          scale: [1, 1.15, 1, 1.15, 1],
+          transition: { duration: 0.6, ease: 'easeInOut' }
+        } : {}}
       >
-        <Undo2 className="w-5 h-5 text-foreground" />
-        <span className="text-xs font-medium text-foreground">Undo</span>
+        <Undo2 className={`w-5 h-5 text-foreground ${undoPulse ? 'text-amber-500' : ''}`} />
+        <span className={`text-xs font-medium ${undoPulse ? 'text-amber-500' : 'text-foreground'}`}>Undo</span>
         <span className="text-[10px] text-muted-foreground">Move {moveCount}</span>
-      </button>
+      </motion.button>
 
       {/* Divider */}
       <div className="w-px self-stretch my-2" style={{ backgroundColor: '#e2e8f0' }} />

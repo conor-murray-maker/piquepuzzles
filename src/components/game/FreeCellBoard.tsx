@@ -760,6 +760,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         </div>
       </div>
 
+      <HintBanner message={hintMessage} duration={3000} />
+
       {/* Bottom action bar */}
       {!state.isWon && (
         <GameActionBar

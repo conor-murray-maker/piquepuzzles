@@ -609,11 +609,19 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
+  const isHinted = (source: string) => {
+    if (hintTarget) return hintTarget.from === source || hintTarget.to === source;
+    return false;
+  };
+
   const isHighlighted = (source: string) => {
     if (hintTarget) return hintTarget.from === source || hintTarget.to === source;
     if (selectedCard) return selectedCard.source === source;
     return false;
   };
+
+  const hintRingClass = 'ring-[3px] ring-[#FFB800] shadow-[0_0_12px_rgba(255,184,0,0.4)] animate-pulse';
+  const dimClass = hintTarget ? 'opacity-40 transition-opacity duration-200' : '';
 
   const boardWidth = cardW * COLS + COL_GAP * (COLS - 1);
 

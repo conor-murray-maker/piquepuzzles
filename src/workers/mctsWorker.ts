@@ -430,6 +430,13 @@ function evaluatePositionDeep(
   return completed > 0 ? totalScore / completed : scorePosition(state);
 }
 
+function normaliseImprovementScore(futureScore: number, baselineScore: number): number {
+  if (futureScore <= baselineScore) return 0;
+
+  const remainingHeadroom = Math.max(0.001, 1 - baselineScore);
+  return Math.min(1, (futureScore - baselineScore) / remainingHeadroom);
+}
+
 // --- Abort mechanism ---
 let currentAbortFlag: { cancelled: boolean } | null = null;
 
@@ -493,7 +500,7 @@ self.onmessage = (e: MessageEvent) => {
 
     // Phase 1: initial evaluation with depth 15, budget split across moves
     let bestMove = moves[0];
-    let bestScore = -1;
+    let bestFutureScore = -1;
     const phase1Sims = Math.max(3, Math.round((simCount * 0.6) / moves.length));
     const startTime = performance.now();
 
@@ -507,15 +514,16 @@ self.onmessage = (e: MessageEvent) => {
       if (!next) continue;
 
       const score = evaluatePosition(next as SerializedGameState, phase1Sims, abortFlag);
-      if (score > bestScore) {
-        bestScore = score;
+      if (score > bestFutureScore) {
+        bestFutureScore = score;
         bestMove = move;
       }
     }
 
     // Phase 2: if best score < 0.1 after ~1500ms, re-evaluate top candidates with depth 25
     const elapsed = performance.now() - startTime;
-    if (!abortFlag.cancelled && bestScore < 0.1 && elapsed < 2200) {
+    const phase1NormalisedScore = normaliseImprovementScore(bestFutureScore, baselineScore);
+    if (!abortFlag.cancelled && phase1NormalisedScore < 0.1 && elapsed < 2200) {
       // Gather top candidates (score within 0.05 of best)
       const candidates: { move: Move; score: number }[] = [];
       for (const move of moves) {
@@ -528,12 +536,14 @@ self.onmessage = (e: MessageEvent) => {
         const deepSims = Math.max(2, Math.round((simCount * 0.4) / Math.min(moves.length, 5)));
         const s = evaluatePositionDeep(next as SerializedGameState, deepSims, 25, abortFlag);
         candidates.push({ move, score: s });
-        if (s > bestScore) {
-          bestScore = s;
+        if (s > bestFutureScore) {
+          bestFutureScore = s;
           bestMove = move;
         }
       }
     }
+
+    const bestScore = normaliseImprovementScore(bestFutureScore, baselineScore);
 
     currentAbortFlag = null;
 

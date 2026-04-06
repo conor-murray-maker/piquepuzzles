@@ -377,10 +377,11 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
     haptic.medium();
+    clearHint();
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
     setState(s => ({ ...prev, moves: s.moves + 1, undosUsed: s.undosUsed + 1 }));
-  }, [history]);
+  }, [history, clearHint]);
 
   const clearHint = useCallback(() => {
     setHintTarget(null);

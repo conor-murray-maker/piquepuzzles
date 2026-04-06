@@ -5,11 +5,12 @@ import { GameBoard, clearStorage } from '@/components/game/GameBoard';
 import { FreeCellBoard, clearFreeCellStorage } from '@/components/game/FreeCellBoard';
 import { RealmBoard, clearRealmStorage } from '@/components/game/RealmBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
+import { CompletingScreen } from '@/components/game/CompletingScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
-import { Loader2 } from 'lucide-react';
+import { PiqueLoader } from '@/components/PiqueLoader';
 
 interface PlayProps {
   onActiveGameChange?: (active: boolean) => void;
@@ -30,7 +31,8 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const { user, profile, refreshProfile } = useAuth();
   const { saveGameResult } = useGamePersistence();
   const { popNextDeal } = useDealQueue();
-  const [gamePhase, setGamePhase] = useState<'playing' | 'postgame'>('playing');
+  const [gamePhase, setGamePhase] = useState<'playing' | 'completing' | 'postgame'>('playing');
+  const [completingResultType, setCompletingResultType] = useState<'win' | 'loss' | 'giveup'>('win');
   const [queuedDeal, setQueuedDeal] = useState<QueuedDeal | null>(null);
   const [loading, setLoading] = useState(initialSeed === undefined);
   const [lastResult, setLastResult] = useState<{

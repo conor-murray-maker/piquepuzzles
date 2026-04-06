@@ -97,8 +97,9 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const dealUuid = (state as any).dealUuid as string | undefined;
     const resultType = state.isWon ? 'win' : 'loss';
 
-    // Enter completing phase immediately (synchronous)
+    // Enter completing phase after brief delay for transition
     setCompletingResultType(resultType);
+    await new Promise(r => setTimeout(r, 100));
     setPhase('completing');
     const completingStart = Date.now();
 
@@ -161,8 +162,9 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const seed = (state as any).seed as number | undefined;
     const dealUuid = (state as any).dealUuid as string | undefined;
 
-    // Enter completing phase immediately
+    // Enter completing phase after brief delay for transition
     setCompletingResultType('giveup');
+    await new Promise(r => setTimeout(r, 100));
     setPhase('completing');
     const completingStart = Date.now();
 

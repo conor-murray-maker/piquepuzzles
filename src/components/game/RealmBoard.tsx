@@ -129,6 +129,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   });
   const [errorCells, setErrorCells] = useState<Set<string>>(new Set());
   const [hintCell, setHintCell] = useState<{ row: number; col: number } | null>(null);
+  const [hintMessage, setHintMessage] = useState<string | null>(null);
   const [showGiveUpDialog, setShowGiveUpDialog] = useState(false);
   const [winAnimating, setWinAnimating] = useState(false);
   const [crownColors, setCrownColors] = useState<Record<string, string>>({});
@@ -350,18 +351,19 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
 
     const hint = getRealmHint(state);
     if (!hint) {
-      toast('No hints available right now');
+      setHintMessage('No helpful moves found — try undoing');
+      setTimeout(() => setHintMessage(null), 3000);
       return;
     }
 
     setHintCell({ row: hint.row, col: hint.col });
-    setTimeout(() => setHintCell(null), 2000);
-
-    if (hint.action === 'eliminate') {
-      toast('This cell cannot have a crown');
-    } else {
-      toast('A crown belongs here');
-    }
+    const msg = hint.action === 'eliminate'
+      ? "This cell can't have a crown"
+      : hint.action === 'forced'
+      ? 'Logic requires a crown in this region'
+      : 'A crown must go here';
+    setHintMessage(msg);
+    setTimeout(() => { setHintCell(null); setHintMessage(null); }, 3000);
   }, [state, winAnimating]);
 
   const handleGiveUp = useCallback(() => {

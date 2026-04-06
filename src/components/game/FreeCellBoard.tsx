@@ -855,7 +855,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         </div>
       </div>
 
-      <HintBanner message={hintMessage} duration={3000} isCalculating={hintCalculating} engine={hintEngine} />
+      <HintBanner message={hintMessage} duration={isDeadEnd ? 4000 : 3000} isCalculating={hintCalculating} engine={hintEngine} isDeadEnd={isDeadEnd} />
 
       {/* Bottom action bar */}
       {!state.isWon && (

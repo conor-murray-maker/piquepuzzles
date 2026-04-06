@@ -917,7 +917,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         </div>
       </div>
 
-      <HintBanner message={hintMessage} duration={3000} isCalculating={hintCalculating} engine={hintEngine} />
+      <HintBanner message={hintMessage} duration={isDeadEnd ? 4000 : 3000} isCalculating={hintCalculating} engine={hintEngine} isDeadEnd={isDeadEnd} />
 
       {/* Bottom action bar */}
       {!state.isWon && (
@@ -927,6 +927,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
           undoDisabled={history.length === 0}
           moveCount={state.moves}
           hintLoading={hintLoading}
+          undoPulse={undoPulse}
         />
       )}
 

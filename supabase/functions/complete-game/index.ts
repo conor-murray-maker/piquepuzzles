@@ -55,7 +55,7 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
     undoPenaltyPerUndo: 0,
     baseCompletionFraction: 0.5,
     lossPenalty: -20,
-    winFloor: 1,
+    winFloor: null,
   },
   klondike: {
     timeWeight: 10,
@@ -63,23 +63,57 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
     undoPenaltyPerUndo: 0,
     baseCompletionFraction: 0.6,
     lossPenalty: -20,
-    winFloor: 1,
+    winFloor: null,
   },
 };
+
+function worstPossibleWinScore(
+  config: ModeConfig,
+  baseCompletion: number
+): number {
+  // Worst time: actualTime → ∞, ratio → 0
+  const worstTimeDelta = config.timeWeight
+    ? config.timeWeight * (Math.pow(0.001, 1.3) - 1)
+    : 0;
+
+  // Worst moves: actualMoves → ∞, ratio → 0
+  const worstMovesDelta = config.movesWeight
+    ? config.movesWeight * (Math.pow(0.001, 1.3) - 1)
+    : 0;
+
+  // Worst hint penalty: 6+ hints = 30% of baseCompletion
+  const worstHintPenalty = baseCompletion * 0.3;
+
+  // Realm undo penalty: assume worst case 50 undos
+  const worstUndoPenalty = config.undoPenaltyPerUndo
+    ? config.undoPenaltyPerUndo * 50
+    : 0;
+
+  return Math.floor(
+    baseCompletion
+    + worstTimeDelta
+    + worstMovesDelta
+    - worstHintPenalty
+    - worstUndoPenalty
+  );
+}
 
 function computeScore(input: ScoreInput): ScoreResult {
   const config = MODE_CONFIGS[input.gameMode] ?? MODE_CONFIGS.klondike;
 
   if (!input.completed) {
+    // Dynamic loss penalty: worse than the worst possible win
+    const lossBaseCompletion = Math.round(input.baseDelta * config.baseCompletionFraction);
+    const dynamicLoss = worstPossibleWinScore(config, lossBaseCompletion) - 1;
     return {
-      baseCompletion: config.lossPenalty,
+      baseCompletion: dynamicLoss,
       timeDelta: 0,
       movesDelta: 0,
       undoPenalty: 0,
       hintPenalty: 0,
-      total: config.lossPenalty,
+      total: dynamicLoss,
       breakdown: [
-        { label: `${ddsToLabel(input.dealDDS)} deal — not solved`, value: config.lossPenalty },
+        { label: `${ddsToLabel(input.dealDDS)} deal — not solved`, value: dynamicLoss },
       ],
     };
   }
@@ -106,7 +140,9 @@ function computeScore(input: ScoreInput): ScoreResult {
     total = Math.max(config.winFloor, total);
   }
 
-  total = Math.max(config.lossPenalty + 1, total);
+  // Dynamic loss floor: a win must always score better than a loss
+  const dynamicLossPenalty = worstPossibleWinScore(config, baseCompletion) - 1;
+  total = Math.max(dynamicLossPenalty + 1, total);
 
   const breakdown: { label: string; value: number }[] = [];
   const diffLabel = ddsToLabel(input.dealDDS);

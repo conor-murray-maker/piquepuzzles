@@ -471,7 +471,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
       }, 3000);
     };
 
-    if (hintResult && hintResult.score > 0) {
+    if (hintResult && hintResult.score >= 50) {
       if (HINT_DEBUG) {
         console.log(`[HINT] Phase: HEURISTIC | Score: ${hintResult.score} | Time: ${heuristicTime.toFixed(1)}ms`);
       }

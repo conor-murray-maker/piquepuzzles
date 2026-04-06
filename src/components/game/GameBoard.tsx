@@ -813,6 +813,8 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         </div>
       </div>
 
+      <HintBanner message={hintMessage} duration={3000} />
+
       {/* Bottom action bar */}
       {!state.isWon && (
         <GameActionBar

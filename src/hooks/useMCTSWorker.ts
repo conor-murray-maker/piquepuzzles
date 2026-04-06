@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { KlondikeState, FreeCellState, GameMode } from '@/game/types';
 
-interface MCTSHintResult {
+export interface MCTSHintResult {
   bestMove: {
     type: string;
     from: string;
@@ -66,7 +66,6 @@ export function useMCTSWorker() {
       worker.onerror = () => {
         console.warn('[MCTS] Worker crashed — disabling MCTS features');
         setAvailable(false);
-        // Reject all pending
         pendingRef.current.forEach(p => {
           clearTimeout(p.timeout);
           p.reject(new Error('Worker crashed'));
@@ -91,6 +90,11 @@ export function useMCTSWorker() {
     };
   }, []);
 
+  /** Send ABORT to worker to cancel in-flight simulations */
+  const abort = useCallback(() => {
+    workerRef.current?.postMessage({ type: 'ABORT' });
+  }, []);
+
   const postRequest = useCallback(<T>(message: any, resultType: string, timeoutMs: number): Promise<T> => {
     return new Promise((resolve, reject) => {
       if (!workerRef.current || !available) {
@@ -104,22 +108,26 @@ export function useMCTSWorker() {
         clearTimeout(existing.timeout);
         existing.reject(new Error('Cancelled'));
         pendingRef.current.delete(resultType);
+        // Send abort to worker for in-flight simulations
+        abort();
       }
 
       const timeout = setTimeout(() => {
         pendingRef.current.delete(resultType);
+        // Send abort to worker on timeout
+        abort();
         reject(new Error('Timeout'));
       }, timeoutMs);
 
       pendingRef.current.set(resultType, { resolve, reject, timeout });
       workerRef.current.postMessage(message);
     });
-  }, [available]);
+  }, [available, abort]);
 
   const requestHint = useCallback(async (
     state: KlondikeState | FreeCellState,
     gameMode: GameMode,
-    simulations = 50
+    simulations = 300
   ): Promise<MCTSHintResult | null> => {
     try {
       const gameState = gameMode === 'klondike'
@@ -129,7 +137,7 @@ export function useMCTSWorker() {
       const result = await postRequest<MCTSHintResult>(
         { type: 'HINT', gameState, simulations },
         'HINT_RESULT',
-        2000
+        2500
       );
       return result;
     } catch {
@@ -158,5 +166,5 @@ export function useMCTSWorker() {
     }
   }, [postRequest]);
 
-  return { requestHint, requestWinProbability, available };
+  return { requestHint, requestWinProbability, available, abort };
 }

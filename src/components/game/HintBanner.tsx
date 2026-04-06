@@ -7,7 +7,7 @@ interface HintBannerProps {
   message: string | null;
   duration?: number; // ms
   isCalculating?: boolean;
-  engine?: 'heuristic' | 'fallback' | null;
+  engine?: 'heuristic' | 'mcts' | 'fallback' | null;
 }
 
 export function HintBanner({ message, duration = 3000, isCalculating, engine }: HintBannerProps) {

@@ -1,9 +1,9 @@
 /**
- * MCTS Web Worker — runs Monte Carlo Tree Search simulations off the main thread.
- * Handles hint evaluation, win probability estimation, and move quality analysis.
+ * MCTS Web Worker — runs heuristic-scored lookahead simulations off the main thread.
+ * Replaced binary win/loss random playouts with scorePosition + runLookahead.
  */
 
-// Minimal card/state types duplicated here to avoid import issues in worker context
+// Minimal card/state types duplicated here (worker can't import from src/)
 interface WCard {
   id: string;
   suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
@@ -52,12 +52,16 @@ function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
 }
 
+function suitSym(suit: string): string {
+  const m: Record<string, string> = { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠' };
+  return m[suit] || '';
+}
+
 // --- Klondike legal moves ---
 function getKlondikeLegalMoves(state: SerializedKlondikeState): Move[] {
   const moves: Move[] = [];
   const { tableau, foundation, waste, stock } = state;
 
-  // Tableau to foundation
   for (let i = 0; i < 7; i++) {
     const col = tableau[i];
     if (!col.length) continue;
@@ -69,7 +73,6 @@ function getKlondikeLegalMoves(state: SerializedKlondikeState): Move[] {
     }
   }
 
-  // Waste to foundation
   if (waste.length > 0) {
     const card = waste[waste.length - 1];
     const fi = canMoveToFoundationK(card, foundation);
@@ -78,7 +81,6 @@ function getKlondikeLegalMoves(state: SerializedKlondikeState): Move[] {
     }
   }
 
-  // Tableau to tableau
   for (let i = 0; i < 7; i++) {
     const col = tableau[i];
     for (let j = 0; j < col.length; j++) {
@@ -92,7 +94,6 @@ function getKlondikeLegalMoves(state: SerializedKlondikeState): Move[] {
     }
   }
 
-  // Waste to tableau
   if (waste.length > 0) {
     const card = waste[waste.length - 1];
     for (let k = 0; k < 7; k++) {
@@ -102,7 +103,6 @@ function getKlondikeLegalMoves(state: SerializedKlondikeState): Move[] {
     }
   }
 
-  // Draw from stock
   if (stock.length > 0 || waste.length > 0) {
     moves.push({ type: 'stock-draw', from: 'stock', to: 'waste', description: 'Draw from stock' });
   }
@@ -171,7 +171,6 @@ function applyKlondikeMove(state: SerializedKlondikeState, move: Move): Serializ
     const card = s.tableau[fi].pop()!;
     const ti = parseInt(move.to.split('-')[1]);
     s.foundation[ti].push(card);
-    // Flip top card
     const col = s.tableau[fi];
     if (col.length > 0 && !col[col.length - 1].faceUp) {
       col[col.length - 1].faceUp = true;
@@ -202,7 +201,6 @@ function getFreeCellLegalMoves(state: SerializedFreeCellState): Move[] {
   const moves: Move[] = [];
   const { tableau, foundation, freeCells } = state;
 
-  // Tableau to foundation
   for (let i = 0; i < 8; i++) {
     const col = tableau[i];
     if (!col.length) continue;
@@ -213,7 +211,6 @@ function getFreeCellLegalMoves(state: SerializedFreeCellState): Move[] {
     }
   }
 
-  // Free cell to foundation
   for (let i = 0; i < 4; i++) {
     const card = freeCells[i];
     if (!card) continue;
@@ -223,7 +220,6 @@ function getFreeCellLegalMoves(state: SerializedFreeCellState): Move[] {
     }
   }
 
-  // Tableau to tableau (single card only for simulation speed)
   for (let i = 0; i < 8; i++) {
     const col = tableau[i];
     if (!col.length) continue;
@@ -236,7 +232,6 @@ function getFreeCellLegalMoves(state: SerializedFreeCellState): Move[] {
     }
   }
 
-  // Free cell to tableau
   for (let i = 0; i < 4; i++) {
     const card = freeCells[i];
     if (!card) continue;
@@ -247,7 +242,6 @@ function getFreeCellLegalMoves(state: SerializedFreeCellState): Move[] {
     }
   }
 
-  // Tableau to free cell
   const hasEmptyCell = freeCells.some(c => c === null);
   if (hasEmptyCell) {
     for (let i = 0; i < 8; i++) {
@@ -335,57 +329,101 @@ function applyFreeCellMove(state: SerializedFreeCellState, move: Move): Serializ
   return null;
 }
 
-function suitSym(suit: string): string {
-  const m: Record<string, string> = { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠' };
-  return m[suit] || '';
-}
+// --- Heuristic position scorer (replaces binary win/loss) ---
+// Inlined here because workers can't import from src/ modules
+function scorePosition(state: SerializedGameState): number {
+  const foundationCards = state.foundation.reduce(
+    (sum, pile) => sum + pile.length, 0
+  );
 
-// --- Simulation ---
-function isWon(state: SerializedGameState): boolean {
-  return state.foundation.reduce((s, p) => s + p.length, 0) === 52;
-}
+  // Primary signal: foundation progress (0-52 cards)
+  let score = foundationCards * 10;
 
-function foundationScore(state: SerializedGameState): number {
-  return state.foundation.reduce((s, p) => s + p.length, 0);
-}
+  // Empty columns (highly valuable)
+  const emptyCols = state.tableau.filter(c => c.length === 0).length;
+  score += emptyCols * 150;
 
-function runRandomPlayout(state: SerializedGameState): boolean {
-  let s = deepClone(state);
-  const MAX_MOVES = 500;
+  // Face-up cards in tableau (more = better)
+  const faceUpCards = state.tableau.flat().filter(c => c.faceUp).length;
+  score += faceUpCards * 15;
 
-  for (let i = 0; i < MAX_MOVES; i++) {
-    if (isWon(s)) return true;
-
-    const moves = s.gameMode === 'klondike'
-      ? getKlondikeLegalMoves(s as SerializedKlondikeState)
-      : getFreeCellLegalMoves(s as SerializedFreeCellState);
-
-    if (moves.length === 0) return false;
-
-    // Prioritize foundation moves
-    const foundationMoves = moves.filter(m => m.type.includes('foundation') && !m.type.startsWith('foundation'));
-    const move = foundationMoves.length > 0
-      ? foundationMoves[Math.floor(Math.random() * foundationMoves.length)]
-      : moves[Math.floor(Math.random() * moves.length)];
-
-    const next = s.gameMode === 'klondike'
-      ? applyKlondikeMove(s as SerializedKlondikeState, move)
-      : applyFreeCellMove(s as SerializedFreeCellState, move);
-
-    if (!next) return false;
-    s = next as SerializedGameState;
+  // For Klondike: waste pile penalty (buried cards)
+  if (state.gameMode === 'klondike') {
+    const kState = state as SerializedKlondikeState;
+    score -= kState.waste.length * 2;
   }
 
-  return isWon(s);
+  // For FreeCell: freecell usage penalty
+  if (state.gameMode === 'freecell') {
+    const fcState = state as SerializedFreeCellState;
+    const usedFreeCells = fcState.freeCells.filter(c => c !== null).length;
+    score -= usedFreeCells * 20;
+  }
+
+  // Normalise to 0-1 range (max theoretical score ~1000)
+  return Math.min(1, Math.max(0, score / 800));
 }
 
-function evaluatePosition(state: SerializedGameState, simulations: number): number {
-  let wins = 0;
-  for (let i = 0; i < simulations; i++) {
-    if (runRandomPlayout(state)) wins++;
+// --- Shallow lookahead (replaces runRandomPlayout) ---
+function runLookahead(state: SerializedGameState, depth: number): SerializedGameState {
+  let current = deepClone(state);
+
+  for (let i = 0; i < depth; i++) {
+    const moves = current.gameMode === 'klondike'
+      ? getKlondikeLegalMoves(current as SerializedKlondikeState)
+      : getFreeCellLegalMoves(current as SerializedFreeCellState);
+
+    if (moves.length === 0) break;
+
+    // Weighted random: foundation moves 3x, tableau-to-tableau 2x, others 1x
+    const weighted = moves.map(m => ({
+      move: m,
+      weight: m.type.includes('foundation') && !m.type.startsWith('foundation') ? 3 :
+              m.type === 'tableau-to-tableau' ? 2 : 1,
+    }));
+
+    const totalWeight = weighted.reduce((s, w) => s + w.weight, 0);
+    let rand = Math.random() * totalWeight;
+    let selected = weighted[weighted.length - 1].move;
+    for (const w of weighted) {
+      rand -= w.weight;
+      if (rand <= 0) { selected = w.move; break; }
+    }
+
+    const next = current.gameMode === 'klondike'
+      ? applyKlondikeMove(current as SerializedKlondikeState, selected)
+      : applyFreeCellMove(current as SerializedFreeCellState, selected);
+
+    if (!next) break;
+    current = next as SerializedGameState;
   }
-  return wins / simulations;
+
+  return current;
 }
+
+// --- Heuristic evaluation with lookahead simulations ---
+function evaluatePosition(
+  state: SerializedGameState,
+  simCount: number,
+  abortFlag: { cancelled: boolean }
+): number {
+  let totalScore = 0;
+  let completed = 0;
+
+  for (let i = 0; i < simCount; i++) {
+    if (abortFlag.cancelled) break;
+
+    // Run shallow lookahead (15 moves), score resulting position
+    const lookaheadState = runLookahead(state, 15);
+    totalScore += scorePosition(lookaheadState);
+    completed++;
+  }
+
+  return completed > 0 ? totalScore / completed : scorePosition(state);
+}
+
+// --- Abort mechanism ---
+let currentAbortFlag: { cancelled: boolean } | null = null;
 
 // --- Performance tier ---
 let performanceTier: 'full' | 'reduced' = 'full';
@@ -393,11 +431,11 @@ let performanceTier: 'full' | 'reduced' = 'full';
 function calibratePerformance(state: SerializedGameState): void {
   const start = performance.now();
   for (let i = 0; i < 10; i++) {
-    runRandomPlayout(state);
+    runLookahead(state, 15);
   }
   const elapsed = performance.now() - start;
   performanceTier = elapsed > 300 ? 'reduced' : 'full';
-  console.log(`[MCTS Worker] Performance tier: ${performanceTier} (10 sims in ${Math.round(elapsed)}ms)`);
+  console.log(`[MCTS Worker] Performance tier: ${performanceTier} (10 lookaheads in ${Math.round(elapsed)}ms)`);
 }
 
 let calibrated = false;
@@ -405,6 +443,14 @@ let calibrated = false;
 // --- Message handler ---
 self.onmessage = (e: MessageEvent) => {
   const request = e.data;
+
+  // Handle ABORT message
+  if (request.type === 'ABORT') {
+    if (currentAbortFlag) {
+      currentAbortFlag.cancelled = true;
+    }
+    return;
+  }
 
   if (!calibrated && request.gameState) {
     calibratePerformance(request.gameState);
@@ -414,58 +460,83 @@ self.onmessage = (e: MessageEvent) => {
   const simMultiplier = performanceTier === 'reduced' ? 0.5 : 1;
 
   if (request.type === 'HINT') {
+    // Abort any in-flight simulation
+    if (currentAbortFlag) {
+      currentAbortFlag.cancelled = true;
+    }
+    const abortFlag = { cancelled: false };
+    currentAbortFlag = abortFlag;
+
     const state = request.gameState as SerializedGameState;
-    const simCount = Math.round((request.simulations || 50) * simMultiplier);
+    const simCount = Math.round((request.simulations || 300) * simMultiplier);
 
     const moves = state.gameMode === 'klondike'
       ? getKlondikeLegalMoves(state as SerializedKlondikeState)
       : getFreeCellLegalMoves(state as SerializedFreeCellState);
 
     if (moves.length === 0) {
-      self.postMessage({ type: 'HINT_RESULT', bestMove: null, winRate: 0, candidateCount: 0 });
+      currentAbortFlag = null;
+      self.postMessage({ type: 'HINT_RESULT', bestMove: null, winRate: 0, baselineWinRate: 0, candidateCount: 0 });
       return;
     }
 
-    // Evaluate baseline
-    const baselineWinRate = evaluatePosition(state, Math.max(5, Math.round(simCount / 4)));
+    // Evaluate baseline position
+    const baselineScore = scorePosition(state);
 
     // Evaluate each candidate move
     let bestMove = moves[0];
-    let bestWinRate = -1;
+    let bestScore = -1;
     const perMoveSims = Math.max(3, Math.round(simCount / moves.length));
 
     for (const move of moves) {
+      if (abortFlag.cancelled) break;
+
       const next = state.gameMode === 'klondike'
         ? applyKlondikeMove(state as SerializedKlondikeState, move)
         : applyFreeCellMove(state as SerializedFreeCellState, move);
 
       if (!next) continue;
 
-      const winRate = evaluatePosition(next as SerializedGameState, perMoveSims);
-      if (winRate > bestWinRate) {
-        bestWinRate = winRate;
+      const score = evaluatePosition(next as SerializedGameState, perMoveSims, abortFlag);
+      if (score > bestScore) {
+        bestScore = score;
         bestMove = move;
       }
     }
 
-    self.postMessage({
-      type: 'HINT_RESULT',
-      bestMove,
-      winRate: bestWinRate,
-      baselineWinRate,
-      candidateCount: moves.length,
-    });
+    currentAbortFlag = null;
+
+    if (!abortFlag.cancelled) {
+      self.postMessage({
+        type: 'HINT_RESULT',
+        bestMove,
+        winRate: bestScore,
+        baselineWinRate: baselineScore,
+        candidateCount: moves.length,
+      });
+    }
   }
 
   if (request.type === 'WIN_PROBABILITY') {
+    // Abort any in-flight simulation
+    if (currentAbortFlag) {
+      currentAbortFlag.cancelled = true;
+    }
+    const abortFlag = { cancelled: false };
+    currentAbortFlag = abortFlag;
+
     const state = request.gameState as SerializedGameState;
     const simCount = Math.round((request.simulations || 30) * simMultiplier);
-    const winProbability = evaluatePosition(state, simCount);
+    const score = evaluatePosition(state, simCount, abortFlag);
 
-    self.postMessage({
-      type: 'WIN_PROBABILITY_RESULT',
-      winProbability,
-      simulationsRun: simCount,
-    });
+    currentAbortFlag = null;
+
+    if (!abortFlag.cancelled) {
+      self.postMessage({
+        type: 'WIN_PROBABILITY_RESULT',
+        winProbability: score,
+        simulationsRun: simCount,
+      });
+    }
   }
 };

@@ -85,9 +85,9 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     });
   }, [challengeId]);
 
-  const setPhase = useCallback((phase: 'playing' | 'postgame') => {
+  const setPhase = useCallback((phase: 'playing' | 'completing' | 'postgame') => {
     setGamePhase(phase);
-    onActiveGameChange?.(phase === 'playing');
+    onActiveGameChange?.(phase === 'playing' || phase === 'completing');
   }, [onActiveGameChange]);
 
   const handleGameEnd = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {

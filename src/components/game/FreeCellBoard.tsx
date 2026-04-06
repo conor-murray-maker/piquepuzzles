@@ -321,6 +321,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   // Drag and drop
   const handleDrop = useCallback((source: DragSource, targetId: string | null) => {
     if (!targetId || autoCompleting) return;
+    clearHint();
 
     let newState: FreeCellState | null = null;
 

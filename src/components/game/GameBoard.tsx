@@ -341,6 +341,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   // Drag and drop handler
   const handleDrop = useCallback((source: DragSource, targetId: string | null) => {
     if (!targetId || autoCompleting) return;
+    clearHint();
 
     let newState: KlondikeState | null = null;
 

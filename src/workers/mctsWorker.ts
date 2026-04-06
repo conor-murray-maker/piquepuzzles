@@ -483,10 +483,11 @@ self.onmessage = (e: MessageEvent) => {
     // Evaluate baseline position
     const baselineScore = scorePosition(state);
 
-    // Evaluate each candidate move
+    // Phase 1: initial evaluation with depth 15, budget split across moves
     let bestMove = moves[0];
     let bestScore = -1;
-    const perMoveSims = Math.max(3, Math.round(simCount / moves.length));
+    const phase1Sims = Math.max(3, Math.round((simCount * 0.6) / moves.length));
+    const startTime = performance.now();
 
     for (const move of moves) {
       if (abortFlag.cancelled) break;
@@ -497,10 +498,32 @@ self.onmessage = (e: MessageEvent) => {
 
       if (!next) continue;
 
-      const score = evaluatePosition(next as SerializedGameState, perMoveSims, abortFlag);
+      const score = evaluatePosition(next as SerializedGameState, phase1Sims, abortFlag);
       if (score > bestScore) {
         bestScore = score;
         bestMove = move;
+      }
+    }
+
+    // Phase 2: if best score < 0.1 after ~1500ms, re-evaluate top candidates with depth 25
+    const elapsed = performance.now() - startTime;
+    if (!abortFlag.cancelled && bestScore < 0.1 && elapsed < 2200) {
+      // Gather top candidates (score within 0.05 of best)
+      const candidates: { move: Move; score: number }[] = [];
+      for (const move of moves) {
+        if (abortFlag.cancelled) break;
+        const next = state.gameMode === 'klondike'
+          ? applyKlondikeMove(state as SerializedKlondikeState, move)
+          : applyFreeCellMove(state as SerializedFreeCellState, move);
+        if (!next) continue;
+        // Quick re-score at depth 25 with remaining budget
+        const deepSims = Math.max(2, Math.round((simCount * 0.4) / Math.min(moves.length, 5)));
+        const s = evaluatePositionDeep(next as SerializedGameState, deepSims, 25, abortFlag);
+        candidates.push({ move, score: s });
+        if (s > bestScore) {
+          bestScore = s;
+          bestMove = move;
+        }
       }
     }
 

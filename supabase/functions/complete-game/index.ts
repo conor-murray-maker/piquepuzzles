@@ -102,15 +102,18 @@ function computeScore(input: ScoreInput): ScoreResult {
   const config = MODE_CONFIGS[input.gameMode] ?? MODE_CONFIGS.klondike;
 
   if (!input.completed) {
+    // Dynamic loss penalty: worse than the worst possible win
+    const lossBaseCompletion = Math.round(input.baseDelta * config.baseCompletionFraction);
+    const dynamicLoss = worstPossibleWinScore(config, lossBaseCompletion) - 1;
     return {
-      baseCompletion: config.lossPenalty,
+      baseCompletion: dynamicLoss,
       timeDelta: 0,
       movesDelta: 0,
       undoPenalty: 0,
       hintPenalty: 0,
-      total: config.lossPenalty,
+      total: dynamicLoss,
       breakdown: [
-        { label: `${ddsToLabel(input.dealDDS)} deal — not solved`, value: config.lossPenalty },
+        { label: `${ddsToLabel(input.dealDDS)} deal — not solved`, value: dynamicLoss },
       ],
     };
   }

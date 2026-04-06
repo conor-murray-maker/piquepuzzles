@@ -156,6 +156,8 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const [showStuckModal, setShowStuckModal] = useState(false);
   const [stuckDismissedAtMove, setStuckDismissedAtMove] = useState(-1);
   const [autoSendChain, setAutoSendChain] = useState(false);
+  const [isDeadEnd, setIsDeadEnd] = useState(false);
+  const [undoPulse, setUndoPulse] = useState(false);
   const stuckTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const gameBoardRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(() => computeCardWidth(window.innerWidth));
@@ -170,6 +172,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   const [hintCalculating, setHintCalculating] = useState(false);
   const [hintEngine, setHintEngine] = useState<'heuristic' | 'mcts' | 'fallback' | null>(null);
   const [hintJustUsed, setHintJustUsed] = useState(false);
+  const hintTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
   const mcts = useMCTSWorker();
   const { profile: authProfile } = useAuth();

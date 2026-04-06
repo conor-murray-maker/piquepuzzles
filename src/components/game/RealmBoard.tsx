@@ -474,7 +474,11 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <div className="flex items-center gap-1.5">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
+            ))}
+          </div>
           <span className="text-sm text-muted-foreground">Loading puzzle...</span>
         </div>
       </div>

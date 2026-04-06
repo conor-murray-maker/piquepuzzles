@@ -581,10 +581,11 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   const handleStockClick = useCallback(() => {
     if (!gameStarted) setGameStarted(true);
+    clearHint();
     pushHistory(state);
     setState(drawFromStock(state));
     setSelectedCard(null);
-  }, [state, pushHistory, gameStarted]);
+  }, [state, pushHistory, gameStarted, clearHint]);
 
   // Single-click auto-move: foundation first, then tableau, then empty col
   const handleAutoMove = useCallback((source: string, cardIndex: number) => {
@@ -667,10 +668,9 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   const handleCardClick = useCallback((source: string, cardIndex: number) => {
     if (autoCompleting) return;
     if (dragManager.isDragging || dragManager.wasDragAction()) return;
-
-    // Single click: auto-move the card
+    clearHint();
     handleAutoMove(source, cardIndex);
-  }, [autoCompleting, handleAutoMove]);
+  }, [autoCompleting, handleAutoMove, clearHint]);
 
   const handleEmptyTableauClick = useCallback((colIndex: number) => {
     if (!selectedCard || autoCompleting) return;

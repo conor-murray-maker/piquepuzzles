@@ -721,7 +721,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
             {/* Waste */}
             <div
-              className={`flex-shrink-0 relative ${isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : ''}`}
+              className={`flex-shrink-0 relative ${isHinted('waste') ? hintRingClass + ' rounded-lg z-10' : isHighlighted('waste') ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
               style={{ width: cardW + (wasteVisible.length - 1) * wasteFanOffset, height: cardH }}
               data-drop-target="waste"
             >
@@ -754,7 +754,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
             {state.foundation.map((pile, i) => (
               <div
                 key={i}
-                className={`flex-shrink-0 ${isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                className={`flex-shrink-0 ${isHinted(`foundation-${i}`) ? hintRingClass + ' rounded-lg z-10' : isHighlighted(`foundation-${i}`) ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
                 data-drop-target={`foundation-${i}`}
               >
                 {pile.length > 0 ? (
@@ -777,7 +777,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
             {state.tableau.map((col, colIdx) => (
               <div
                 key={colIdx}
-                className={`relative flex-shrink-0 ${isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                className={`relative flex-shrink-0 ${isHinted(`tableau-${colIdx}`) ? hintRingClass + ' rounded-lg z-10' : isHighlighted(`tableau-${colIdx}`) ? 'ring-2 ring-primary rounded-lg' : dimClass}`}
                 style={{ width: cardW, minHeight: cardH + 20 }}
                 data-drop-target={`tableau-${colIdx}`}
               >

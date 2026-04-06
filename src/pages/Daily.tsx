@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { haptic } from '@/lib/haptics';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -136,8 +137,17 @@ export default function Daily() {
 
   if (loading) {
     return (
-      <div className="bg-background flex items-center justify-center" style={{ minHeight: '100dvh', paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px))' }}>
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="bg-background" style={{ height: '100dvh', paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)' }}>
+        <div className="px-4 sm:px-6 py-4 border-b border-border" style={{ paddingTop: 'calc(16px + var(--safe-area-top, 0px))' }}>
+          <Skeleton className="h-6 w-40" />
+        </div>
+        <div className="px-4 sm:px-6 py-6 max-w-md mx-auto space-y-6">
+          <Skeleton className="h-5 w-48 mx-auto" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
+        </div>
       </div>
     );
   }

@@ -135,6 +135,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   const [crownColors, setCrownColors] = useState<Record<string, string>>({});
   const [particles, setParticles] = useState<Array<{ x: number; y: number; delay: number; angle: number; id: string }>>([]);
   const [boardPulse, setBoardPulse] = useState(false);
+  const hintTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);

@@ -341,7 +341,13 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   // Drag and drop handler
   const handleDrop = useCallback((source: DragSource, targetId: string | null) => {
     if (!targetId || autoCompleting) return;
-    clearHint();
+    // Clear any active hint on drag interaction
+    setHintTarget(null);
+    setHintMessage(null);
+    setHintEngine(null);
+    setHintJustUsed(false);
+    setIsDeadEnd(false);
+    setUndoPulse(false);
 
     let newState: KlondikeState | null = null;
 
@@ -370,7 +376,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
     const isFoundationDrop = targetId.startsWith('foundation-') && newState !== null;
     applyMove(newState, isFoundationDrop);
-  }, [state, applyMove, autoCompleting, clearHint]);
+  }, [state, applyMove, autoCompleting]);
 
   const dragConfig = useMemo(() => ({
     onDrop: handleDrop,

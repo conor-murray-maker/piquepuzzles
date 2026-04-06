@@ -23,7 +23,9 @@ import { dragManager, DragSource } from '@/game/DragManager';
 import { isFreeCellStuck } from '@/game/stuckDetector';
 import { WinProbabilityBar } from './WinProbabilityBar';
 import { GameActionBar } from './GameActionBar';
-import { useMCTSWorker } from '@/hooks/useMCTSWorker';
+// MCTS worker retained for future premium hint tier — not active in current hint flow
+// import { useMCTSWorker } from '@/hooks/useMCTSWorker';
+import { getFreeCellHint, HINT_DEBUG } from '@/game/hintEvaluator';
 import { registerDeal } from '@/services/DealRegistrationService';
 import { RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -164,10 +166,10 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const cardH = Math.round(cardW * 1.4);
 
-  // MCTS integration
-  const mcts = useMCTSWorker();
-  const [winProbability, setWinProbability] = useState<number | null>(null);
+  // Hint state
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintCalculating, setHintCalculating] = useState(false);
+  const [hintEngine, setHintEngine] = useState<'heuristic' | 'fallback' | null>(null);
   const [hintJustUsed, setHintJustUsed] = useState(false);
   const idleTimerRef2 = useRef<ReturnType<typeof setTimeout>>();
   const { profile: authProfile } = useAuth();
@@ -382,54 +384,61 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     setHintMessage(null);
   }, []);
 
-  const handleHint = useCallback(async () => {
-    if (hintLoading) return;
+  const handleHint = useCallback(() => {
+    if (hintLoading || hintCalculating) return;
     haptic.light();
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
     setHintJustUsed(true);
-    setTimeout(() => setHintJustUsed(false), 3000);
 
-    if (mcts.available) {
-      setHintLoading(true);
-      const mctsResult = await mcts.requestHint(state, 'freecell', 50);
-      setHintLoading(false);
+    // Show "Calculating optimal move..." banner
+    setHintCalculating(true);
+    setHintLoading(true);
 
-      if (mctsResult?.bestMove) {
-        const move = mctsResult.bestMove;
-        setHintTarget({ from: move.from, to: move.to });
-        setHintMessage(move.description || `Move to ${move.to}`);
-        if (mctsResult.winRate !== undefined) {
-          setWinProbability(mctsResult.winRate);
+    // Evaluate synchronously (fast, <50ms)
+    const hintResult = getFreeCellHint(state);
+
+    // Minimum 800ms display for calculating state
+    const minDelay = 800;
+    const startTime = Date.now();
+
+    setTimeout(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, minDelay - elapsed);
+
+      setTimeout(() => {
+        setHintCalculating(false);
+        setHintLoading(false);
+
+        if (hintResult) {
+          setHintTarget({ from: hintResult.from, to: hintResult.to });
+          setHintMessage(hintResult.description);
+          setHintEngine(hintResult.engine);
+        } else {
+          // Fallback to basic hint (stuck state)
+          const result = getProgressiveHint(state, history);
+          if ('noHint' in result) {
+            setHintMessage(result.message);
+            setHintEngine('fallback');
+          } else {
+            setHintTarget(result);
+            setHintMessage(result.description);
+            setHintEngine('fallback');
+          }
+          if (HINT_DEBUG) console.log('[HINT] Engine: FALLBACK');
         }
-        setTimeout(clearHint, 3000);
-        return;
-      }
-    }
 
-    // Fallback to basic hint
-    const result = getProgressiveHint(state, history);
-    if ('noHint' in result) {
-      setHintMessage(result.message);
-      setTimeout(clearHint, 3000);
-    } else {
-      setHintTarget(result);
-      setHintMessage(result.description);
-      setTimeout(clearHint, 3000);
-    }
-  }, [state, history, mcts, hintLoading, clearHint]);
+        // 3s hint duration starts NOW (when result is revealed)
+        setHintJustUsed(true);
+        setTimeout(() => {
+          setHintJustUsed(false);
+          clearHint();
+          setHintEngine(null);
+        }, 3000);
+      }, remaining);
+    }, 0);
+  }, [state, history, hintLoading, hintCalculating, clearHint]);
 
-  // Win probability idle trigger
-  useEffect(() => {
-    if (idleTimerRef2.current) clearTimeout(idleTimerRef2.current);
-    if (!mcts.available || state.isWon || state.moves < 5) return;
-
-    idleTimerRef2.current = setTimeout(async () => {
-      const prob = await mcts.requestWinProbability(state, 'freecell', 30);
-      if (prob !== null) setWinProbability(prob);
-    }, 3000);
-
-    return () => { if (idleTimerRef2.current) clearTimeout(idleTimerRef2.current); };
-  }, [state.moves, state.isWon, mcts]);
+  // Win probability removed (MCTS disabled)
 
   const handleNewGame = useCallback(() => {
     clearFreeCellStorage();
@@ -655,7 +664,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
       {/* Win probability bar */}
       <WinProbabilityBar
-        probability={winProbability}
+        probability={null}
         visible={!state.isWon}
         foundationCount={state.foundation.reduce((sum, pile) => sum + pile.length, 0)}
       />
@@ -761,7 +770,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         </div>
       </div>
 
-      <HintBanner message={hintMessage} duration={3000} />
+      <HintBanner message={hintMessage} duration={3000} isCalculating={hintCalculating} engine={hintEngine} />
 
       {/* Bottom action bar */}
       {!state.isWon && (

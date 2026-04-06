@@ -820,7 +820,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         </div>
       </div>
 
-      <HintBanner message={hintMessage} duration={3000} />
+      <HintBanner message={hintMessage} duration={3000} isCalculating={hintCalculating} engine={hintEngine} />
 
       {/* Bottom action bar */}
       {!state.isWon && (

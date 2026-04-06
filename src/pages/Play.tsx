@@ -95,6 +95,13 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     gameEndInFlight.current = true;
     const seed = (state as any).seed as number | undefined;
     const dealUuid = (state as any).dealUuid as string | undefined;
+    const resultType = state.isWon ? 'win' : 'loss';
+
+    // Enter completing phase immediately (synchronous)
+    setCompletingResultType(resultType);
+    setPhase('completing');
+    const completingStart = Date.now();
+
     setLastResult({
       won: state.isWon,
       moves: state.moves,
@@ -110,7 +117,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const isDaily = !!dailyDate;
     const result = await saveGameResult(state, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
     setRatingResult(result);
-    setPhase('postgame');
 
     // Save challenge completion
     if (challengeId && user) {
@@ -141,6 +147,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     }
 
     void refreshProfile();
+
+    // Ensure minimum 800ms display of completing screen
+    const elapsed = Date.now() - completingStart;
+    const remaining = Math.max(0, 800 - elapsed);
+    setTimeout(() => setPhase('postgame'), remaining);
   }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile]);
 
   const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {

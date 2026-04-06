@@ -398,6 +398,11 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const handleHint = useCallback(() => {
     if (hintLoading || hintCalculating) return;
+    // If hint is currently showing, clear it (re-tap to dismiss)
+    if (hintTarget || hintMessage) {
+      clearHint();
+      return;
+    }
     haptic.light();
     setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
     setHintJustUsed(true);
@@ -414,15 +419,30 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
     const revealHint = (move: { from: string; to: string; description: string }, engine: 'heuristic' | 'mcts' | 'fallback') => {
       setHintCalculating(false);
       setHintLoading(false);
+      setIsDeadEnd(false);
       setHintTarget({ from: move.from, to: move.to });
       setHintMessage(move.description);
       setHintEngine(engine);
       setHintJustUsed(true);
-      setTimeout(() => {
-        setHintJustUsed(false);
+      hintTimeoutRef.current = setTimeout(() => {
         clearHint();
-        setHintEngine(null);
       }, 3000);
+    };
+
+    const revealDeadEnd = () => {
+      setHintCalculating(false);
+      setHintLoading(false);
+      setIsDeadEnd(true);
+      setHintTarget(null);
+      setHintMessage('No good moves found. Try undoing.');
+      setHintEngine('mcts');
+      setHintJustUsed(true);
+      setUndoPulse(true);
+      setTimeout(() => setUndoPulse(false), 700);
+      hintTimeoutRef.current = setTimeout(() => {
+        clearHint();
+      }, 4000);
+      if (HINT_DEBUG) console.log('[HINT] DEAD END detected — no moves above threshold');
     };
 
     const revealFallback = () => {
@@ -439,22 +459,18 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
       }
       if (HINT_DEBUG) console.log('[HINT] Engine: FALLBACK');
       setHintJustUsed(true);
-      setTimeout(() => {
-        setHintJustUsed(false);
+      hintTimeoutRef.current = setTimeout(() => {
         clearHint();
-        setHintEngine(null);
       }, 3000);
     };
 
     if (hintResult && hintResult.score > 0) {
-      // Phase 1 success: heuristic found a good move — reveal after 800ms
       if (HINT_DEBUG) {
         console.log(`[HINT] Phase: HEURISTIC | Score: ${hintResult.score} | Time: ${heuristicTime.toFixed(1)}ms`);
       }
       const minDelay = 800;
       setTimeout(() => revealHint(hintResult, 'heuristic'), minDelay);
     } else {
-      // Phase 2: No good heuristic move — trigger MCTS with extended timing
       if (HINT_DEBUG) {
         console.log(`[HINT] Phase: MCTS triggered (heuristic best score: ${hintResult?.score ?? 'null'})`);
       }
@@ -467,45 +483,43 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
           const remaining = Math.max(0, minDelay - elapsed);
 
           if (HINT_DEBUG) {
-            console.log(`[HINT] MCTS completed in ${elapsed}ms, candidates: ${mctsResult?.candidateCount}`);
+            console.log(`[HINT] MCTS completed in ${elapsed}ms, candidates: ${mctsResult?.candidateCount}, bestScore: ${mctsResult?.winRate}`);
           }
 
           setTimeout(() => {
-            if (mctsResult?.bestMove) {
+            if (mctsResult?.bestMove && mctsResult.winRate >= 0.1) {
               revealHint({
                 from: mctsResult.bestMove.from,
                 to: mctsResult.bestMove.to,
                 description: mctsResult.bestMove.description,
               }, 'mcts');
+            } else if (mctsResult?.winRate !== undefined && mctsResult.winRate < 0.1) {
+              revealDeadEnd();
             } else if (hintResult) {
               revealHint(hintResult, 'heuristic');
             } else {
-              revealFallback();
+              revealDeadEnd();
             }
           }, remaining);
         }).catch(() => {
-          if (HINT_DEBUG) console.log('[HINT] MCTS failed/timed out — falling back');
+          if (HINT_DEBUG) console.log('[HINT] MCTS failed/timed out — checking for dead end');
           const elapsed = Date.now() - mctsStart;
           const remaining = Math.max(0, minDelay - elapsed);
           setTimeout(() => {
-            if (hintResult) {
-              revealHint(hintResult, 'heuristic');
-            } else {
-              revealFallback();
-            }
+            revealDeadEnd();
           }, remaining);
         });
       } else {
         setTimeout(() => {
-          if (hintResult) {
+          if (hintResult && hintResult.score > 0) {
             revealHint(hintResult, 'heuristic');
           } else {
-            revealFallback();
+            revealDeadEnd();
           }
         }, minDelay);
       }
     }
-  }, [state, history, hintLoading, hintCalculating, clearHint, mcts]);
+  }, [state, history, hintLoading, hintCalculating, hintTarget, hintMessage, clearHint, mcts]);
 
   // Win probability removed (MCTS disabled)
 

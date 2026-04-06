@@ -718,11 +718,17 @@ function checkCrownError(grid: RealmCell[][], row: number, col: number, n: numbe
 
 // ==================== Hint System ====================
 
-export function getRealmHint(state: RealmState): { row: number; col: number; action: 'crown' | 'eliminate' } | null {
+export type RealmHintAction = 'crown' | 'eliminate' | 'forced';
+
+export function getRealmHint(state: RealmState): { row: number; col: number; action: RealmHintAction } | null {
   const n = state.size;
   const grid = state.grid;
 
-  // Find cells that can be eliminated
+  // === TIER 1: Constraint propagation on current partial board state ===
+  const tier1 = getConstraintHint(state);
+  if (tier1) return tier1;
+
+  // === TIER 2: Trivial elimination (adjacency/conflict with placed crowns) ===
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       if (grid[r][c].state !== 'empty') continue;
@@ -751,10 +757,157 @@ export function getRealmHint(state: RealmState): { row: number; col: number; act
     }
   }
 
-  // Find forced crown placements from solution
+  // === TIER 3: Solution reveal (last resort) ===
   for (const [sr, sc] of state.solution) {
     if (grid[sr][sc].state === 'empty' || grid[sr][sc].state === 'auto-marked') {
       return { row: sr, col: sc, action: 'crown' };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Tier 1: Adapt solveByDeduction to work on the current partial board state.
+ * Finds forced placements and logically derivable eliminations.
+ */
+function getConstraintHint(state: RealmState): { row: number; col: number; action: RealmHintAction } | null {
+  const n = state.size;
+  const grid = state.grid;
+
+  // Build constraint state from current board
+  const possible: boolean[][] = Array.from({ length: n }, (_, r) =>
+    Array.from({ length: n }, (_, c) => {
+      const cell = grid[r][c];
+      // A cell is possible if it's empty or auto-marked (not yet placed, not manually eliminated)
+      return cell.state === 'empty' || cell.state === 'auto-marked';
+    })
+  );
+
+  const usedRows = new Set<number>();
+  const usedCols = new Set<number>();
+  const usedRegions = new Set<number>();
+
+  // Register already-placed crowns
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (grid[r][c].state === 'crown') {
+        usedRows.add(r);
+        usedCols.add(c);
+        usedRegions.add(grid[r][c].region);
+        // Eliminate all cells in same row, col, region, and adjacency
+        for (let i = 0; i < n; i++) {
+          possible[r][i] = false;
+          possible[i][c] = false;
+        }
+        for (let rr = 0; rr < n; rr++)
+          for (let cc = 0; cc < n; cc++)
+            if (grid[rr][cc].region === grid[r][c].region) possible[rr][cc] = false;
+        for (let dr = -1; dr <= 1; dr++)
+          for (let dc = -1; dc <= 1; dc++) {
+            const nr = r + dr;
+            const nc = c + dc;
+            if (nr >= 0 && nr < n && nc >= 0 && nc < n) possible[nr][nc] = false;
+          }
+      }
+    }
+  }
+
+  // Also mark 'marked' cells as impossible
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++)
+      if (grid[r][c].state === 'marked') possible[r][c] = false;
+
+  // Build region map from grid
+  const regionMap: number[][] = Array.from({ length: n }, (_, r) =>
+    Array.from({ length: n }, (_, c) => grid[r][c].region)
+  );
+
+  // Run one pass of constraint propagation looking for forced placements
+  // Check each unfilled region
+  for (let ri = 0; ri < n; ri++) {
+    if (usedRegions.has(ri)) continue;
+    const candidates: [number, number][] = [];
+    for (let r = 0; r < n; r++) {
+      if (usedRows.has(r)) continue;
+      for (let c = 0; c < n; c++) {
+        if (usedCols.has(c)) continue;
+        if (regionMap[r][c] === ri && possible[r][c]) candidates.push([r, c]);
+      }
+    }
+    if (candidates.length === 1) {
+      return { row: candidates[0][0], col: candidates[0][1], action: 'forced' };
+    }
+  }
+
+  // Check each unfilled row
+  for (let r = 0; r < n; r++) {
+    if (usedRows.has(r)) continue;
+    const candidates: [number, number][] = [];
+    for (let c = 0; c < n; c++) {
+      if (usedCols.has(c)) continue;
+      if (possible[r][c]) candidates.push([r, c]);
+    }
+    if (candidates.length === 1) {
+      return { row: candidates[0][0], col: candidates[0][1], action: 'forced' };
+    }
+  }
+
+  // Check each unfilled column
+  for (let c = 0; c < n; c++) {
+    if (usedCols.has(c)) continue;
+    const candidates: [number, number][] = [];
+    for (let r = 0; r < n; r++) {
+      if (usedRows.has(r)) continue;
+      if (possible[r][c]) candidates.push([r, c]);
+    }
+    if (candidates.length === 1) {
+      return { row: candidates[0][0], col: candidates[0][1], action: 'forced' };
+    }
+  }
+
+  // Check for cells that can be logically eliminated:
+  // If a cell being possible in a region/row/col is the only way to satisfy
+  // constraints, then other cells in conflicting positions can be eliminated.
+  // For simplicity, find any empty cell where adjacency to a forced region narrows it.
+  // (Advanced constraint propagation — find an eliminable cell)
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (!possible[r][c]) continue;
+      if (grid[r][c].state !== 'empty') continue;
+
+      // Check if placing a crown here would make any region unsolvable
+      const testPossible = possible.map(row => [...row]);
+      // Simulate eliminations from placing at (r, c)
+      for (let i = 0; i < n; i++) { testPossible[r][i] = false; testPossible[i][c] = false; }
+      for (let rr = 0; rr < n; rr++)
+        for (let cc = 0; cc < n; cc++)
+          if (regionMap[rr][cc] === regionMap[r][c]) testPossible[rr][cc] = false;
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n) testPossible[nr][nc] = false;
+        }
+
+      // Check if any unfilled region now has zero candidates
+      let invalidates = false;
+      for (let ri = 0; ri < n; ri++) {
+        if (usedRegions.has(ri) || ri === regionMap[r][c]) continue;
+        let hasCandidate = false;
+        for (let rr = 0; rr < n; rr++) {
+          if (usedRows.has(rr) || rr === r) continue;
+          for (let cc = 0; cc < n; cc++) {
+            if (usedCols.has(cc) || cc === c) continue;
+            if (regionMap[rr][cc] === ri && testPossible[rr][cc]) { hasCandidate = true; break; }
+          }
+          if (hasCandidate) break;
+        }
+        if (!hasCandidate) { invalidates = true; break; }
+      }
+
+      if (invalidates) {
+        return { row: r, col: c, action: 'eliminate' };
+      }
     }
   }
 

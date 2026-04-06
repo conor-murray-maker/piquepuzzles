@@ -608,24 +608,7 @@ Deno.serve(async (req) => {
       baseDelta,
     });
 
-    let finalDelta = scoreResult.total;
-
-    // Daily challenge floor for card games
-    if (isDaily && !isRealm) {
-      let bracketMin = 0;
-      if (modeIQ < 1100) bracketMin = 0;
-      else if (modeIQ < 1300) bracketMin = 25;
-      else if (modeIQ < 1500) bracketMin = 45;
-      else if (modeIQ < 1700) bracketMin = 60;
-      else if (modeIQ < 2000) bracketMin = 75;
-      else if (modeIQ < 2500) bracketMin = 90;
-      else bracketMin = 115;
-
-      if (dds < bracketMin) {
-        if (isWin) finalDelta = Math.max(0, finalDelta);
-        else finalDelta = -1;
-      }
-    }
+    const finalDelta = scoreResult.total;
 
     const newModeIQ = Math.max(0, modeIQ + finalDelta);
 

@@ -594,8 +594,12 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
                 borderLeft: borderLeft ? `${regionBorderWidth} solid ${color}` : innerBorder,
                 borderBottom: borderBottom ? `${regionBorderWidth} solid ${color}` : innerBorder,
                 borderRight: borderRight ? `${regionBorderWidth} solid ${color}` : innerBorder,
-                boxShadow: isError ? 'inset 0 0 0 2px #ef4444' : isHint ? 'inset 0 0 0 2px #3b82f6' : 'none',
-                transition: 'border-color 0.3s, box-shadow 0.3s',
+                boxShadow: isError ? 'inset 0 0 0 2px #ef4444'
+                  : isHint ? '0 0 0 3px #FFB800, 0 0 12px rgba(255,184,0,0.4)'
+                  : 'none',
+                opacity: hintCell && !isHint ? 0.4 : 1,
+                transition: 'border-color 0.3s, box-shadow 0.3s, opacity 0.2s',
+                zIndex: isHint ? 10 : 'auto',
               }}
               animate={isError ? { scale: [1, 1.05, 1] } : {}}
               transition={{ duration: 0.3 }}

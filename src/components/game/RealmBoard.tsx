@@ -601,8 +601,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
                 transition: 'border-color 0.3s, box-shadow 0.3s, opacity 0.2s',
                 zIndex: isHint ? 10 : 'auto',
               }}
-              animate={isError ? { scale: [1, 1.05, 1] } : {}}
-              transition={{ duration: 0.3 }}
+              animate={isError ? { scale: [1, 1.05, 1] } : isHint ? { scale: [1, 1.05, 1], opacity: [1, 0.7, 1] } : {}}
+              transition={isHint ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
             >
               {cell.state === 'crown' && (
                 <motion.div

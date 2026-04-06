@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint } from '@/game/realm';
+import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint, RealmHintAction } from '@/game/realm';
 import { supabase } from '@/integrations/supabase/client';
 import { CrownIcon } from './CrownIcon';
 import { GameActionBar } from './GameActionBar';
@@ -10,6 +10,7 @@ import { PuzzleIQBadge } from './PuzzleIQBadge';
 import { X, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { haptic } from '@/lib/haptics';
+import { HintBanner } from './HintBanner';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,

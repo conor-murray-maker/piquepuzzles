@@ -518,7 +518,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         });
       } else {
         setTimeout(() => {
-          if (hintResult && hintResult.score > 0) {
+          if (hintResult && hintResult.score >= 50) {
             revealHint(hintResult, 'heuristic');
           } else {
             revealDeadEnd();

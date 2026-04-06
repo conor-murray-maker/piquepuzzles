@@ -23,7 +23,9 @@ import { dragManager, DragSource } from '@/game/DragManager';
 import { isFreeCellStuck } from '@/game/stuckDetector';
 import { WinProbabilityBar } from './WinProbabilityBar';
 import { GameActionBar } from './GameActionBar';
-import { useMCTSWorker } from '@/hooks/useMCTSWorker';
+// MCTS worker retained for future premium hint tier — not active in current hint flow
+// import { useMCTSWorker } from '@/hooks/useMCTSWorker';
+import { getFreeCellHint, HINT_DEBUG } from '@/game/hintEvaluator';
 import { registerDeal } from '@/services/DealRegistrationService';
 import { RotateCcw, Timer, Hash, Trophy, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';

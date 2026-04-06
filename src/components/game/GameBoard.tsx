@@ -21,7 +21,9 @@ import { dragManager, DragSource } from '@/game/DragManager';
 import { isKlondikeStuck } from '@/game/stuckDetector';
 import { WinProbabilityBar } from './WinProbabilityBar';
 import { GameActionBar } from './GameActionBar';
-import { useMCTSWorker } from '@/hooks/useMCTSWorker';
+// MCTS worker retained for future premium hint tier — not active in current hint flow
+// import { useMCTSWorker } from '@/hooks/useMCTSWorker';
+import { getKlondikeHint, HINT_DEBUG } from '@/game/hintEvaluator';
 import { registerDeal } from '@/services/DealRegistrationService';
 import { Timer, Hash, Trophy, Layers, X, ArrowLeft, RotateCcw, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';

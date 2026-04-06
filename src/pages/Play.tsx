@@ -160,6 +160,12 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const lostState = { ...state, isWon: false };
     const seed = (state as any).seed as number | undefined;
     const dealUuid = (state as any).dealUuid as string | undefined;
+
+    // Enter completing phase immediately
+    setCompletingResultType('giveup');
+    setPhase('completing');
+    const completingStart = Date.now();
+
     setLastResult({
       won: false,
       moves: state.moves,
@@ -174,7 +180,6 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const isDaily = !!dailyDate;
     const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
     setRatingResult(result);
-    setPhase('postgame');
 
     if (gameMode === 'realm') clearRealmStorage();
     else if (gameMode === 'freecell') clearFreeCellStorage();
@@ -195,6 +200,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     }
 
     void refreshProfile();
+
+    // Ensure minimum 800ms display
+    const elapsed = Date.now() - completingStart;
+    const remaining = Math.max(0, 800 - elapsed);
+    setTimeout(() => setPhase('postgame'), remaining);
   }, [saveGameResult, setPhase, gameMode, dailyDate, dailyDealId, user, drawMode, refreshProfile]);
 
   const handlePlayAgain = useCallback(async () => {

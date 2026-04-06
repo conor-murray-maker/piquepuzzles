@@ -407,14 +407,22 @@ function evaluatePosition(
   simCount: number,
   abortFlag: { cancelled: boolean }
 ): number {
+  return evaluatePositionDeep(state, simCount, 15, abortFlag);
+}
+
+function evaluatePositionDeep(
+  state: SerializedGameState,
+  simCount: number,
+  depth: number,
+  abortFlag: { cancelled: boolean }
+): number {
   let totalScore = 0;
   let completed = 0;
 
   for (let i = 0; i < simCount; i++) {
     if (abortFlag.cancelled) break;
 
-    // Run shallow lookahead (15 moves), score resulting position
-    const lookaheadState = runLookahead(state, 15);
+    const lookaheadState = runLookahead(state, depth);
     totalScore += scorePosition(lookaheadState);
     completed++;
   }

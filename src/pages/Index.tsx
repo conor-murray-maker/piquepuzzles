@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Spade, Trophy, BarChart3, Flame, ChevronRight, Layers, Grid3X3, Crown } from 'lucide-react';
 import { PiqueIQPanel } from '@/components/game/PiqueIQPanel';
+import { DailyChallengeCard } from '@/components/game/DailyChallengeCard';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { OnboardingCarousel } from '@/components/onboarding/OnboardingCarousel';

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Timer, Hash, Trophy, Users, Share2, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -54,16 +54,19 @@ export function DailyChallengeResultScreen({
   const [showMilestone, setShowMilestone] = useState(false);
   const [streakPercentile, setStreakPercentile] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const fetchAttempt = useRef(0);
 
   const challengeNumber = getChallengeNumber(dailyDate);
   const modeLabel = getModeLabel(gameMode);
 
-  // Fetch leaderboard and result data
+  // Fetch leaderboard and result data with retry
   useEffect(() => {
-    async function fetchData() {
+    let cancelled = false;
+
+    async function fetchData(): Promise<boolean> {
       try {
         const ch = await DailyChallengeService.getTodaysChallenge(dailyDate);
-        if (!ch || !user) { setLoading(false); return; }
+        if (!ch || !user || cancelled) { setLoading(false); return true; }
 
         const [count, lb, result] = await Promise.all([
           DailyChallengeService.getCompletionCount(ch.id),
@@ -71,9 +74,10 @@ export function DailyChallengeResultScreen({
           DailyChallengeService.getMyResult(ch.id, user.id),
         ]);
 
+        if (cancelled) return true;
+
         setRealCompletionCount(count);
 
-        // Merge with ghost players
         const chDifficulty = ch.difficulty || difficulty;
         const ghosts = generateGhostPlayers(ch.id, chDifficulty, ch.game_mode, count);
         const merged = mergeWithGhosts(lb, ghosts);
@@ -81,7 +85,6 @@ export function DailyChallengeResultScreen({
         setTotalPlayers(count + ghosts.length);
         setMyResult(result);
 
-        // Check personal best
         if (won) {
           const pbResult = await DailyChallengeService.updatePersonalBest({
             userId: user.id,
@@ -91,23 +94,51 @@ export function DailyChallengeResultScreen({
             timeSeconds: elapsedSeconds,
             moves,
           });
-          setIsNewPB(pbResult.isNewPB);
-          setPersonalBest(pbResult.previousBest);
+          if (!cancelled) {
+            setIsNewPB(pbResult.isNewPB);
+            setPersonalBest(pbResult.previousBest);
+          }
         }
 
         if (currentStreak >= 30) {
           const pct = await DailyChallengeService.getStreakPercentile(30);
-          setStreakPercentile(pct);
+          if (!cancelled) setStreakPercentile(pct);
         }
+
+        setLoading(false);
+        // Return whether we got the result row
+        return !!result;
       } catch (err) {
         console.warn('Failed to fetch daily result data:', err);
+        setLoading(false);
+        return false;
       }
-      setLoading(false);
     }
 
-    // Small delay to allow the edge function write to propagate
-    const timer = setTimeout(fetchData, 500);
-    return () => clearTimeout(timer);
+    // First attempt at 1500ms
+    const timer1 = setTimeout(async () => {
+      if (cancelled) return;
+      fetchAttempt.current = 1;
+      const gotResult = await fetchData();
+      // If no result row yet, retry once at 3000ms from mount
+      if (!gotResult && !cancelled) {
+        const timer2 = setTimeout(async () => {
+          if (cancelled) return;
+          fetchAttempt.current = 2;
+          await fetchData();
+        }, 1500);
+        // Store cleanup for timer2
+        cleanupTimer2 = timer2;
+      }
+    }, 1500);
+
+    let cleanupTimer2: ReturnType<typeof setTimeout> | null = null;
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer1);
+      if (cleanupTimer2) clearTimeout(cleanupTimer2);
+    };
   }, [dailyDate, user, won, gameMode, difficulty, elapsedSeconds, moves, currentStreak]);
 
   // Check milestone celebration
@@ -121,12 +152,20 @@ export function DailyChallengeResultScreen({
 
   const streakCopy = getStreakCopy(currentStreak, streakPercentile);
 
+  // Calculate client-side rank from merged leaderboard as fallback
+  const clientRank = user
+    ? leaderboard.findIndex(e => e.user_id === user.id) + 1
+    : 0;
+  const resolvedRank = myResult?.rank ?? (clientRank > 0 ? clientRank : null);
+  const rankReady = resolvedRank !== null;
+
   const handleShare = useCallback(async () => {
-    const rank = myResult?.rank ?? '?';
     const time = formatTimeRaw(elapsedSeconds);
     let text: string;
-    if (won) {
-      text = `I ranked #${rank} on today's Pique ${modeLabel} Challenge in ${time} 🏆\npiquepuzzles.lovable.app`;
+    if (won && resolvedRank) {
+      text = `I ranked #${resolvedRank} on today's Pique ${modeLabel} Challenge in ${time} 🏆\npiquepuzzles.lovable.app`;
+    } else if (won) {
+      text = `I completed today's Pique ${modeLabel} Challenge in ${time} 🏆\npiquepuzzles.lovable.app`;
     } else {
       text = `I attempted today's Pique ${modeLabel} Challenge — can you beat ${totalPlayers} completions?\npiquepuzzles.lovable.app`;
     }
@@ -136,7 +175,7 @@ export function DailyChallengeResultScreen({
       await navigator.clipboard.writeText(text);
       toast.success('Result copied to clipboard!');
     }
-  }, [myResult, elapsedSeconds, won, modeLabel, totalPlayers]);
+  }, [resolvedRank, elapsedSeconds, won, modeLabel, totalPlayers]);
 
   if (showMilestone && ratingResult?.streakUpdate?.milestoneReached) {
     return (
@@ -152,6 +191,9 @@ export function DailyChallengeResultScreen({
   const completions = leaderboard.filter(e => e.completed);
   const dnfs = leaderboard.filter(e => !e.completed);
   const streakIncremented = ratingResult?.streakUpdate && ratingResult.streakUpdate.currentStreak > 0;
+
+  // Share button disabled until rank is confirmed (for wins) or always enabled for losses
+  const shareDisabled = won && !rankReady && loading;
 
   return (
     <div
@@ -186,7 +228,7 @@ export function DailyChallengeResultScreen({
           </p>
         </motion.div>
 
-        {/* 2. Your result */}
+        {/* 2. Your result — uses won prop directly, never waits for DB */}
         <motion.div
           className="stat-card py-5 text-center space-y-2"
           initial={{ opacity: 0, y: 10 }}
@@ -228,20 +270,22 @@ export function DailyChallengeResultScreen({
           </motion.div>
         )}
 
-        {/* 4. Global Rank */}
+        {/* 4. Global Rank — uses won prop for immediate display */}
         <motion.div
           className="stat-card py-5 text-center"
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          {won && myResult?.rank ? (
-            <>
-              <p className="text-4xl font-bold font-mono text-primary">#{myResult.rank}</p>
-              <p className="text-sm text-muted-foreground mt-1">of {totalPlayers} completions today</p>
-            </>
-          ) : loading ? (
-            <p className="text-sm text-muted-foreground">Loading rank...</p>
+          {won ? (
+            resolvedRank ? (
+              <>
+                <p className="text-4xl font-bold font-mono text-primary">#{resolvedRank}</p>
+                <p className="text-sm text-muted-foreground mt-1">of {totalPlayers} completions today</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground animate-pulse">Finding your rank...</p>
+            )
           ) : (
             <>
               <p className="text-lg font-semibold text-muted-foreground">Did not finish</p>
@@ -300,9 +344,14 @@ export function DailyChallengeResultScreen({
         )}
 
         {/* 7. Share */}
-        <Button variant="outline" onClick={handleShare} className="w-full">
+        <Button
+          variant="outline"
+          onClick={handleShare}
+          className="w-full"
+          disabled={shareDisabled}
+        >
           <Share2 className="w-4 h-4 mr-2" />
-          Share Result
+          {shareDisabled ? 'Finding rank...' : 'Share Result'}
         </Button>
 
         {/* 8. Secondary CTA */}

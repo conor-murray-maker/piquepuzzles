@@ -114,6 +114,10 @@ export default function Index() {
               <PiqueIQPanel piqueIQ={stats.puzzleIQ} modeRatings={stats.modeRatings} />
             </motion.div>
 
+            <motion.div variants={item}>
+              <DailyChallengeCard />
+            </motion.div>
+
             <motion.div variants={item} className="space-y-3">
               <h2 className="text-xs text-muted-foreground uppercase tracking-wider font-medium px-1">Games</h2>
 

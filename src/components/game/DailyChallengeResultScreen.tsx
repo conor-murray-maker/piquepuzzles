@@ -292,6 +292,13 @@ export function DailyChallengeResultScreen({
           <LeaderboardSection title="Did Not Finish" entries={dnfs} userId={user?.id} showTime={false} />
         )}
 
+        {/* Early access note */}
+        {shouldShowEarlyAccessNote(realCompletionCount) && (
+          <p className="text-xs text-muted-foreground text-center">
+            🌍 Leaderboard fills as more players join
+          </p>
+        )}
+
         {/* 7. Share */}
         <Button variant="outline" onClick={handleShare} className="w-full">
           <Share2 className="w-4 h-4 mr-2" />

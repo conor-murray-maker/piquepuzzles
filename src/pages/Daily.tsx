@@ -38,8 +38,10 @@ export default function Daily() {
 
   const [challenge, setChallenge] = useState<DailyChallenge | null>(null);
   const [myResult, setMyResult] = useState<DailyResult | null>(null);
+  const [locallyCompleted, setLocallyCompleted] = useState(false);
   const [leaderboard, setLeaderboard] = useState<DailyResult[]>([]);
   const [totalPlayers, setTotalPlayers] = useState(0);
+  const [realCompletionCount, setRealCompletionCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState('');
   const [personalBest, setPersonalBest] = useState<PersonalBest | null>(null);

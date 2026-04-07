@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { DailyChallengeService, DailyChallenge, DailyResult } from '@/services/DailyChallengeService';
 import { DailyStreakBadge } from './DailyStreakBadge';
 import { formatTimeRaw, ddsToLabel } from '@/lib/format';
+import { isDailyCompletedByDeal } from '@/lib/dailyCompletionFlag';
 
 function getModeLabel(mode: string): string {
   if (mode === 'freecell') return 'FreeCell';
@@ -74,8 +75,7 @@ export function DailyChallengeCard() {
 
   const difficulty = challenge.difficulty || (challenge.deals ? ddsToLabel(challenge.deals.dds_blended) : 'Medium');
   const challengeNumber = getChallengeNumber(challenge.date);
-  const completed = !!myResult;
-
+  const completed = !!myResult || (user ? isDailyCompletedByDeal(challenge.deal_id, user.id) : false);
   if (completed && myResult) {
     // Completed state
     return (

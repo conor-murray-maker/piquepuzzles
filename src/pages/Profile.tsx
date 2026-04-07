@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Trophy, Flame, BarChart3, LogOut, Share2, Check, Edit3, User, Layers, Grid3X3, Shield, Brain, Puzzle } from 'lucide-react';
 import { toast } from 'sonner';
 import { FeedbackBox } from '@/components/profile/FeedbackBox';
+import { DailyStreakBadge, getStreakCopy } from '@/components/game/DailyStreakBadge';
 
 export default function Profile() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -138,19 +139,17 @@ export default function Profile() {
           </Button>
         </motion.div>
 
-        {/* Streak info */}
+        {/* Streak info with badge */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <Card>
             <CardContent className="pt-4 pb-3 space-y-3">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Streak</p>
-              <div className="flex items-center justify-between py-2 border-b border-border">
-                <div className="flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-destructive" />
-                  <span className="text-sm font-medium">Current Streak</span>
-                </div>
-                <span className="text-lg font-mono font-bold">{stats.currentStreak}</span>
+              <div className="flex items-center justify-between py-2">
+                <DailyStreakBadge streak={stats.currentStreak} size="lg" showLabel />
+                <span className="text-2xl font-mono font-bold">{stats.currentStreak}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-border">
+              <p className="text-xs text-muted-foreground">{getStreakCopy(stats.currentStreak)}</p>
+              <div className="flex items-center justify-between py-2 border-t border-border pt-3">
                 <div className="flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-gold" />
                   <span className="text-sm font-medium">Best Streak</span>
@@ -158,7 +157,7 @@ export default function Profile() {
                 <span className="text-lg font-mono font-bold">{stats.bestStreak}</span>
               </div>
               {profile?.subscription_status === 'premium' && (
-                <div className="flex items-center justify-between py-2">
+                <div className="flex items-center justify-between py-2 border-t border-border pt-3">
                   <div className="flex items-center gap-2">
                     <Shield className="w-4 h-4 text-primary" />
                     <span className="text-sm font-medium">Streak Freeze</span>

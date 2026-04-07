@@ -648,32 +648,31 @@ Deno.serve(async (req) => {
     const txSQL = `
 BEGIN;
 
--- Step 1: Upsert player_mode_ratings (IQ + games_played counter)
+${isDailyChallenge ? '-- Skip mode rating upsert for daily challenges (no IQ impact)' : `-- Step 1: Upsert player_mode_ratings (IQ + games_played counter)
 INSERT INTO player_mode_ratings (user_id, game_mode, iq, games_played, updated_at)
 VALUES (${sqlLiteral(userId)}, ${sqlLiteral(gameMode)}, ${newModeIQ}, ${modeGamesPlayed + 1}, ${sqlLiteral(nowISO)})
 ON CONFLICT (user_id, game_mode)
-DO UPDATE SET iq = ${newModeIQ}, games_played = ${modeGamesPlayed + 1}, updated_at = ${sqlLiteral(nowISO)};
-
--- Step 2: Calculate new composite puzzle IQ
--- (done inline via subquery in the profile update)
+DO UPDATE SET iq = ${newModeIQ}, games_played = ${modeGamesPlayed + 1}, updated_at = ${sqlLiteral(nowISO)};`}
 
 -- Step 3: Insert game_history
 INSERT INTO game_history (
   user_id, deal_id, won, moves, time_seconds, hints_used, undos_used,
   difficulty, difficulty_score, rating_before, rating_after, rating_change,
-  game_mode, performance_modifier, base_delta, final_delta, deal_uuid
+  game_mode, performance_modifier, base_delta, final_delta, deal_uuid,
+  is_daily_challenge, iq_delta_applied
 ) VALUES (
   ${sqlLiteral(userId)}, ${sqlLiteral(clientDealId)}, ${isWin}, ${actualMoves}, ${actualTime},
   ${hintsUsed}, ${undosUsed}, ${sqlLiteral(difficulty)}, ${dds},
   ${previousPuzzleIQ},
-  (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+  ${isDailyChallenge ? previousPuzzleIQ : `(SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
    FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
-   WHERE gm.is_active = true),
-  (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+   WHERE gm.is_active = true)`},
+  ${isDailyChallenge ? 0 : `(SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
    FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
-   WHERE gm.is_active = true) - ${previousPuzzleIQ},
+   WHERE gm.is_active = true) - ${previousPuzzleIQ}`},
   ${sqlLiteral(gameMode)}, 1.0, ${baseDelta}, ${finalDelta},
-  ${dealUuidForInsert ? sqlLiteral(dealUuidForInsert) : 'NULL'}
+  ${dealUuidForInsert ? sqlLiteral(dealUuidForInsert) : 'NULL'},
+  ${isDailyChallenge}, ${iqDeltaApplied}
 );
 
 -- Step 4: Update profile (rating, counters, streak)

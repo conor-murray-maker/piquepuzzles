@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
-import { Spade, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Spade } from 'lucide-react';
 
 const container = {
   hidden: { opacity: 0 },
@@ -28,7 +27,7 @@ interface Props {
 export default function LandingHero({ onSignIn, onGuestPlay }: Props) {
   return (
     <motion.section
-      className="px-5 pt-10 pb-8 text-center max-w-md mx-auto"
+      className="px-5 pt-10 pb-4 text-center max-w-md mx-auto"
       variants={container}
       initial="hidden"
       animate="show"
@@ -43,34 +42,32 @@ export default function LandingHero({ onSignIn, onGuestPlay }: Props) {
         How sharp is your mind?
       </motion.h1>
 
-      <motion.p variants={item} className="text-muted-foreground text-base leading-relaxed mb-4">
-        The puzzle game that measures how good you actually are.
+      <motion.p variants={item} className="text-muted-foreground text-base leading-relaxed mb-3" style={{ maxWidth: '280px', margin: '0 auto 12px' }}>
+        The puzzle game that measures{'\u00A0'}how good you actually are.
       </motion.p>
 
-      <motion.div variants={item} className="space-y-0.5 mb-5">
-        <p className="text-muted-foreground/80 text-sm">Track your Pique IQ across every game.</p>
-        <p className="text-muted-foreground/80 text-sm">Compete in daily challenges against the world.</p>
-        <p className="text-muted-foreground/80 text-sm">Climb from Bronze to Grandmaster.</p>
-      </motion.div>
+      <motion.p variants={item} className="text-muted-foreground/80 text-base mb-3 text-center">
+        IQ tracking. Daily challenges. Global ranks.
+      </motion.p>
 
       <motion.p variants={item} className="text-muted-foreground/60 text-xs italic mb-5">
         Built for people who want to know how good they really are.
       </motion.p>
 
-      <motion.div variants={item} className="space-y-2">
-        <Button
-          size="lg"
+      <motion.div variants={item}>
+        <button
           onClick={onSignIn}
-          variant="outline"
-          className="w-full h-14 text-base font-medium gap-3 border-2"
+          className="w-full h-14 rounded-xl font-semibold text-base flex items-center justify-center gap-3 transition-opacity hover:opacity-90 active:opacity-80"
+          style={{ backgroundColor: '#FFFFFF', color: '#0A0A0A' }}
         >
           <GoogleIcon />
-          Continue with Google — it's free
-        </Button>
+          Continue with Google. It's free.
+        </button>
 
         <button
           onClick={onGuestPlay}
-          className="w-full text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors py-2"
+          className="w-full mt-4 text-sm hover:underline transition-colors py-2"
+          style={{ color: '#666666' }}
         >
           Try a game without signing in
         </button>

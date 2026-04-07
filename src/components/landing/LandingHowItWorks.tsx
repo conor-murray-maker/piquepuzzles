@@ -10,7 +10,7 @@ const steps = [
   {
     icon: BarChart3,
     title: 'Get your Pique IQ',
-    desc: "Every move scored against the deal difficulty. Your IQ reflects how good you actually are — not just whether you won.",
+    desc: 'Every move scored against the deal difficulty. Your IQ reflects how good you actually are, not just whether you won.',
   },
   {
     icon: Trophy,
@@ -21,11 +21,11 @@ const steps = [
 
 export default function LandingHowItWorks() {
   return (
-    <section className="px-5 py-8 max-w-md mx-auto">
-      <h2 className="text-xs text-muted-foreground/70 uppercase tracking-wider font-medium mb-5 text-center">
+    <section className="px-5 py-16 max-w-md mx-auto">
+      <h2 className="text-xs text-muted-foreground/70 uppercase tracking-wider font-medium mb-8 text-center">
         How it works
       </h2>
-      <div className="space-y-5">
+      <div className="space-y-7">
         {steps.map(({ icon: Icon, title, desc }, i) => (
           <motion.div
             key={title}

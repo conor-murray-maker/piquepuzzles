@@ -80,20 +80,30 @@ export default function Daily() {
         const ch = await DailyChallengeService.getTodaysChallenge(todayStr);
         if (ch) {
           setChallenge(ch);
+          const difficulty = ch.difficulty || (ch.deals ? ddsToLabel(ch.deals.dds_blended) : 'Medium');
 
           const [count, lb] = await Promise.all([
             DailyChallengeService.getCompletionCount(ch.id),
             DailyChallengeService.getLeaderboard(ch.id, user?.id),
           ]);
-          setTotalPlayers(count);
-          setLeaderboard(lb);
+          setRealCompletionCount(count);
+
+          // Merge with ghost players
+          const ghosts = generateGhostPlayers(ch.id, difficulty, ch.game_mode, count);
+          const merged = mergeWithGhosts(lb, ghosts);
+          setLeaderboard(merged);
+          setTotalPlayers(count + ghosts.length);
 
           if (user) {
             const result = await DailyChallengeService.getMyResult(ch.id, user.id);
             setMyResult(result);
 
+            // Also check localStorage flag
+            if (!result && isDailyCompletedByDeal(ch.deal_id, user.id)) {
+              setLocallyCompleted(true);
+            }
+
             if (result?.completed && ch.deals) {
-              const difficulty = ch.difficulty || ddsToLabel(ch.deals.dds_blended);
               const pb = await DailyChallengeService.getPersonalBest(
                 user.id, ch.game_mode, difficulty, 'daily_challenge'
               );

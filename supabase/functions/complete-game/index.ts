@@ -479,6 +479,54 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Daily challenge: broader duplicate check (any prior completion of this deal)
+    if (clientIsDaily && clientDealUuid) {
+      const { data: existingDaily } = await supabaseAdmin
+        .from('game_history').select('id, won, moves, time_seconds, rating_before, rating_after, rating_change, final_delta, base_delta, difficulty, difficulty_score, hints_used, undos_used')
+        .eq('user_id', userId).eq('deal_uuid', clientDealUuid)
+        .limit(1);
+
+      if (existingDaily && existingDaily.length > 0) {
+        console.log('[complete-game] Duplicate daily challenge detected, returning existing result');
+        const existing = existingDaily[0];
+
+        // Still attempt daily_challenge_results upsert (safe via onConflict)
+        try {
+          const now = new Date();
+          const todayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+            .toISOString().split('T')[0];
+          const { data: dc } = await supabaseAdmin
+            .from('daily_challenges').select('id').eq('deal_id', clientDealUuid).eq('date', todayStr).single();
+          if (dc) {
+            await supabaseAdmin.from('daily_challenge_results').upsert({
+              challenge_id: dc.id,
+              user_id: userId,
+              completed: existing.won,
+              completion_time_seconds: existing.won ? existing.time_seconds : null,
+              moves: existing.moves,
+              hints_used: existing.hints_used ?? 0,
+              submitted_at: new Date().toISOString(),
+            }, { onConflict: 'challenge_id,user_id' });
+          }
+        } catch (dcrErr) {
+          console.warn('[complete-game] daily_challenge_results upsert on duplicate (non-fatal):', dcrErr);
+        }
+
+        return new Response(JSON.stringify({
+          error: 'duplicate_game',
+          message: 'Daily challenge already recorded',
+          duplicate_daily: true,
+          finalDelta: existing.final_delta ?? 0,
+          baseDelta: existing.base_delta ?? 0,
+          newRating: existing.rating_after,
+          previousRating: existing.rating_before,
+          isDailyChallenge: true,
+        }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Server-side isDaily verification
     let isDaily = false;
     if (clientIsDaily && clientDealUuid) {

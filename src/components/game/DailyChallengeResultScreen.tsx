@@ -9,6 +9,7 @@ import { DailyMilestoneCelebration } from './DailyMilestoneCelebration';
 import { DailyChallengeService, DailyResult, PersonalBest } from '@/services/DailyChallengeService';
 import { useAuth } from '@/contexts/AuthContext';
 import { GameResult } from '@/hooks/useGamePersistence';
+import { generateGhostPlayers, mergeWithGhosts, shouldShowEarlyAccessNote } from '@/lib/ghostLeaderboard';
 
 function getModeLabel(mode: string): string {
   if (mode === 'freecell') return 'FreeCell';

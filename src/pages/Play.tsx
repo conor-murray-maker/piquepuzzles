@@ -13,6 +13,7 @@ import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
 import { PiqueLoader } from '@/components/PiqueLoader';
 import { ddsToLabel } from '@/lib/format';
+import { setDailyCompleted, setDailyCompletedByDeal, isDailyCompletedByDeal } from '@/lib/dailyCompletionFlag';
 
 interface PlayProps {
   onActiveGameChange?: (active: boolean) => void;
@@ -54,6 +55,15 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const hasPopped = useRef(false);
   const popInFlight = useRef(false);
   const gameEndInFlight = useRef(false);
+
+  // Redirect if daily challenge already completed
+  useEffect(() => {
+    if (dailyDealId && user) {
+      if (isDailyCompletedByDeal(dailyDealId, user.id)) {
+        navigate('/daily', { replace: true });
+      }
+    }
+  }, [dailyDealId, user, navigate]);
 
   // Pop deal from pool on mount (only for regular games, not challenges/daily)
   useEffect(() => {

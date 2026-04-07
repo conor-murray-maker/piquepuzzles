@@ -226,6 +226,15 @@ export default function Stats() {
   const freecellGames = useMemo(() => stats.games.filter((g: any) => g.game_mode === 'freecell'), [stats.games]);
   const realmGames = useMemo(() => stats.games.filter((g: any) => g.game_mode === 'realm'), [stats.games]);
 
+  const peakIQ = (gamesList: GameRecord[]) => {
+    if (gamesList.length === 0) return null;
+    return Math.max(...gamesList.map(g => g.rating_after));
+  };
+  const allPeakIQ = useMemo(() => peakIQ(stats.games as GameRecord[]), [stats.games]);
+  const klondikePeakIQ = useMemo(() => peakIQ(klondikeGames as GameRecord[]), [klondikeGames]);
+  const freecellPeakIQ = useMemo(() => peakIQ(freecellGames as GameRecord[]), [freecellGames]);
+  const realmPeakIQ = useMemo(() => peakIQ(realmGames as GameRecord[]), [realmGames]);
+
   if (stats.loading) {
     return (
       <div className="bg-background overflow-y-auto" style={{ height: '100dvh', paddingBottom: 'calc(56px + var(--safe-area-bottom, 0px) + 24px)' }}>
@@ -280,16 +289,16 @@ export default function Stats() {
           </TabsList>
 
           <TabsContent value="all">
-            <StatsContent games={stats.games as GameRecord[]} stats={stats} />
+            <StatsContent games={stats.games as GameRecord[]} stats={stats} peakIQ={allPeakIQ} />
           </TabsContent>
           <TabsContent value="klondike">
-            <StatsContent games={klondikeGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'klondike')?.iq} />
+            <StatsContent games={klondikeGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'klondike')?.iq} peakIQ={klondikePeakIQ} />
           </TabsContent>
           <TabsContent value="freecell">
-            <StatsContent games={freecellGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'freecell')?.iq} />
+            <StatsContent games={freecellGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'freecell')?.iq} peakIQ={freecellPeakIQ} />
           </TabsContent>
           <TabsContent value="realm">
-            <StatsContent games={realmGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'realm')?.iq} />
+            <StatsContent games={realmGames as GameRecord[]} stats={stats} modeIQ={stats.modeRatings.find(r => r.game_mode === 'realm')?.iq} peakIQ={realmPeakIQ} />
           </TabsContent>
         </Tabs>
       </div>

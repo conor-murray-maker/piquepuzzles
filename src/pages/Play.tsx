@@ -257,6 +257,31 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }
 
   if (gamePhase === 'postgame' && lastResult) {
+    const isDaily = !!dailyDate;
+
+    // Daily challenge gets its own result screen
+    if (isDaily && dailyDate && dailyDealId) {
+      const dailyDifficulty = lastResult.difficulty || 'Medium';
+      return (
+        <DailyChallengeResultScreen
+          won={lastResult.won}
+          moves={lastResult.moves}
+          elapsedSeconds={lastResult.elapsedSeconds}
+          hintsUsed={lastResult.hintsUsed}
+          gameMode={gameMode}
+          difficulty={dailyDifficulty}
+          dailyDate={dailyDate}
+          dailyDealId={dailyDealId}
+          ratingResult={ratingResult}
+          onPlayAgain={() => {
+            gameEndInFlight.current = false;
+            navigate(`/play?mode=${gameMode}`, { replace: true });
+          }}
+          onGoHome={() => navigate('/')}
+        />
+      );
+    }
+
     const fakeState = {
       isWon: lastResult.won,
       moves: lastResult.moves,

@@ -145,8 +145,9 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       });
     }
 
-    // Save daily challenge completion
+    // Save daily challenge completion + set localStorage flag
     if (dailyDate && dailyDealId && user) {
+      setDailyCompletedByDeal(dailyDealId, user.id);
       await ChallengeService.saveDailyCompletion({
         userId: user.id,
         date: dailyDate,

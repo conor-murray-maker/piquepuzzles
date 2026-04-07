@@ -711,25 +711,31 @@ COMMIT;
       // RPC may not exist — fall back to sequential writes with explicit error checking
       console.warn('[complete-game] Transaction RPC unavailable, using sequential writes:', txError.message);
 
-      // Step 1: Upsert mode rating
-      const { error: modeErr } = await supabaseAdmin
-        .from('player_mode_ratings')
-        .upsert({
-          user_id: userId, game_mode: gameMode,
-          iq: newModeIQ, games_played: modeGamesPlayed + 1,
-          updated_at: nowISO,
-        }, { onConflict: 'user_id,game_mode' });
+      // Step 1: Upsert mode rating (skip for daily challenges)
+      if (!isDailyChallenge) {
+        const { error: modeErr } = await supabaseAdmin
+          .from('player_mode_ratings')
+          .upsert({
+            user_id: userId, game_mode: gameMode,
+            iq: newModeIQ, games_played: modeGamesPlayed + 1,
+            updated_at: nowISO,
+          }, { onConflict: 'user_id,game_mode' });
 
-      if (modeErr) {
-        txFailed = true;
-        txErrorMsg = `mode_rating_upsert: ${modeErr.message}`;
-        console.error('[complete-game] CRITICAL: mode rating upsert failed:', modeErr);
+        if (modeErr) {
+          txFailed = true;
+          txErrorMsg = `mode_rating_upsert: ${modeErr.message}`;
+          console.error('[complete-game] CRITICAL: mode rating upsert failed:', modeErr);
+        }
       }
 
       if (!txFailed) {
         // Step 2: Calculate composite IQ
-        const { data: puzzleIQResult } = await supabaseAdmin.rpc('calculate_puzzle_iq', { p_user_id: userId });
-        newPuzzleIQ = puzzleIQResult ?? newModeIQ;
+        if (!isDailyChallenge) {
+          const { data: puzzleIQResult } = await supabaseAdmin.rpc('calculate_puzzle_iq', { p_user_id: userId });
+          newPuzzleIQ = puzzleIQResult ?? newModeIQ;
+        } else {
+          newPuzzleIQ = previousPuzzleIQ;
+        }
 
         // Step 3: Insert game history
         const { error: historyErr } = await supabaseAdmin.from('game_history').insert({
@@ -742,6 +748,8 @@ COMMIT;
           performance_modifier: 1.0,
           base_delta: baseDelta, final_delta: finalDelta,
           deal_uuid: dealUuidForInsert,
+          is_daily_challenge: isDailyChallenge,
+          iq_delta_applied: iqDeltaApplied,
         } as Record<string, unknown>);
 
         if (historyErr) {

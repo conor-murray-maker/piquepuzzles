@@ -32,7 +32,7 @@ export default function LandingStats() {
     load();
   }, []);
 
-  if (!stats) return <div className="h-16" />; // reserve space, no spinner
+  if (!stats) return null;
 
   const items: { label: string; value: string }[] = [];
   if (stats.gamesPlayed >= 500) items.push({ value: roundDown100(stats.gamesPlayed), label: 'Games played' });
@@ -41,14 +41,14 @@ export default function LandingStats() {
 
   return (
     <AnimatePresence>
-      <motion.section
-        className="px-5 py-6"
+      <motion.div
+        className="px-5 mt-6"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.3 }}
       >
         {items.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground/70">
+          <p className="text-center italic" style={{ fontSize: '13px', color: '#888888' }}>
             Join the sharpest puzzle players on the web.
           </p>
         ) : (
@@ -63,7 +63,7 @@ export default function LandingStats() {
             ))}
           </div>
         )}
-      </motion.section>
+      </motion.div>
     </AnimatePresence>
   );
 }

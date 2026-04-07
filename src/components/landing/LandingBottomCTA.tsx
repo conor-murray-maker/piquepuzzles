@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -18,7 +17,7 @@ interface Props {
 export default function LandingBottomCTA({ onSignIn, onGuestPlay }: Props) {
   return (
     <motion.section
-      className="px-5 py-10 max-w-md mx-auto text-center"
+      className="px-5 py-16 max-w-md mx-auto text-center"
       initial={{ opacity: 0, y: 16 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
@@ -27,20 +26,20 @@ export default function LandingBottomCTA({ onSignIn, onGuestPlay }: Props) {
       <h2 className="text-2xl font-bold tracking-tight mb-2">Ready to find out?</h2>
       <p className="text-sm text-muted-foreground/70 mb-6">Free to play. Takes 30 seconds to start.</p>
 
-      <div className="space-y-2">
-        <Button
-          size="lg"
-          variant="outline"
+      <div>
+        <button
           onClick={onSignIn}
-          className="w-full h-14 text-base font-medium gap-3 border-2"
+          className="w-full h-14 rounded-xl font-semibold text-base flex items-center justify-center gap-3 transition-opacity hover:opacity-90 active:opacity-80"
+          style={{ backgroundColor: '#FFFFFF', color: '#0A0A0A' }}
         >
           <GoogleIcon />
-          Continue with Google — it's free
-        </Button>
+          Continue with Google. It's free.
+        </button>
 
         <button
           onClick={onGuestPlay}
-          className="w-full text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors py-2"
+          className="w-full mt-4 text-sm hover:underline transition-colors py-2"
+          style={{ color: '#666666' }}
         >
           Try a game without signing in
         </button>

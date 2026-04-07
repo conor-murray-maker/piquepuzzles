@@ -26,10 +26,11 @@ function useCountdown() {
       const diff = utcMidnight.getTime() - now.getTime();
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
-      setText(`${h}h ${m}m`);
+      const s = Math.floor((diff % 60000) / 1000);
+      setText(`${h}h ${m}m ${s}s`);
     }
     update();
-    const id = setInterval(update, 60000);
+    const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, []);
   return text;
@@ -75,7 +76,7 @@ export default function LandingDailyChallenge({ onSignIn }: { onSignIn: () => vo
 
   return (
     <motion.section
-      className="px-5 py-8 max-w-md mx-auto"
+      className="px-5 py-16 max-w-md mx-auto"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}

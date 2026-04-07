@@ -48,6 +48,7 @@ export function DailyChallengeResultScreen({
   const [myResult, setMyResult] = useState<DailyResult | null>(null);
   const [leaderboard, setLeaderboard] = useState<DailyResult[]>([]);
   const [totalPlayers, setTotalPlayers] = useState(0);
+  const [realCompletionCount, setRealCompletionCount] = useState(0);
   const [personalBest, setPersonalBest] = useState<PersonalBest | null>(null);
   const [isNewPB, setIsNewPB] = useState(false);
   const [showMilestone, setShowMilestone] = useState(false);

@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { RATING_TIERS } from '@/game/types';
 import { PuzzleIQBadge } from '@/components/game/PuzzleIQBadge';
 import { TierProgressBar } from '@/components/game/TierProgressBar';
-import { PiqueIQPanel } from '@/components/game/PiqueIQPanel';
+
 import { GlobalStanding } from '@/components/game/GlobalStanding';
 import { usePlayerStats, ModeRating } from '@/hooks/usePlayerStats';
 import { formatTime } from '@/lib/format';

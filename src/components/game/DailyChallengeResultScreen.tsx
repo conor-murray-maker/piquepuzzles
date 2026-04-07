@@ -9,6 +9,7 @@ import { DailyMilestoneCelebration } from './DailyMilestoneCelebration';
 import { DailyChallengeService, DailyResult, PersonalBest } from '@/services/DailyChallengeService';
 import { useAuth } from '@/contexts/AuthContext';
 import { GameResult } from '@/hooks/useGamePersistence';
+import { generateGhostPlayers, mergeWithGhosts, shouldShowEarlyAccessNote } from '@/lib/ghostLeaderboard';
 
 function getModeLabel(mode: string): string {
   if (mode === 'freecell') return 'FreeCell';
@@ -47,6 +48,7 @@ export function DailyChallengeResultScreen({
   const [myResult, setMyResult] = useState<DailyResult | null>(null);
   const [leaderboard, setLeaderboard] = useState<DailyResult[]>([]);
   const [totalPlayers, setTotalPlayers] = useState(0);
+  const [realCompletionCount, setRealCompletionCount] = useState(0);
   const [personalBest, setPersonalBest] = useState<PersonalBest | null>(null);
   const [isNewPB, setIsNewPB] = useState(false);
   const [showMilestone, setShowMilestone] = useState(false);
@@ -69,8 +71,14 @@ export function DailyChallengeResultScreen({
           DailyChallengeService.getMyResult(ch.id, user.id),
         ]);
 
-        setTotalPlayers(count);
-        setLeaderboard(lb);
+        setRealCompletionCount(count);
+
+        // Merge with ghost players
+        const chDifficulty = ch.difficulty || difficulty;
+        const ghosts = generateGhostPlayers(ch.id, chDifficulty, ch.game_mode, count);
+        const merged = mergeWithGhosts(lb, ghosts);
+        setLeaderboard(merged);
+        setTotalPlayers(count + ghosts.length);
         setMyResult(result);
 
         // Check personal best
@@ -282,6 +290,13 @@ export function DailyChallengeResultScreen({
         )}
         {dnfs.length > 0 && (
           <LeaderboardSection title="Did Not Finish" entries={dnfs} userId={user?.id} showTime={false} />
+        )}
+
+        {/* Early access note */}
+        {shouldShowEarlyAccessNote(realCompletionCount) && (
+          <p className="text-xs text-muted-foreground text-center">
+            🌍 Leaderboard fills as more players join
+          </p>
         )}
 
         {/* 7. Share */}

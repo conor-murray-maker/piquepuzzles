@@ -71,8 +71,14 @@ export function DailyChallengeResultScreen({
           DailyChallengeService.getMyResult(ch.id, user.id),
         ]);
 
-        setTotalPlayers(count);
-        setLeaderboard(lb);
+        setRealCompletionCount(count);
+
+        // Merge with ghost players
+        const chDifficulty = ch.difficulty || difficulty;
+        const ghosts = generateGhostPlayers(ch.id, chDifficulty, ch.game_mode, count);
+        const merged = mergeWithGhosts(lb, ghosts);
+        setLeaderboard(merged);
+        setTotalPlayers(count + ghosts.length);
         setMyResult(result);
 
         // Check personal best

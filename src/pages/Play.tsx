@@ -200,8 +200,9 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     else if (gameMode === 'freecell') clearFreeCellStorage();
     else clearStorage();
 
-    // Save daily challenge completion on give up
+    // Save daily challenge completion on give up + set localStorage flag
     if (dailyDate && dailyDealId && user) {
+      setDailyCompletedByDeal(dailyDealId, user.id);
       await ChallengeService.saveDailyCompletion({
         userId: user.id,
         date: dailyDate,

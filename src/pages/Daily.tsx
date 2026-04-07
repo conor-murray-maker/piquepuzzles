@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { DailyStreakBadge, LeaderboardStreakIcon, getStreakCopy } from '@/components/game/DailyStreakBadge';
 import { DailyMilestoneCelebration } from '@/components/game/DailyMilestoneCelebration';
 import { DailyChallengeService, DailyChallenge, DailyResult, PersonalBest } from '@/services/DailyChallengeService';
+import { isDailyCompletedByDeal } from '@/lib/dailyCompletionFlag';
+import { generateGhostPlayers, mergeWithGhosts, shouldShowEarlyAccessNote } from '@/lib/ghostLeaderboard';
 
 function getDayOfWeekUTC(): number {
   return new Date().getUTCDay();

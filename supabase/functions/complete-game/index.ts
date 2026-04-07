@@ -277,7 +277,7 @@ function getHardcodedPriors(gameMode: string, ddsBucket: string, iqBucket: strin
 
 // ─── Streak logic ──────────────────────────────────────────────
 
-const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
+const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 365];
 
 function getUserLocalDate(timezoneOffset: number, baseDate = new Date()): string {
   const localMs = baseDate.getTime() - timezoneOffset * 60000;

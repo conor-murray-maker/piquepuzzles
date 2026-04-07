@@ -27,10 +27,11 @@ interface GameRecord {
   game_mode: string;
 }
 
-function StatsContent({ games, stats, modeIQ }: {
+function StatsContent({ games, stats, modeIQ, peakIQ }: {
   games: GameRecord[];
   stats: ReturnType<typeof usePlayerStats>;
   modeIQ?: number | null;
+  peakIQ?: number | null;
 }) {
   const localStats = useMemo(() => {
     if (games.length === 0) return null;
@@ -92,6 +93,11 @@ function StatsContent({ games, stats, modeIQ }: {
                   {latestChange > 0 ? '+' : ''}{latestChange}
                 </p>
                 <p className="text-xs text-muted-foreground">Last game</p>
+                {peakIQ != null && (
+                  <p className="text-xs text-muted-foreground">
+                    Peak: <span className="font-mono font-semibold text-foreground">{peakIQ}</span>
+                  </p>
+                )}
               </div>
             </div>
 
@@ -259,12 +265,6 @@ export default function Stats() {
           </h1>
         </motion.div>
 
-        {/* Pique IQ Panel */}
-        {stats.modeRatings.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
-            <PiqueIQPanel piqueIQ={stats.puzzleIQ} modeRatings={stats.modeRatings} activeMode={selectedTab !== 'all' ? selectedTab : null} />
-          </motion.div>
-        )}
 
         {/* Global Standing */}
         {stats.modeRatings.length > 0 && (

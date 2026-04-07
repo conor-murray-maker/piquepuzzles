@@ -287,7 +287,11 @@ export default function Play({ onActiveGameChange }: PlayProps) {
           ratingResult={ratingResult}
           onPlayAgain={() => {
             gameEndInFlight.current = false;
-            navigate(`/play?mode=${gameMode}`, { replace: true });
+            setGamePhase('playing');
+            setLastResult(null);
+            setRatingResult(null);
+            setQueuedDeal(null);
+            navigate(`/play?mode=${gameMode}&t=${Date.now()}`, { replace: true });
           }}
           onGoHome={() => navigate('/')}
         />

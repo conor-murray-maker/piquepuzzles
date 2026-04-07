@@ -762,13 +762,15 @@ COMMIT;
       if (!txFailed) {
         // Step 4: Update profile
         const profileUpdate: Record<string, unknown> = {
-          rating: newPuzzleIQ,
           games_played: gamesPlayed + 1,
           games_won: (profile.games_won as number) + (isWin ? 1 : 0),
           [perModeKey]: currentPerMode + 1,
           updated_at: nowISO,
           ...streakResult.profileUpdate,
         };
+        if (!isDailyChallenge) {
+          profileUpdate.rating = newPuzzleIQ;
+        }
         if (Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840) {
           profileUpdate.timezone_offset = timezoneOffset;
         }

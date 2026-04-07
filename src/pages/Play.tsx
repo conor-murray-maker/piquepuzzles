@@ -5,12 +5,14 @@ import { GameBoard, clearStorage } from '@/components/game/GameBoard';
 import { FreeCellBoard, clearFreeCellStorage } from '@/components/game/FreeCellBoard';
 import { RealmBoard, clearRealmStorage } from '@/components/game/RealmBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
+import { DailyChallengeResultScreen } from '@/components/game/DailyChallengeResultScreen';
 import { CompletingScreen } from '@/components/game/CompletingScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
 import { PiqueLoader } from '@/components/PiqueLoader';
+import { ddsToLabel } from '@/lib/format';
 
 interface PlayProps {
   onActiveGameChange?: (active: boolean) => void;
@@ -255,6 +257,31 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }
 
   if (gamePhase === 'postgame' && lastResult) {
+    const isDaily = !!dailyDate;
+
+    // Daily challenge gets its own result screen
+    if (isDaily && dailyDate && dailyDealId) {
+      const dailyDifficulty = lastResult.difficulty || 'Medium';
+      return (
+        <DailyChallengeResultScreen
+          won={lastResult.won}
+          moves={lastResult.moves}
+          elapsedSeconds={lastResult.elapsedSeconds}
+          hintsUsed={lastResult.hintsUsed}
+          gameMode={gameMode}
+          difficulty={dailyDifficulty}
+          dailyDate={dailyDate}
+          dailyDealId={dailyDealId}
+          ratingResult={ratingResult}
+          onPlayAgain={() => {
+            gameEndInFlight.current = false;
+            navigate(`/play?mode=${gameMode}`, { replace: true });
+          }}
+          onGoHome={() => navigate('/')}
+        />
+      );
+    }
+
     const fakeState = {
       isWon: lastResult.won,
       moves: lastResult.moves,

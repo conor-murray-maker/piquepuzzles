@@ -814,6 +814,44 @@ COMMIT;
 
     const puzzleIQDelta = newPuzzleIQ - previousPuzzleIQ;
 
+    // ─── Write daily_challenge_results if this was a daily challenge ───
+    if (isDailyChallenge && clientDealUuid) {
+      try {
+        // Look up the daily_challenges row to get the correct challenge_id
+        const todayForDC = new Date().toISOString().split('T')[0];
+        const { data: dcRow } = await supabaseAdmin
+          .from('daily_challenges')
+          .select('id')
+          .eq('deal_id', clientDealUuid)
+          .eq('date', todayForDC)
+          .single();
+
+        if (dcRow) {
+          const { error: dcrErr } = await supabaseAdmin
+            .from('daily_challenge_results')
+            .upsert({
+              challenge_id: dcRow.id,
+              user_id: userId,
+              completed: isWin,
+              completion_time_seconds: isWin ? actualTime : null,
+              moves: actualMoves,
+              hints_used: hintsUsed,
+              submitted_at: new Date().toISOString(),
+            }, { onConflict: 'challenge_id,user_id' });
+
+          if (dcrErr) {
+            console.error('[complete-game] daily_challenge_results upsert failed:', dcrErr);
+          } else {
+            console.log('[complete-game] daily_challenge_results upserted for challenge:', dcRow.id);
+          }
+        } else {
+          console.warn('[complete-game] No daily_challenges row found for deal_id:', clientDealUuid, 'date:', todayForDC);
+        }
+      } catch (dcrCatchErr) {
+        console.warn('[complete-game] daily_challenge_results write error (non-fatal):', dcrCatchErr);
+      }
+    }
+
     // ─── Non-critical updates (fire-and-forget, don't block response) ───
 
     // Update deal pool stats

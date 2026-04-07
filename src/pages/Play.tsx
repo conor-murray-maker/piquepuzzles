@@ -5,12 +5,14 @@ import { GameBoard, clearStorage } from '@/components/game/GameBoard';
 import { FreeCellBoard, clearFreeCellStorage } from '@/components/game/FreeCellBoard';
 import { RealmBoard, clearRealmStorage } from '@/components/game/RealmBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
+import { DailyChallengeResultScreen } from '@/components/game/DailyChallengeResultScreen';
 import { CompletingScreen } from '@/components/game/CompletingScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
 import { PiqueLoader } from '@/components/PiqueLoader';
+import { ddsToLabel } from '@/lib/format';
 
 interface PlayProps {
   onActiveGameChange?: (active: boolean) => void;

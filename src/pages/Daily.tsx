@@ -164,6 +164,7 @@ export default function Daily() {
 
   const completions = leaderboard.filter(e => e.completed);
   const dnfs = leaderboard.filter(e => !e.completed);
+  const hasCompleted = !!myResult || locallyCompleted;
 
   const myRank = myResult?.rank;
   const streakCopy = getStreakCopy(currentStreak, streakPercentile);
@@ -293,17 +294,29 @@ export default function Daily() {
             )}
 
             {/* My result or CTA */}
-            {myResult ? (
-              <DailyResultCard
-                result={myResult}
-                totalPlayers={totalPlayers}
-                personalBest={personalBest}
-                isNewPB={isNewPB}
-                difficulty={difficulty}
-                gameMode={challenge.game_mode}
-                onShare={handleShare}
-                onPlayMore={() => navigate(`/play?mode=${challenge.game_mode}`)}
-              />
+            {hasCompleted ? (
+              myResult ? (
+                <DailyResultCard
+                  result={myResult}
+                  totalPlayers={totalPlayers}
+                  personalBest={personalBest}
+                  isNewPB={isNewPB}
+                  difficulty={difficulty}
+                  gameMode={challenge.game_mode}
+                  onShare={handleShare}
+                  onPlayMore={() => navigate(`/play?mode=${challenge.game_mode}`)}
+                />
+              ) : (
+                <motion.div className="stat-card py-4 text-center space-y-2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                  <Trophy className="w-8 h-8 text-gold mx-auto" />
+                  <h2 className="text-xl font-bold">Challenge Attempted</h2>
+                  <p className="text-sm text-muted-foreground">Your result is being processed...</p>
+                  <Button onClick={() => navigate(`/play?mode=${challenge.game_mode}`)} className="mt-3">
+                    Play more {getModeLabel(challenge.game_mode)}
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </motion.div>
+              )
             ) : (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -336,6 +349,18 @@ export default function Daily() {
                 userId={user?.id}
                 showTime={false}
               />
+            )}
+
+            {/* Early access note */}
+            {shouldShowEarlyAccessNote(realCompletionCount) && (
+              <motion.p
+                className="text-xs text-muted-foreground text-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                🌍 Leaderboard fills as more players join
+              </motion.p>
             )}
           </>
         )}

@@ -156,36 +156,86 @@ export type Database = {
           },
         ]
       }
+      daily_challenge_results: {
+        Row: {
+          challenge_id: string
+          completed: boolean
+          completion_time_seconds: number | null
+          hints_used: number
+          id: string
+          moves: number
+          rank: number | null
+          submitted_at: string
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          completed?: boolean
+          completion_time_seconds?: number | null
+          hints_used?: number
+          id?: string
+          moves?: number
+          rank?: number | null
+          submitted_at?: string
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          completed?: boolean
+          completion_time_seconds?: number | null
+          hints_used?: number
+          id?: string
+          moves?: number
+          rank?: number | null
+          submitted_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_challenge_results_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "daily_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_challenges: {
         Row: {
           created_at: string
           date: string
           day_of_week: number | null
           deal_id: string
+          difficulty: string | null
           game_mode: string
           id: string
           target_dds_max: number | null
           target_dds_min: number | null
+          week_rotation_id: string | null
         }
         Insert: {
           created_at?: string
           date: string
           day_of_week?: number | null
           deal_id: string
+          difficulty?: string | null
           game_mode?: string
           id?: string
           target_dds_max?: number | null
           target_dds_min?: number | null
+          week_rotation_id?: string | null
         }
         Update: {
           created_at?: string
           date?: string
           day_of_week?: number | null
           deal_id?: string
+          difficulty?: string | null
           game_mode?: string
           id?: string
           target_dds_max?: number | null
           target_dds_min?: number | null
+          week_rotation_id?: string | null
         }
         Relationships: [
           {
@@ -193,6 +243,13 @@ export type Database = {
             columns: ["deal_id"]
             isOneToOne: false
             referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_challenges_week_rotation_id_fkey"
+            columns: ["week_rotation_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_challenge_rotation"
             referencedColumns: ["id"]
           },
         ]
@@ -428,6 +485,8 @@ export type Database = {
           game_mode: string
           hints_used: number
           id: string
+          iq_delta_applied: boolean
+          is_daily_challenge: boolean
           moves: number
           performance_modifier: number | null
           played_at: string
@@ -449,6 +508,8 @@ export type Database = {
           game_mode?: string
           hints_used?: number
           id?: string
+          iq_delta_applied?: boolean
+          is_daily_challenge?: boolean
           moves: number
           performance_modifier?: number | null
           played_at?: string
@@ -470,6 +531,8 @@ export type Database = {
           game_mode?: string
           hints_used?: number
           id?: string
+          iq_delta_applied?: boolean
+          is_daily_challenge?: boolean
           moves?: number
           performance_modifier?: number | null
           played_at?: string
@@ -550,6 +613,39 @@ export type Database = {
           },
         ]
       }
+      personal_bests: {
+        Row: {
+          achieved_at: string
+          best_moves: number
+          best_time_seconds: number
+          context: string
+          difficulty: string
+          game_mode: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          achieved_at?: string
+          best_moves: number
+          best_time_seconds: number
+          context?: string
+          difficulty: string
+          game_mode: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          achieved_at?: string
+          best_moves?: number
+          best_time_seconds?: number
+          context?: string
+          difficulty?: string
+          game_mode?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       player_mode_ratings: {
         Row: {
           game_mode: string
@@ -605,6 +701,7 @@ export type Database = {
           games_played_realm: number
           games_won: number
           id: string
+          last_celebrated_milestone: number
           last_streak_date: string | null
           last_win_date: string | null
           pending_milestone: number | null
@@ -632,6 +729,7 @@ export type Database = {
           games_played_realm?: number
           games_won?: number
           id: string
+          last_celebrated_milestone?: number
           last_streak_date?: string | null
           last_win_date?: string | null
           pending_milestone?: number | null
@@ -659,6 +757,7 @@ export type Database = {
           games_played_realm?: number
           games_won?: number
           id?: string
+          last_celebrated_milestone?: number
           last_streak_date?: string | null
           last_win_date?: string | null
           pending_milestone?: number | null
@@ -780,6 +879,33 @@ export type Database = {
           },
         ]
       }
+      weekly_challenge_rotation: {
+        Row: {
+          created_at: string
+          id: string
+          monday_mode: string
+          tuesday_mode: string
+          wednesday_mode: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          monday_mode: string
+          tuesday_mode: string
+          wednesday_mode: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          monday_mode?: string
+          tuesday_mode?: string
+          wednesday_mode?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -787,6 +913,10 @@ export type Database = {
     Functions: {
       calculate_puzzle_iq: { Args: { p_user_id: string }; Returns: number }
       count_daily_attempts: { Args: { p_date: string }; Returns: number }
+      count_daily_completions: {
+        Args: { p_challenge_id: string }
+        Returns: number
+      }
       create_challenge: {
         Args: {
           p_deal_seed: number
@@ -819,7 +949,21 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_daily_leaderboard_v2: {
+        Args: { p_challenge_id: string; p_user_id?: string }
+        Returns: {
+          completed: boolean
+          completion_time_seconds: number
+          current_streak: number
+          display_name: string
+          hints_used: number
+          moves: number
+          rank: number
+          user_id: string
+        }[]
+      }
       get_rating_percentile: { Args: { user_rating: number }; Returns: number }
+      get_streak_percentile: { Args: { p_min_streak: number }; Returns: number }
     }
     Enums: {
       [_ in never]: never

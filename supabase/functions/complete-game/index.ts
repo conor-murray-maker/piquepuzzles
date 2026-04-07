@@ -277,7 +277,7 @@ function getHardcodedPriors(gameMode: string, ddsBucket: string, iqBucket: strin
 
 // ─── Streak logic ──────────────────────────────────────────────
 
-const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
+const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 365];
 
 function getUserLocalDate(timezoneOffset: number, baseDate = new Date()): string {
   const localMs = baseDate.getTime() - timezoneOffset * 60000;
@@ -491,6 +491,7 @@ Deno.serve(async (req) => {
     }
 
     const isWin = result === 'win';
+    const isDailyChallenge = isDaily;
 
     // 1. Fetch user profile
     const { data: profile, error: profileErr } = await supabaseAdmin
@@ -608,9 +609,11 @@ Deno.serve(async (req) => {
       baseDelta,
     });
 
-    const finalDelta = scoreResult.total;
+    // Daily challenges do NOT affect IQ
+    const finalDelta = isDailyChallenge ? 0 : scoreResult.total;
+    const iqDeltaApplied = !isDailyChallenge;
 
-    const newModeIQ = Math.max(0, modeIQ + finalDelta);
+    const newModeIQ = isDailyChallenge ? modeIQ : Math.max(0, modeIQ + finalDelta);
 
     console.log('[complete-game] Scoring:', {
       gameMode, modeIQ, dealRating, dds, K, expected: expected.toFixed(3),
@@ -645,39 +648,38 @@ Deno.serve(async (req) => {
     const txSQL = `
 BEGIN;
 
--- Step 1: Upsert player_mode_ratings (IQ + games_played counter)
+${isDailyChallenge ? '-- Skip mode rating upsert for daily challenges (no IQ impact)' : `-- Step 1: Upsert player_mode_ratings (IQ + games_played counter)
 INSERT INTO player_mode_ratings (user_id, game_mode, iq, games_played, updated_at)
 VALUES (${sqlLiteral(userId)}, ${sqlLiteral(gameMode)}, ${newModeIQ}, ${modeGamesPlayed + 1}, ${sqlLiteral(nowISO)})
 ON CONFLICT (user_id, game_mode)
-DO UPDATE SET iq = ${newModeIQ}, games_played = ${modeGamesPlayed + 1}, updated_at = ${sqlLiteral(nowISO)};
-
--- Step 2: Calculate new composite puzzle IQ
--- (done inline via subquery in the profile update)
+DO UPDATE SET iq = ${newModeIQ}, games_played = ${modeGamesPlayed + 1}, updated_at = ${sqlLiteral(nowISO)};`}
 
 -- Step 3: Insert game_history
 INSERT INTO game_history (
   user_id, deal_id, won, moves, time_seconds, hints_used, undos_used,
   difficulty, difficulty_score, rating_before, rating_after, rating_change,
-  game_mode, performance_modifier, base_delta, final_delta, deal_uuid
+  game_mode, performance_modifier, base_delta, final_delta, deal_uuid,
+  is_daily_challenge, iq_delta_applied
 ) VALUES (
   ${sqlLiteral(userId)}, ${sqlLiteral(clientDealId)}, ${isWin}, ${actualMoves}, ${actualTime},
   ${hintsUsed}, ${undosUsed}, ${sqlLiteral(difficulty)}, ${dds},
   ${previousPuzzleIQ},
-  (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+  ${isDailyChallenge ? previousPuzzleIQ : `(SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
    FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
-   WHERE gm.is_active = true),
-  (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+   WHERE gm.is_active = true)`},
+  ${isDailyChallenge ? 0 : `(SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
    FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
-   WHERE gm.is_active = true) - ${previousPuzzleIQ},
+   WHERE gm.is_active = true) - ${previousPuzzleIQ}`},
   ${sqlLiteral(gameMode)}, 1.0, ${baseDelta}, ${finalDelta},
-  ${dealUuidForInsert ? sqlLiteral(dealUuidForInsert) : 'NULL'}
+  ${dealUuidForInsert ? sqlLiteral(dealUuidForInsert) : 'NULL'},
+  ${isDailyChallenge}, ${iqDeltaApplied}
 );
 
 -- Step 4: Update profile (rating, counters, streak)
 UPDATE profiles SET
-  rating = (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+  ${isDailyChallenge ? '' : `rating = (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
             FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
-            WHERE gm.is_active = true),
+            WHERE gm.is_active = true),`}
   games_played = ${gamesPlayed + 1},
   games_won = ${(profile.games_won as number) + (isWin ? 1 : 0)},
   ${perModeKey} = ${currentPerMode + 1},
@@ -709,25 +711,31 @@ COMMIT;
       // RPC may not exist — fall back to sequential writes with explicit error checking
       console.warn('[complete-game] Transaction RPC unavailable, using sequential writes:', txError.message);
 
-      // Step 1: Upsert mode rating
-      const { error: modeErr } = await supabaseAdmin
-        .from('player_mode_ratings')
-        .upsert({
-          user_id: userId, game_mode: gameMode,
-          iq: newModeIQ, games_played: modeGamesPlayed + 1,
-          updated_at: nowISO,
-        }, { onConflict: 'user_id,game_mode' });
+      // Step 1: Upsert mode rating (skip for daily challenges)
+      if (!isDailyChallenge) {
+        const { error: modeErr } = await supabaseAdmin
+          .from('player_mode_ratings')
+          .upsert({
+            user_id: userId, game_mode: gameMode,
+            iq: newModeIQ, games_played: modeGamesPlayed + 1,
+            updated_at: nowISO,
+          }, { onConflict: 'user_id,game_mode' });
 
-      if (modeErr) {
-        txFailed = true;
-        txErrorMsg = `mode_rating_upsert: ${modeErr.message}`;
-        console.error('[complete-game] CRITICAL: mode rating upsert failed:', modeErr);
+        if (modeErr) {
+          txFailed = true;
+          txErrorMsg = `mode_rating_upsert: ${modeErr.message}`;
+          console.error('[complete-game] CRITICAL: mode rating upsert failed:', modeErr);
+        }
       }
 
       if (!txFailed) {
         // Step 2: Calculate composite IQ
-        const { data: puzzleIQResult } = await supabaseAdmin.rpc('calculate_puzzle_iq', { p_user_id: userId });
-        newPuzzleIQ = puzzleIQResult ?? newModeIQ;
+        if (!isDailyChallenge) {
+          const { data: puzzleIQResult } = await supabaseAdmin.rpc('calculate_puzzle_iq', { p_user_id: userId });
+          newPuzzleIQ = puzzleIQResult ?? newModeIQ;
+        } else {
+          newPuzzleIQ = previousPuzzleIQ;
+        }
 
         // Step 3: Insert game history
         const { error: historyErr } = await supabaseAdmin.from('game_history').insert({
@@ -740,6 +748,8 @@ COMMIT;
           performance_modifier: 1.0,
           base_delta: baseDelta, final_delta: finalDelta,
           deal_uuid: dealUuidForInsert,
+          is_daily_challenge: isDailyChallenge,
+          iq_delta_applied: iqDeltaApplied,
         } as Record<string, unknown>);
 
         if (historyErr) {
@@ -752,13 +762,15 @@ COMMIT;
       if (!txFailed) {
         // Step 4: Update profile
         const profileUpdate: Record<string, unknown> = {
-          rating: newPuzzleIQ,
           games_played: gamesPlayed + 1,
           games_won: (profile.games_won as number) + (isWin ? 1 : 0),
           [perModeKey]: currentPerMode + 1,
           updated_at: nowISO,
           ...streakResult.profileUpdate,
         };
+        if (!isDailyChallenge) {
+          profileUpdate.rating = newPuzzleIQ;
+        }
         if (Number.isInteger(timezoneOffset) && timezoneOffset >= -720 && timezoneOffset <= 840) {
           profileUpdate.timezone_offset = timezoneOffset;
         }
@@ -902,6 +914,8 @@ COMMIT;
       gameMode,
       puzzleIQ: newPuzzleIQ,
       puzzleIQDelta,
+      isDailyChallenge,
+      iqDeltaApplied: iqDeltaApplied,
       streakUpdate: {
         currentStreak: streakResult.currentStreak,
         bestStreak: streakResult.bestStreak,

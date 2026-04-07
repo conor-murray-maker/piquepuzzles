@@ -5,16 +5,43 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Weekly progressive difficulty curve (UTC day of week)
-const WEEKLY_DDS: Record<number, { min: number; max: number; label: string }> = {
-  1: { min: 15, max: 30, label: 'Easy' },          // Monday
-  2: { min: 25, max: 45, label: 'Easy-Medium' },    // Tuesday
-  3: { min: 40, max: 58, label: 'Medium' },          // Wednesday
-  4: { min: 50, max: 65, label: 'Medium-Hard' },     // Thursday
-  5: { min: 58, max: 75, label: 'Hard' },             // Friday
-  6: { min: 68, max: 85, label: 'Hard-Expert' },      // Saturday
-  0: { min: 78, max: 100, label: 'Expert' },           // Sunday
+// Weekly difficulty escalation (resets Monday)
+const DAILY_DIFFICULTY: Record<number, string> = {
+  1: 'Easy',      // Monday
+  2: 'Medium',    // Tuesday
+  3: 'Hard',      // Wednesday
+  4: 'Hard',      // Thursday
+  5: 'Expert',    // Friday
+  6: 'Expert',    // Saturday
+  0: 'Expert',    // Sunday
 };
+
+// DDS ranges per difficulty
+const DIFFICULTY_DDS: Record<string, { min: number; max: number }> = {
+  Easy:   { min: 0, max: 25 },
+  Medium: { min: 26, max: 50 },
+  Hard:   { min: 51, max: 75 },
+  Expert: { min: 76, max: 100 },
+};
+
+const ALL_MODES = ['klondike', 'freecell', 'realm'];
+
+function getMonday(date: Date): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -34,12 +61,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Calculate tomorrow's date and today in UTC
     const now = new Date();
-    const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
     const todayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
       .toISOString().split('T')[0];
+    const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
     const results: Record<string, string> = {};
 
@@ -66,50 +92,106 @@ Deno.serve(async (req) => {
       }
 
       const dateObj = new Date(dateStr + 'T00:00:00Z');
-      const dayOfWeek = dateObj.getUTCDay(); // 0=Sun, 6=Sat
-      const ddsRange = WEEKLY_DDS[dayOfWeek] || WEEKLY_DDS[3]; // fallback to Thursday
+      const dayOfWeek = dateObj.getUTCDay();
+      const mondayStr = getMonday(dateObj);
 
-      // Query calibration deals within DDS range with confidence >= 0.8
-      const { data: calibrationCandidates } = await supabaseAdmin
-        .from('deals')
-        .select('id, dds_blended, game_mode, confidence, reserved_for')
-        .eq('is_calibration', true)
-        .gte('dds_blended', ddsRange.min)
-        .lte('dds_blended', ddsRange.max)
-        .gte('confidence', 0.8)
-        .limit(100);
+      // === MODE ROTATION ===
+      // Check if rotation exists for this week
+      let { data: rotation } = await supabaseAdmin
+        .from('weekly_challenge_rotation')
+        .select('*')
+        .eq('week_start', mondayStr)
+        .single();
 
-      // Filter out recently used deals
-      let pool = (calibrationCandidates || []).filter((d: any) => !recentDealIds.has(d.id));
+      // If Monday and no rotation, create one
+      if (!rotation) {
+        const shuffled = shuffleArray(ALL_MODES);
+        const mondayMode = shuffled[0];
+        const tuesdayMode = shuffled[1];
+        const wednesdayMode = shuffled[2];
 
-      // Fallback: organic verified deals if calibration pool empty
-      if (pool.length === 0) {
-        const { data: organicCandidates } = await supabaseAdmin
+        const { data: newRotation, error: rotErr } = await supabaseAdmin
+          .from('weekly_challenge_rotation')
+          .insert({
+            week_start: mondayStr,
+            monday_mode: mondayMode,
+            tuesday_mode: tuesdayMode,
+            wednesday_mode: wednesdayMode,
+          })
+          .select()
+          .single();
+
+        if (rotErr) {
+          // Might be race condition — re-fetch
+          const { data: refetch } = await supabaseAdmin
+            .from('weekly_challenge_rotation')
+            .select('*')
+            .eq('week_start', mondayStr)
+            .single();
+          rotation = refetch;
+        } else {
+          rotation = newRotation;
+        }
+      }
+
+      if (!rotation) {
+        results[dateStr] = 'rotation_creation_failed';
+        continue;
+      }
+
+      // Map day of week to mode from rotation (Thu=Mon, Fri=Tue, Sat=Wed, Sun=Mon pattern)
+      const dayToModeKey: Record<number, string> = {
+        1: 'monday_mode',    // Monday
+        2: 'tuesday_mode',   // Tuesday
+        3: 'wednesday_mode', // Wednesday
+        4: 'monday_mode',    // Thursday repeats Monday
+        5: 'tuesday_mode',   // Friday repeats Tuesday
+        6: 'wednesday_mode', // Saturday repeats Wednesday
+        0: 'monday_mode',    // Sunday repeats Monday
+      };
+
+      const modeKey = dayToModeKey[dayOfWeek] || 'monday_mode';
+      const todayMode = rotation[modeKey] as string;
+      const difficulty = DAILY_DIFFICULTY[dayOfWeek] || 'Hard';
+      const ddsRange = DIFFICULTY_DDS[difficulty] || DIFFICULTY_DDS.Hard;
+
+      // === DEAL SELECTION ===
+      // Try calibration deals first with high confidence
+      let pool: any[] = [];
+      const difficulties = [difficulty];
+      // Fallback difficulties
+      if (difficulty === 'Expert') difficulties.push('Hard', 'Medium');
+      else if (difficulty === 'Hard') difficulties.push('Medium', 'Easy');
+      else if (difficulty === 'Medium') difficulties.push('Easy');
+
+      for (const diff of difficulties) {
+        const range = DIFFICULTY_DDS[diff] || ddsRange;
+
+        const { data: candidates } = await supabaseAdmin
           .from('deals')
-          .select('id, dds_blended, game_mode, confidence, reserved_for')
-          .eq('is_calibration', false)
-          .gte('dds_blended', ddsRange.min)
-          .lte('dds_blended', ddsRange.max)
+          .select('id, dds_blended, game_mode, confidence')
+          .eq('game_mode', todayMode)
+          .gte('dds_blended', range.min)
+          .lte('dds_blended', range.max)
           .gte('confidence', 0.5)
           .limit(100);
 
-        pool = (organicCandidates || []).filter((d: any) => !recentDealIds.has(d.id));
+        pool = (candidates || []).filter((d: any) => !recentDealIds.has(d.id));
+        if (pool.length > 0) break;
       }
 
-      // Final fallback: any deal in DDS range regardless of calibration/confidence
+      // Final fallback: any deal in that mode
       if (pool.length === 0) {
         const { data: anyDeals } = await supabaseAdmin
           .from('deals')
           .select('id, dds_blended, game_mode')
-          .gte('dds_blended', ddsRange.min)
-          .lte('dds_blended', ddsRange.max)
+          .eq('game_mode', todayMode)
           .limit(50);
-
         pool = (anyDeals || []).filter((d: any) => !recentDealIds.has(d.id));
       }
 
+      // Absolute fallback: any calibration deal in any mode
       if (pool.length === 0) {
-        // Absolute fallback: any calibration deal
         const { data: fallback } = await supabaseAdmin
           .from('deals')
           .select('id, game_mode')
@@ -120,35 +202,10 @@ Deno.serve(async (req) => {
           results[dateStr] = 'no_deals_available';
           continue;
         }
-
-        const pick = fallback[Math.floor(Math.random() * fallback.length)];
-        await supabaseAdmin.from('daily_challenges').insert({
-          date: dateStr,
-          game_mode: pick.game_mode,
-          deal_id: pick.id,
-          day_of_week: dayOfWeek,
-          target_dds_min: ddsRange.min,
-          target_dds_max: ddsRange.max,
-        });
-        results[dateStr] = 'created_from_fallback';
-        continue;
+        pool = fallback;
       }
 
-      // Monday: prefer monday_challenge reserved deals; other days alternate game mode
-      let finalPool = pool;
-      if (dayOfWeek === 1) {
-        const mondayReserved = pool.filter((c: any) => c.reserved_for === 'monday_challenge');
-        if (mondayReserved.length > 0) {
-          finalPool = mondayReserved;
-        }
-      } else {
-        const preferredMode = dateObj.getUTCDate() % 2 === 0 ? 'klondike' : 'freecell';
-        const modeFiltered = pool.filter((c: any) => c.game_mode === preferredMode);
-        finalPool = modeFiltered.length > 0 ? modeFiltered : pool;
-      }
-
-      // Pick randomly
-      const pick = finalPool[Math.floor(Math.random() * finalPool.length)];
+      const pick = pool[Math.floor(Math.random() * pool.length)];
       await supabaseAdmin.from('daily_challenges').insert({
         date: dateStr,
         game_mode: pick.game_mode,
@@ -156,6 +213,8 @@ Deno.serve(async (req) => {
         day_of_week: dayOfWeek,
         target_dds_min: ddsRange.min,
         target_dds_max: ddsRange.max,
+        difficulty: difficulty,
+        week_rotation_id: rotation.id,
       });
       results[dateStr] = 'created';
     }

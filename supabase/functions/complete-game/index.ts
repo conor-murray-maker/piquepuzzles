@@ -491,6 +491,7 @@ Deno.serve(async (req) => {
     }
 
     const isWin = result === 'win';
+    const isDailyChallenge = isDaily;
 
     // 1. Fetch user profile
     const { data: profile, error: profileErr } = await supabaseAdmin
@@ -608,9 +609,11 @@ Deno.serve(async (req) => {
       baseDelta,
     });
 
-    const finalDelta = scoreResult.total;
+    // Daily challenges do NOT affect IQ
+    const finalDelta = isDailyChallenge ? 0 : scoreResult.total;
+    const iqDeltaApplied = !isDailyChallenge;
 
-    const newModeIQ = Math.max(0, modeIQ + finalDelta);
+    const newModeIQ = isDailyChallenge ? modeIQ : Math.max(0, modeIQ + finalDelta);
 
     console.log('[complete-game] Scoring:', {
       gameMode, modeIQ, dealRating, dds, K, expected: expected.toFixed(3),

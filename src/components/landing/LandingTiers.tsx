@@ -25,15 +25,12 @@ export default function LandingTiers() {
           Pique IQ Tiers
         </h2>
 
-        <div className="flex items-end justify-center gap-3 mb-3 flex-wrap">
+        <div className="flex items-center justify-center gap-4 mb-3">
           {RATING_TIERS.map((tier) => {
             const isGM = tier.name === 'Grandmaster';
             const isBronze = tier.name === 'Bronze';
             return (
-              <div key={tier.name} className="flex flex-col items-center px-1 py-1.5 relative">
-                {isBronze && (
-                  <ChevronUp className="w-3 h-3 text-muted-foreground/50 mb-0.5" />
-                )}
+              <div key={tier.name} className="flex flex-col items-center" style={{ minWidth: 0 }}>
                 <div
                   className={`rounded-full mb-1 ${isGM ? 'gm-shimmer' : ''}`}
                   style={{
@@ -42,18 +39,18 @@ export default function LandingTiers() {
                     height: isGM ? '14px' : '10px',
                   }}
                 />
-                <span className={`font-medium ${isGM ? 'gm-shimmer-text text-[10px]' : 'text-muted-foreground/70 text-[9px]'}`}>
+                <span className={`font-medium leading-tight ${isGM ? 'gm-shimmer-text text-[9px]' : 'text-muted-foreground/70 text-[8px]'}`}>
                   {tier.name}
                 </span>
-                {isBronze && (
-                  <span className="text-muted-foreground/50 mt-0.5 whitespace-nowrap" style={{ fontSize: '11px' }}>
-                    Everyone starts here
-                  </span>
-                )}
               </div>
             );
           })}
         </div>
+
+        <p className="text-[11px] text-muted-foreground/50 text-center mb-1">
+          <ChevronUp className="w-3 h-3 inline-block -mt-0.5" />
+          {' '}Everyone starts at Bronze
+        </p>
 
         <p className="text-xs text-muted-foreground/60 text-center mt-4">
           Seven tiers. One number that tells you exactly where you stand.

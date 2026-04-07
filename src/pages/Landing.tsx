@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LandingHero from '@/components/landing/LandingHero';
 import LandingStats from '@/components/landing/LandingStats';
@@ -9,6 +10,16 @@ import LandingBottomCTA from '@/components/landing/LandingBottomCTA';
 
 export default function Landing() {
   const navigate = useNavigate();
+
+  // Force dark mode on landing page
+  useEffect(() => {
+    const root = document.documentElement;
+    const wasDark = root.classList.contains('dark');
+    root.classList.add('dark');
+    return () => {
+      if (!wasDark) root.classList.remove('dark');
+    };
+  }, []);
 
   const handleSignIn = () => navigate('/auth');
   const handleGuestPlay = () => {

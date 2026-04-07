@@ -677,9 +677,9 @@ INSERT INTO game_history (
 
 -- Step 4: Update profile (rating, counters, streak)
 UPDATE profiles SET
-  rating = (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
+  ${isDailyChallenge ? '' : `rating = (SELECT COALESCE(floor(avg(COALESCE(pmr.iq, 1000)))::integer, ${previousPuzzleIQ})
             FROM game_modes gm LEFT JOIN player_mode_ratings pmr ON pmr.game_mode = gm.id AND pmr.user_id = ${sqlLiteral(userId)}
-            WHERE gm.is_active = true),
+            WHERE gm.is_active = true),`}
   games_played = ${gamesPlayed + 1},
   games_won = ${(profile.games_won as number) + (isWin ? 1 : 0)},
   ${perModeKey} = ${currentPerMode + 1},

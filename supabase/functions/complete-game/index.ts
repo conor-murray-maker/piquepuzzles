@@ -914,6 +914,8 @@ COMMIT;
       gameMode,
       puzzleIQ: newPuzzleIQ,
       puzzleIQDelta,
+      isDailyChallenge,
+      iqDeltaApplied: iqDeltaApplied,
       streakUpdate: {
         currentStreak: streakResult.currentStreak,
         bestStreak: streakResult.bestStreak,

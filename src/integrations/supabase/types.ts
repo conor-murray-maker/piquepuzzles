@@ -695,6 +695,9 @@ export type Database = {
           daily_wins_today: number
           dark_mode: boolean
           display_name: string | null
+          first_hint_seen: boolean
+          first_loss_seen: boolean
+          first_tier_upgrade_seen: boolean
           games_played: number
           games_played_freecell: number
           games_played_klondike: number
@@ -704,6 +707,10 @@ export type Database = {
           last_celebrated_milestone: number
           last_streak_date: string | null
           last_win_date: string | null
+          onboarding_completed: boolean
+          onboarding_freecell_completed: boolean
+          onboarding_klondike_completed: boolean
+          onboarding_realm_completed: boolean
           pending_milestone: number | null
           premium_expires_at: string | null
           rating: number
@@ -723,6 +730,9 @@ export type Database = {
           daily_wins_today?: number
           dark_mode?: boolean
           display_name?: string | null
+          first_hint_seen?: boolean
+          first_loss_seen?: boolean
+          first_tier_upgrade_seen?: boolean
           games_played?: number
           games_played_freecell?: number
           games_played_klondike?: number
@@ -732,6 +742,10 @@ export type Database = {
           last_celebrated_milestone?: number
           last_streak_date?: string | null
           last_win_date?: string | null
+          onboarding_completed?: boolean
+          onboarding_freecell_completed?: boolean
+          onboarding_klondike_completed?: boolean
+          onboarding_realm_completed?: boolean
           pending_milestone?: number | null
           premium_expires_at?: string | null
           rating?: number
@@ -751,6 +765,9 @@ export type Database = {
           daily_wins_today?: number
           dark_mode?: boolean
           display_name?: string | null
+          first_hint_seen?: boolean
+          first_loss_seen?: boolean
+          first_tier_upgrade_seen?: boolean
           games_played?: number
           games_played_freecell?: number
           games_played_klondike?: number
@@ -760,6 +777,10 @@ export type Database = {
           last_celebrated_milestone?: number
           last_streak_date?: string | null
           last_win_date?: string | null
+          onboarding_completed?: boolean
+          onboarding_freecell_completed?: boolean
+          onboarding_klondike_completed?: boolean
+          onboarding_realm_completed?: boolean
           pending_milestone?: number | null
           premium_expires_at?: string | null
           rating?: number

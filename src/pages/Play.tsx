@@ -372,14 +372,20 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
   if (gameMode === 'realm') {
     return (
-      <RealmBoard
-        key={gameKey}
-        onGameEnd={handleGameEnd as any}
-        onGiveUp={handleGiveUp as any}
-        initialSeed={effectiveSeed}
-        dealUuid={effectiveDealUuid}
-        gridSize={queuedDeal?.minMoves}
-      />
+      <>
+        {showRealmOverlay && (
+          <RealmOnboardingOverlay onDismiss={() => setShowRealmOverlay(false)} />
+        )}
+        <RealmBoard
+          key={gameKey}
+          onGameEnd={handleGameEnd as any}
+          onGiveUp={handleGiveUp as any}
+          initialSeed={effectiveSeed}
+          dealUuid={effectiveDealUuid}
+          gridSize={isOnboarding ? 5 : queuedDeal?.minMoves}
+          isOnboarding={isOnboarding}
+        />
+      </>
     );
   }
 

@@ -170,11 +170,31 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
     void refreshProfile();
 
+    // Mark onboarding complete on first game
+    if (isOnboarding) {
+      void onboarding.markOnboardingComplete();
+      void onboarding.markModeComplete(gameMode);
+    }
+
+    // Show IQ reveal on first game completion
+    const isFirstGame = isOnboarding || (profile?.games_played === 0);
+    if (isFirstGame && result) {
+      setRevealIQ(result.newRating);
+      // Ensure minimum 800ms completing screen, then show IQ reveal
+      const elapsed = Date.now() - completingStart;
+      const remaining = Math.max(0, 800 - elapsed);
+      setTimeout(() => {
+        setPhase('completing'); // keep completing phase during IQ reveal
+        setShowIQReveal(true);
+      }, remaining);
+      return;
+    }
+
     // Ensure minimum 800ms display of completing screen
     const elapsed = Date.now() - completingStart;
     const remaining = Math.max(0, 800 - elapsed);
     setTimeout(() => setPhase('postgame'), remaining);
-  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile]);
+  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile, isOnboarding, onboarding]);
 
   const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
     if (gameEndInFlight.current) return;

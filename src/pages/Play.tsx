@@ -293,6 +293,17 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }
 
   if (gamePhase === 'completing') {
+    if (showIQReveal) {
+      return (
+        <IQRevealOverlay
+          targetIQ={revealIQ}
+          onComplete={() => {
+            setShowIQReveal(false);
+            setPhase('postgame');
+          }}
+        />
+      );
+    }
     return <CompletingScreen resultType={completingResultType} />;
   }
 

@@ -31,16 +31,21 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const drawModeParam = searchParams.get('drawMode');
   const dailyDate = searchParams.get('daily');
   const dailyDealId = searchParams.get('dailyDealId');
+  const isOnboarding = searchParams.get('onboarding') === 'true';
   const initialSeed = seedParam ? parseInt(seedParam) : undefined;
   const drawMode = (drawModeParam ? parseInt(drawModeParam) : 3) as DrawMode;
 
   const { user, profile, refreshProfile } = useAuth();
   const { saveGameResult } = useGamePersistence();
   const { popNextDeal } = useDealQueue();
+  const onboarding = useOnboarding();
   const [gamePhase, setGamePhase] = useState<'playing' | 'completing' | 'postgame'>('playing');
   const [completingResultType, setCompletingResultType] = useState<'win' | 'loss' | 'giveup'>('win');
   const [queuedDeal, setQueuedDeal] = useState<QueuedDeal | null>(null);
   const [loading, setLoading] = useState(initialSeed === undefined);
+  const [showRealmOverlay, setShowRealmOverlay] = useState(isOnboarding && gameMode === 'realm');
+  const [showIQReveal, setShowIQReveal] = useState(false);
+  const [revealIQ, setRevealIQ] = useState(1000);
   const [lastResult, setLastResult] = useState<{
     won: boolean; moves: number; difficulty: string; hintsUsed: number;
     undosUsed: number; difficultyScore: number; startTime: number; elapsedSeconds: number;

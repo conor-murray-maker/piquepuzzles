@@ -23,6 +23,13 @@ interface Profile {
   daily_challenge_completed_today: boolean;
   pending_milestone: number | null;
   dark_mode: boolean;
+  onboarding_completed: boolean;
+  onboarding_realm_completed: boolean;
+  onboarding_klondike_completed: boolean;
+  onboarding_freecell_completed: boolean;
+  first_loss_seen: boolean;
+  first_hint_seen: boolean;
+  first_tier_upgrade_seen: boolean;
 }
 
 interface SubscriptionInfo {

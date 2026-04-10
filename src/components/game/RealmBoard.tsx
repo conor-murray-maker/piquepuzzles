@@ -11,6 +11,7 @@ import { X, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { haptic } from '@/lib/haptics';
 import { HintBanner } from './HintBanner';
+import { RealmTooltips } from '@/components/onboarding/RealmTooltips';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -57,6 +58,7 @@ interface RealmBoardProps {
   initialSeed?: number;
   dealUuid?: string;
   gridSize?: number;
+  isOnboarding?: boolean;
 }
 
 const DRAG_HOLD_MS = 150;
@@ -99,7 +101,7 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
   );
 }
 
-export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize }: RealmBoardProps) {
+export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize, isOnboarding }: RealmBoardProps) {
   const [state, setState] = useState<RealmState | null>(() => {
     if (initialSeed !== undefined) {
       const fresh = createRealmGame(initialSeed, gridSize);
@@ -664,6 +666,15 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
       </motion.div>
 
       <HintBanner message={hintMessage} duration={3000} />
+
+      {/* Onboarding tooltips */}
+      <RealmTooltips
+        crownsPlaced={crownsPlaced}
+        totalCrowns={state.size}
+        movesMade={state.moves}
+        gameStartedMs={0}
+        isOnboarding={!!isOnboarding}
+      />
 
       {/* Action bar */}
       <GameActionBar

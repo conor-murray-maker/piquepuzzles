@@ -7,7 +7,10 @@ import { RealmBoard, clearRealmStorage } from '@/components/game/RealmBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
 import { DailyChallengeResultScreen } from '@/components/game/DailyChallengeResultScreen';
 import { CompletingScreen } from '@/components/game/CompletingScreen';
+import { RealmOnboardingOverlay } from '@/components/onboarding/RealmOnboardingOverlay';
+import { IQRevealOverlay } from '@/components/onboarding/IQRevealOverlay';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOnboarding } from '@/hooks/useOnboarding';
 import { useGamePersistence, GameResult } from '@/hooks/useGamePersistence';
 import { useDealQueue, QueuedDeal } from '@/hooks/useDealQueue';
 import { ChallengeService } from '@/services/ChallengeService';
@@ -28,16 +31,21 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const drawModeParam = searchParams.get('drawMode');
   const dailyDate = searchParams.get('daily');
   const dailyDealId = searchParams.get('dailyDealId');
+  const isOnboarding = searchParams.get('onboarding') === 'true';
   const initialSeed = seedParam ? parseInt(seedParam) : undefined;
   const drawMode = (drawModeParam ? parseInt(drawModeParam) : 3) as DrawMode;
 
   const { user, profile, refreshProfile } = useAuth();
   const { saveGameResult } = useGamePersistence();
   const { popNextDeal } = useDealQueue();
+  const onboarding = useOnboarding();
   const [gamePhase, setGamePhase] = useState<'playing' | 'completing' | 'postgame'>('playing');
   const [completingResultType, setCompletingResultType] = useState<'win' | 'loss' | 'giveup'>('win');
   const [queuedDeal, setQueuedDeal] = useState<QueuedDeal | null>(null);
   const [loading, setLoading] = useState(initialSeed === undefined);
+  const [showRealmOverlay, setShowRealmOverlay] = useState(isOnboarding && gameMode === 'realm');
+  const [showIQReveal, setShowIQReveal] = useState(false);
+  const [revealIQ, setRevealIQ] = useState(1000);
   const [lastResult, setLastResult] = useState<{
     won: boolean; moves: number; difficulty: string; hintsUsed: number;
     undosUsed: number; difficultyScore: number; startTime: number; elapsedSeconds: number;
@@ -162,11 +170,31 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
     void refreshProfile();
 
+    // Mark onboarding complete on first game
+    if (isOnboarding) {
+      void onboarding.markOnboardingComplete();
+      void onboarding.markModeComplete(gameMode);
+    }
+
+    // Show IQ reveal on first game completion
+    const isFirstGame = isOnboarding || (profile?.games_played === 0);
+    if (isFirstGame && result) {
+      setRevealIQ(result.newRating);
+      // Ensure minimum 800ms completing screen, then show IQ reveal
+      const elapsed = Date.now() - completingStart;
+      const remaining = Math.max(0, 800 - elapsed);
+      setTimeout(() => {
+        setPhase('completing'); // keep completing phase during IQ reveal
+        setShowIQReveal(true);
+      }, remaining);
+      return;
+    }
+
     // Ensure minimum 800ms display of completing screen
     const elapsed = Date.now() - completingStart;
     const remaining = Math.max(0, 800 - elapsed);
     setTimeout(() => setPhase('postgame'), remaining);
-  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile]);
+  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile, isOnboarding, onboarding]);
 
   const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
     if (gameEndInFlight.current) return;
@@ -265,6 +293,17 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   }
 
   if (gamePhase === 'completing') {
+    if (showIQReveal) {
+      return (
+        <IQRevealOverlay
+          targetIQ={revealIQ}
+          onComplete={() => {
+            setShowIQReveal(false);
+            setPhase('postgame');
+          }}
+        />
+      );
+    }
     return <CompletingScreen resultType={completingResultType} />;
   }
 
@@ -333,14 +372,20 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
   if (gameMode === 'realm') {
     return (
-      <RealmBoard
-        key={gameKey}
-        onGameEnd={handleGameEnd as any}
-        onGiveUp={handleGiveUp as any}
-        initialSeed={effectiveSeed}
-        dealUuid={effectiveDealUuid}
-        gridSize={queuedDeal?.minMoves}
-      />
+      <>
+        {showRealmOverlay && (
+          <RealmOnboardingOverlay onDismiss={() => setShowRealmOverlay(false)} />
+        )}
+        <RealmBoard
+          key={gameKey}
+          onGameEnd={handleGameEnd as any}
+          onGiveUp={handleGiveUp as any}
+          initialSeed={effectiveSeed}
+          dealUuid={effectiveDealUuid}
+          gridSize={isOnboarding ? 5 : queuedDeal?.minMoves}
+          isOnboarding={isOnboarding}
+        />
+      </>
     );
   }
 

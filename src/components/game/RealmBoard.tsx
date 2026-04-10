@@ -100,7 +100,7 @@ function StarParticle({ x, y, delay, angle }: { x: number; y: number; delay: num
   );
 }
 
-export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize }: RealmBoardProps) {
+export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSize, isOnboarding }: RealmBoardProps) {
   const [state, setState] = useState<RealmState | null>(() => {
     if (initialSeed !== undefined) {
       const fresh = createRealmGame(initialSeed, gridSize);

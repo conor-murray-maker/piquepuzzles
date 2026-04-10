@@ -5,9 +5,8 @@ import { PiqueIQPanel } from '@/components/game/PiqueIQPanel';
 import { DailyChallengeCard } from '@/components/game/DailyChallengeCard';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { useAuth } from '@/contexts/AuthContext';
-import { OnboardingCarousel } from '@/components/onboarding/OnboardingCarousel';
+import { WelcomeScreen } from '@/components/onboarding/WelcomeScreen';
 import { WelcomeBackBanner } from '@/components/onboarding/WelcomeBackBanner';
-import { useState, useEffect } from 'react';
 
 function SkeletonCard({ className = '' }: { className?: string }) {
   return <div className={`stat-card animate-pulse bg-muted/50 ${className}`} />;
@@ -17,23 +16,13 @@ export default function Index() {
   const navigate = useNavigate();
   const { profile, isDark, toggleDarkMode } = useAuth();
   const stats = usePlayerStats();
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Check if first-time user
-  useEffect(() => {
-    if (profile && profile.games_played === 0) {
-      const onboardingDone = localStorage.getItem('pique-onboarding-done');
-      if (!onboardingDone) {
-        setShowOnboarding(true);
-      }
-    }
-  }, [profile]);
+  // Show welcome screen for first-time signed-in users
+  const isNewUser = profile && profile.games_played === 0 && !profile.onboarding_completed;
 
-  const handleOnboardingComplete = () => {
-    localStorage.setItem('pique-onboarding-done', 'true');
-    setShowOnboarding(false);
-  };
-
+  if (isNewUser) {
+    return <WelcomeScreen />;
+  }
 
   const container = {
     hidden: { opacity: 0 },
@@ -43,17 +32,6 @@ export default function Index() {
     hidden: { opacity: 0, y: 12 },
     show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
   };
-
-  const userName = profile?.display_name?.split(' ')[0] || 'Player';
-
-  if (showOnboarding) {
-    return (
-      <OnboardingCarousel
-        userName={userName}
-        onComplete={handleOnboardingComplete}
-      />
-    );
-  }
 
   return (
     <div
@@ -84,7 +62,6 @@ export default function Index() {
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
         {stats.loading ? (
-          // Skeleton loading state
           <div className="w-full max-w-md space-y-8">
             <div className="text-center space-y-3">
               <div className="h-8 w-48 bg-muted/50 rounded-lg mx-auto animate-pulse" />
@@ -184,7 +161,6 @@ export default function Index() {
           </motion.div>
         )}
       </main>
-
     </div>
   );
 }

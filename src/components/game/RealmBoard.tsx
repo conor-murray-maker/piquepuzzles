@@ -667,6 +667,15 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
 
       <HintBanner message={hintMessage} duration={3000} />
 
+      {/* Onboarding tooltips */}
+      <RealmTooltips
+        crownsPlaced={crownsPlaced}
+        totalCrowns={state.size}
+        movesMade={state.moves}
+        gameStartedMs={0}
+        isOnboarding={!!isOnboarding}
+      />
+
       {/* Action bar */}
       <GameActionBar
         onHint={handleHint}

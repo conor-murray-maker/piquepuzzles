@@ -32,6 +32,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const dailyDate = searchParams.get('daily');
   const dailyDealId = searchParams.get('dailyDealId');
   const isOnboarding = searchParams.get('onboarding') === 'true';
+  const isTestMode = searchParams.get('testMode') === 'true';
   const initialSeed = seedParam ? parseInt(seedParam) : undefined;
   const drawMode = (drawModeParam ? parseInt(drawModeParam) : 3) as DrawMode;
 

@@ -114,7 +114,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
         size: p.size,
         dds: p.dds,
         deduction: { solvable: true, forcedSteps: 5, cascadeChain: 5 },
-        regionColors: p.regionColors as string[],
+        regionColors: [...p.regionColors],
         spatialSurprise: 0,
       };
       const s = createRealmStateFromDeal(deal, 0);

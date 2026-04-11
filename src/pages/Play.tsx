@@ -92,7 +92,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       popInFlight.current = false;
       setLoading(false);
     });
-  }, [gameMode, drawMode, initialSeed, popNextDeal]);
+  }, [isOnboarding, gameMode, drawMode, initialSeed, popNextDeal]);
 
   // Fetch challenge data
   useEffect(() => {

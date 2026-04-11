@@ -62,13 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionInfo>(defaultSub);
-  const [isDark, setIsDark] = useState(() => {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  const [isDark, setIsDark] = useState(false);
 
-  // Apply dark class on initial mount (system preference)
+  // Apply light mode on initial mount (default)
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.classList.remove('dark');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

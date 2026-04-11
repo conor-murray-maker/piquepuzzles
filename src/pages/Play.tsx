@@ -7,7 +7,7 @@ import { RealmBoard, clearRealmStorage } from '@/components/game/RealmBoard';
 import { PostGameScreen } from '@/components/game/PostGameScreen';
 import { DailyChallengeResultScreen } from '@/components/game/DailyChallengeResultScreen';
 import { CompletingScreen } from '@/components/game/CompletingScreen';
-import { RealmOnboardingOverlay } from '@/components/onboarding/RealmOnboardingOverlay';
+import { RealmTutorial } from '@/components/onboarding/RealmTutorial';
 import { IQRevealOverlay } from '@/components/onboarding/IQRevealOverlay';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnboarding } from '@/hooks/useOnboarding';
@@ -44,7 +44,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const [completingResultType, setCompletingResultType] = useState<'win' | 'loss' | 'giveup'>('win');
   const [queuedDeal, setQueuedDeal] = useState<QueuedDeal | null>(null);
   const [loading, setLoading] = useState(initialSeed === undefined);
-  const [showRealmOverlay, setShowRealmOverlay] = useState(isOnboarding && gameMode === 'realm');
+  const [showRealmTutorial, setShowRealmTutorial] = useState(isOnboarding && gameMode === 'realm');
   const [showIQReveal, setShowIQReveal] = useState(false);
   const [revealIQ, setRevealIQ] = useState(1000);
   const [lastResult, setLastResult] = useState<{
@@ -404,21 +404,24 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const effectiveDealUuid = queuedDeal?.dealUuid;
 
   if (gameMode === 'realm') {
-    return (
-      <>
-        {showRealmOverlay && (
-          <RealmOnboardingOverlay onDismiss={() => setShowRealmOverlay(false)} />
-        )}
-        <RealmBoard
-          key={gameKey}
-          onGameEnd={handleGameEnd as any}
-          onGiveUp={handleGiveUp as any}
-          initialSeed={effectiveSeed}
-          dealUuid={effectiveDealUuid}
-          gridSize={isOnboarding ? 5 : queuedDeal?.minMoves}
-          isOnboarding={isOnboarding}
+    if (showRealmTutorial) {
+      return (
+        <RealmTutorial
+          onComplete={() => setShowRealmTutorial(false)}
+          onDismiss={() => setShowRealmTutorial(false)}
         />
-      </>
+      );
+    }
+    return (
+      <RealmBoard
+        key={gameKey}
+        onGameEnd={handleGameEnd as any}
+        onGiveUp={handleGiveUp as any}
+        initialSeed={effectiveSeed}
+        dealUuid={effectiveDealUuid}
+        gridSize={isOnboarding ? 5 : queuedDeal?.minMoves}
+        isOnboarding={isOnboarding}
+      />
     );
   }
 

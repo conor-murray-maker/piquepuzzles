@@ -362,14 +362,22 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       startTime: lastResult.startTime,
     } as KlondikeState;
 
+    const handleTestModeHome = () => {
+      if (isTestMode) {
+        localStorage.removeItem('pique-guest-mode');
+        clearRealmStorage();
+      }
+      navigate(isTestMode ? '/landing' : '/');
+    };
+
     return (
       <PostGameScreen
         gameState={fakeState}
         currentRating={ratingResult?.newRating ?? profile?.rating ?? 1000}
         previousRating={ratingResult?.previousRating}
         ratingChange={ratingResult?.ratingChange ?? 0}
-        onPlayAgain={handlePlayAgain}
-        onGoHome={() => navigate('/')}
+        onPlayAgain={isTestMode ? handleTestModeHome : handlePlayAgain}
+        onGoHome={handleTestModeHome}
         elapsedSeconds={lastResult.elapsedSeconds}
         gameMode={gameMode}
         dealSeed={lastResult.seed}

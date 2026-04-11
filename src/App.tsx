@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { GuestProvider } from "@/contexts/GuestContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { BottomNav } from "@/components/BottomNav";
+import { WelcomeScreen } from "@/components/onboarding/WelcomeScreen";
 import { AddToHomeScreen } from "@/components/onboarding/AddToHomeScreen";
 import { GuestBanner, GuestSignInModal } from "@/components/onboarding/GuestSignInPrompt";
 import { Suspense, lazy, useState } from "react";
@@ -75,6 +76,7 @@ function AppContent() {
           <Route path="/landing" element={<PublicOnlyRoute><Landing /></PublicOnlyRoute>} />
           <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/welcome-test" element={<WelcomeScreen testMode />} />
           <Route path="/challenge/:id" element={<Challenge />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/play" element={<GuestOrAuthRoute><Play onActiveGameChange={setIsGameActive} /></GuestOrAuthRoute>} />

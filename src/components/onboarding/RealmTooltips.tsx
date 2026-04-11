@@ -58,14 +58,14 @@ export function RealmTooltips({ crownsPlaced, totalCrowns, movesMade, gameStarte
 
   // Auto-dismiss tooltips on any interaction (movesMade changes)
   useEffect(() => {
-    if (activeTooltip === 1 && movesMade > 0) {
+    if (activeTooltip === 1 && movesMade > 0 && crownsPlaced > 0) {
       dismiss();
     }
-  }, [movesMade, activeTooltip, dismiss]);
+  }, [movesMade, crownsPlaced, activeTooltip, dismiss]);
 
   const getMessage = () => {
     switch (activeTooltip) {
-      case 1: return 'Start with the smallest region you can find. Fewer cells means fewer choices.';
+      case 1: return 'Start with the highlighted cell. This opening crown is forced.';
       case 2: return 'Long press a cell to place a crown. Tap again to cycle through states.';
       case 3: return 'Use the regions to narrow it down. Each coloured region needs exactly one.';
       default: return '';

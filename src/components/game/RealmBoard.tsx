@@ -66,7 +66,6 @@ interface RealmBoardProps {
 const DRAG_HOLD_MS = 150;
 const GOLD_COLOR = '#F4C430';
 const NAVY_COLOR = '#1B2340';
-const ONBOARDING_OPENING_CROWN = { row: 0, col: 3 } as const;
 
 // Dark-mode specific region palette — high saturation, lighter fills for dark backgrounds
 const REALM_COLORS_DARK: Record<string, string> = {
@@ -516,9 +515,6 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   }
 
   const crownsPlaced = state.grid.flat().filter(c => c.state === 'crown').length;
-  const openingGuideCell = isOnboarding && state.grid[ONBOARDING_OPENING_CROWN.row]?.[ONBOARDING_OPENING_CROWN.col]?.state !== 'crown'
-    ? ONBOARDING_OPENING_CROWN
-    : null;
 
   return (
     <div
@@ -600,8 +596,6 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
         {state.grid.flat().map((cell) => {
           const isError = errorCells.has(`${cell.row},${cell.col}`);
           const isHint = hintCell?.row === cell.row && hintCell?.col === cell.col;
-          const isOpeningGuide = openingGuideCell?.row === cell.row && openingGuideCell?.col === cell.col;
-          const isHighlighted = isHint || isOpeningGuide;
           const baseColor = state.regionColors[cell.region];
           const color = isDark ? (REALM_COLORS_DARK[baseColor] || baseColor) : baseColor;
 
@@ -634,14 +628,14 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
                 borderBottom: borderBottom ? `${regionBorderWidth} solid ${color}` : innerBorder,
                 borderRight: borderRight ? `${regionBorderWidth} solid ${color}` : innerBorder,
                 boxShadow: isError ? 'inset 0 0 0 2px #ef4444'
-                  : isHighlighted ? '0 0 0 3px #FFB800, 0 0 12px rgba(255,184,0,0.4)'
+                  : isHint ? '0 0 0 3px #FFB800, 0 0 12px rgba(255,184,0,0.4)'
                   : 'none',
                 opacity: hintCell && !isHint ? 0.4 : 1,
                 transition: 'border-color 0.3s, box-shadow 0.3s, opacity 0.2s',
-                zIndex: isHighlighted ? 10 : 'auto',
+                zIndex: isHint ? 10 : 'auto',
               }}
-               animate={isError ? { scale: [1, 1.05, 1] } : isHighlighted ? { scale: [1, 1.05, 1], opacity: [1, 0.7, 1] } : {}}
-               transition={isHighlighted ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
+               animate={isError ? { scale: [1, 1.05, 1] } : isHint ? { scale: [1, 1.05, 1], opacity: [1, 0.7, 1] } : {}}
+               transition={isHint ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
             >
               {cell.state === 'crown' && (
                 <motion.div

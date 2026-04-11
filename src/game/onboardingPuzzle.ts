@@ -1,11 +1,11 @@
 /**
  * Onboarding puzzle configuration — seed-based.
  *
- * Uses seed 191 which produces a verified 5×5 puzzle with:
+ * Uses seed 156 which produces a verified 5×5 puzzle with:
  * - Unique solution (single valid placement)
- * - Fully deductive after first crown at (0,3)
- * - Deduction order: (0,3) → (1,0) → (4,1) → (2,2) → (3,4)
- * - Region sizes: R0=7, R1=5, R2=3, R3=6, R4=4
+ * - Stronger opening: two eliminations, then a full forced-crown chain
+ * - Forced order after eliminations: (0,1) → (2,2) → (4,3) → (1,4) → (3,0)
+ * - Region sizes: R0=6, R1=7, R2=6, R3=3, R4=3
  *
  * The puzzle is generated client-side using the standard
  * createRealmGame function with this fixed seed, guaranteeing
@@ -13,10 +13,10 @@
  */
 
 export const ONBOARDING_REALM_PUZZLE = {
-  seed: 191,
+  seed: 156,
   size: 5,
   difficulty: 'Easy' as const,
-  dds: 20,
+  dds: 38,
   dealUuid: 'onboarding-puzzle-v1',
   puzzleName: 'Your First Puzzle',
 } as const;

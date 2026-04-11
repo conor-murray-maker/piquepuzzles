@@ -65,7 +65,7 @@ export function RealmTooltips({ crownsPlaced, totalCrowns, movesMade, gameStarte
 
   const getMessage = () => {
     switch (activeTooltip) {
-      case 1: return 'Tap a cell to eliminate it. Start by ruling out where a crown can\'t go.';
+      case 1: return 'Look for regions with fewer cells. Less choice means easier logic.';
       case 2: return 'Long press a cell to place a crown. Tap again to cycle through states.';
       case 3: return 'Use the regions to narrow it down. Each coloured region needs exactly one.';
       default: return '';

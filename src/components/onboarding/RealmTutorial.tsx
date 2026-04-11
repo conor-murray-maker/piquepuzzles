@@ -5,33 +5,26 @@ import { Button } from '@/components/ui/button';
 import { CrownIcon } from '@/components/game/CrownIcon';
 
 /*
- * Tutorial puzzle: 4×4 grid with 4 regions.
+ * Tutorial puzzle: 4×4 grid with 4 regions (all contiguous).
  *
- * Region A (single cell): (0,1) — forces first crown immediately.
- * Region B: (0,2), (0,3), (1,3) — top-right area.
- * Region C: (1,0), (1,1), (1,2), (2,0) — middle-left block + top-left.
- * Region D: (2,1), (2,2), (2,3), (3,0), (3,1), (3,2), (3,3) — bottom block.
+ * Region A (single cell): (0,1)
+ * Region B: (0,2), (0,3), (1,3)
+ * Region C: (0,0), (1,0), (1,1), (1,2), (2,0)
+ * Region D: (2,1), (2,2), (2,3), (3,0), (3,1), (3,2), (3,3)
  *
- * All regions are contiguous. (0,0) belongs to Region C, connecting
- * to (1,0) which is also Region C.
+ * Solution: A:(0,1) B:(1,3) C:(2,0) D:(3,2)
  *
- * Solution (verified no adjacency violations):
- *   Crown A: (0,1)  Crown B: (1,3)  Crown C: (2,0)  Crown D: (3,2)
- *
- * Adjacency checks:
- *   (0,1)↔(1,3): |cols|=2 → NOT adjacent ✓
- *   (1,3)↔(2,0): |cols|=3 → NOT adjacent ✓
- *   (2,0)↔(3,2): |cols|=2 → NOT adjacent ✓
- *   All other pairs even farther apart ✓
- *
- * Every placement is forced by elimination:
- *   1. Region A has 1 cell → crown at (0,1) → eliminates row 0, col 1
- *   2. Region B: (0,2)→row0, (0,3)→row0, only (1,3) left → forced
- *   3. Crown at (1,3) → eliminates row 1, col 3
- *   4. Region C: (0,0)→row0, (1,0)→row1, (1,1)→row1, (1,2)→row1, only (2,0) left → forced
- *   5. Crown at (2,0) → eliminates row 2, col 0
- *   6. Region D: (2,1)→row2, (2,2)→row2, (2,3)→row2+col3,
- *      (3,0)→col0, (3,1)→adj(2,0), (3,3)→col3, only (3,2) left → forced
+ * Step flow:
+ *   0: Welcome
+ *   1: Tap Crown A (single cell) – interactive
+ *   2: Row rule (amber row highlight)
+ *   3: Column rule (amber col highlight)
+ *   4: Tap Crown B – interactive (forced by row elim)
+ *   5: Region rule (region B glow after Crown B cascade)
+ *   6: Adjacency rule
+ *   7: Tap Crown C – guided interactive
+ *   8: Tap Crown D – guided interactive
+ *   9: Win celebration + handoff
  */
 
 const GRID_SIZE = 4;
@@ -45,14 +38,6 @@ const REGION_MAP: number[][] = [
 
 const REGION_COLORS = ['#FFB5B5', '#B5D5FF', '#B5FFD5', '#FFE5B5'];
 const REGION_BORDER_COLORS = ['#E88A8A', '#8AB8E8', '#8AE8B5', '#E8C88A'];
-
-// Solution crowns in order of forced placement
-const SOLUTION: [number, number][] = [
-  [0, 1], // Crown A – Region 0 (single cell)
-  [1, 3], // Crown B – Region 1
-  [2, 0], // Crown C – Region 2
-  [3, 2], // Crown D – Region 3
-];
 
 type CellState = 'empty' | 'x' | 'crown';
 
@@ -126,21 +111,6 @@ function getAdjacentCells(row: number, col: number): [number, number][] {
 
 // ── Step definitions ────────────────────────────────────────────
 
-/*
- * FLOW OVERVIEW:
- *
- * 0: Welcome
- * 1: Tap Region A (single cell) — interactive
- * 2: Row elimination stage — "Got it" to advance
- * 3: Column elimination stage — "Got it" to advance
- * 4: Region elimination stage — "Got it" to advance
- * 5: Tap Region B crown — interactive
- * 6: Adjacency rule explanation
- * 7: Tap Region C crown — interactive (guided)
- * 8: Tap Region D crown — interactive (guided)
- * 9: Win celebration + handoff
- */
-
 interface TutorialStep {
   title: string;
   text: string;
@@ -176,19 +146,19 @@ const STEPS: TutorialStep[] = [
     text: 'The same goes for columns.',
     cta: 'Got it',
   },
-  // 4: Region Xs revealed (staged)
-  {
-    title: 'Region rule',
-    text: 'And each colour region can only have one crown.',
-    cta: 'Got it',
-  },
-  // 5: Place crown B — forced by elimination
+  // 4: Place crown B — forced by elimination
   {
     title: 'Next placement',
     text: 'The top row is eliminated. Only one cell remains in this region. Tap it.',
     cta: 'Show me',
     interactiveCell: [1, 3],
     autoAdvance: true,
+  },
+  // 5: Region rule — shown after Crown B with region B glow
+  {
+    title: 'Region rule',
+    text: 'Each colour region can also only have one crown. This region is done.',
+    cta: 'Got it',
   },
   // 6: Adjacency rule
   {
@@ -227,12 +197,11 @@ function createEmptyGrid(): CellState[][] {
 // ── Highlight types ─────────────────────────────────────────────
 
 interface HighlightState {
-  rowHighlight: number | null;      // row index to highlight in amber
-  colHighlight: number | null;      // col index to highlight in amber
-  regionGlow: number | null;        // region index to glow
+  rowHighlight: number | null;
+  colHighlight: number | null;
+  regionGlow: number | null;
   adjacencyHighlight: boolean;
   highlightCell: [number, number] | null;
-  xTimestamps: Map<string, number>; // cell key → timestamp for stagger
 }
 
 const EMPTY_HIGHLIGHTS: HighlightState = {
@@ -241,7 +210,6 @@ const EMPTY_HIGHLIGHTS: HighlightState = {
   regionGlow: null,
   adjacencyHighlight: false,
   highlightCell: null,
-  xTimestamps: new Map(),
 };
 
 // ── Component ───────────────────────────────────────────────────
@@ -275,24 +243,32 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
   }, [clearTimers]);
 
   // ── Build grid state for each step ──────────────────────────
+
+  // Grid state per step:
+  // 0: empty
+  // 1: empty, highlight (0,1)
+  // 2: crown A + row Xs only
+  // 3: crown A + row Xs + col Xs
+  // 4: crown A + full elim, highlight (1,3)
+  // 5: crown A + crown B full elim (region B glow)
+  // 6: crown A + crown B full elim (adjacency highlights)
+  // 7: crown A + B full elim, highlight (2,0)
+  // 8: crown A + B + C full elim, highlight (3,2)
+  // 9: all 4 crowns placed
+
   const buildGridForStep = useCallback((s: number): CellState[][] => {
     let g = createEmptyGrid();
 
-    if (s >= 2 && s <= 4) {
-      // Crown A placed — but Xs are shown progressively
+    if (s === 2) {
       g = applyCrown(g, 0, 1);
-      if (s >= 2) g = applyRowEliminations(g, 0, 1);
-      if (s >= 3) g = applyColumnEliminations(g, 0, 1);
-      if (s >= 4) {
-        g = applyRegionEliminations(g, 0, 1);
-        g = applyAdjacencyEliminations(g, 0, 1);
-      }
-    } else if (s === 5) {
+      g = applyRowEliminations(g, 0, 1);
+    } else if (s === 3) {
+      g = applyCrown(g, 0, 1);
+      g = applyRowEliminations(g, 0, 1);
+      g = applyColumnEliminations(g, 0, 1);
+    } else if (s === 4) {
       g = applyFullEliminations(g, 0, 1);
-    } else if (s === 6) {
-      g = applyFullEliminations(g, 0, 1);
-      g = applyFullEliminations(g, 1, 3);
-    } else if (s === 7) {
+    } else if (s === 5 || s === 6 || s === 7) {
       g = applyFullEliminations(g, 0, 1);
       g = applyFullEliminations(g, 1, 3);
     } else if (s === 8) {
@@ -317,7 +293,7 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
     setAnimating(false);
     setWinCelebration(false);
 
-    const hl: HighlightState = { ...EMPTY_HIGHLIGHTS, xTimestamps: new Map() };
+    const hl: HighlightState = { ...EMPTY_HIGHLIGHTS };
 
     switch (step) {
       case 1:
@@ -330,10 +306,10 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
         hl.colHighlight = 1;
         break;
       case 4:
-        hl.regionGlow = 0;
+        hl.highlightCell = [1, 3];
         break;
       case 5:
-        hl.highlightCell = [1, 3];
+        hl.regionGlow = 1; // Region B
         break;
       case 6:
         hl.adjacencyHighlight = true;
@@ -352,28 +328,56 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
     setHighlights(hl);
   }, [step, buildGridForStep, clearTimers]);
 
-  // ── Staged crown animation for step 1 → steps 2/3/4 ────────
+  // ── Staged crown animation for step 1 → step 2 ─────────────
   const performStagedCrownAnimation = useCallback((targetRow: number, targetCol: number) => {
     if (animating) return;
     setAnimating(true);
     setHighlights(h => ({ ...h, highlightCell: null }));
 
-    // Step A: Place crown immediately
+    // Place crown immediately
     setGrid(prev => applyCrown(prev, targetRow, targetCol));
 
-    // Step B: Row Xs (200ms after crown)
+    // Row Xs after brief pause
     addTimer(() => {
       setGrid(prev => applyRowEliminations(prev, targetRow, targetCol));
       setHighlights(h => ({ ...h, rowHighlight: targetRow }));
     }, 200);
 
-    // Auto-advance to step 2 (row rule) after row Xs settle
+    // Auto-advance to step 2 (row rule copy)
     addTimer(() => {
       setStep(2);
     }, 900);
   }, [animating, addTimer]);
 
-  // ── Quick crown for steps 5, 7, 8 (non-staged) ─────────────
+  // ── Crown B placement for step 4 → step 5 (region rule) ────
+  const performCrownBAnimation = useCallback((targetRow: number, targetCol: number) => {
+    if (animating) return;
+    setAnimating(true);
+    setHighlights(h => ({ ...h, highlightCell: null }));
+
+    // Place crown
+    setGrid(prev => applyCrown(prev, targetRow, targetCol));
+
+    // Full cascade after pause
+    addTimer(() => {
+      setGrid(prev => {
+        let g = applyRowEliminations(prev, targetRow, targetCol);
+        g = applyColumnEliminations(g, targetRow, targetCol);
+        g = applyRegionEliminations(g, targetRow, targetCol);
+        g = applyAdjacencyEliminations(g, targetRow, targetCol);
+        return g;
+      });
+      // Highlight region B to teach the rule
+      setHighlights(h => ({ ...h, regionGlow: 1 }));
+    }, 200);
+
+    // Advance to step 5 (region rule copy)
+    addTimer(() => {
+      setStep(5);
+    }, 800);
+  }, [animating, addTimer]);
+
+  // ── Quick crown for steps 7, 8 ─────────────────────────────
   const performQuickCrown = useCallback((targetRow: number, targetCol: number, nextStep: number) => {
     if (animating) return;
     setAnimating(true);
@@ -381,7 +385,6 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
 
     setGrid(prev => applyCrown(prev, targetRow, targetCol));
 
-    // Apply all eliminations after brief pause
     addTimer(() => {
       setGrid(prev => {
         let g = applyRowEliminations(prev, targetRow, targetCol);
@@ -407,21 +410,17 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
 
     if (step === 1) {
       performStagedCrownAnimation(tr, tc);
-    } else if (step === 5) {
-      performQuickCrown(tr, tc, 6);
+    } else if (step === 4) {
+      performCrownBAnimation(tr, tc);
     } else if (step === 7) {
       performQuickCrown(tr, tc, 8);
     } else if (step === 8) {
-      // Last crown — go to win celebration
-      if (animating) return;
       setAnimating(true);
       setHighlights(h => ({ ...h, highlightCell: null }));
       setGrid(prev => applyFullEliminations(prev, tr, tc));
-      addTimer(() => {
-        setStep(9);
-      }, 600);
+      addTimer(() => setStep(9), 600);
     }
-  }, [step, animating, performStagedCrownAnimation, performQuickCrown, addTimer]);
+  }, [step, animating, performStagedCrownAnimation, performCrownBAnimation, performQuickCrown, addTimer]);
 
   // ── CTA handler ─────────────────────────────────────────────
   const handleCTA = useCallback(() => {
@@ -438,22 +437,20 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
       const [tr, tc] = currentStep.interactiveCell;
       if (step === 1) {
         performStagedCrownAnimation(tr, tc);
-      } else if (step === 5) {
-        performQuickCrown(tr, tc, 6);
+      } else if (step === 4) {
+        performCrownBAnimation(tr, tc);
       } else if (step === 7) {
         performQuickCrown(tr, tc, 8);
       } else if (step === 8) {
         setAnimating(true);
         setHighlights(h => ({ ...h, highlightCell: null }));
         setGrid(prev => applyFullEliminations(prev, tr, tc));
-        addTimer(() => {
-          setStep(9);
-        }, 600);
+        addTimer(() => setStep(9), 600);
       }
     } else {
       setStep(s => s + 1);
     }
-  }, [step, animating, onComplete, performStagedCrownAnimation, performQuickCrown, addTimer]);
+  }, [step, animating, onComplete, performStagedCrownAnimation, performCrownBAnimation, performQuickCrown, addTimer]);
 
   const handleBack = () => {
     if (step > 0) {
@@ -554,7 +551,6 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
                 const isRegionGlowing = highlights.regionGlow !== null && region === highlights.regionGlow;
                 const isAdjacencyZone = adjacencyCells.has(`${row}-${col}`);
 
-                // Amber highlight for row/column stages
                 const amberHighlight = isRowHighlighted || isColHighlighted;
 
                 return (
@@ -594,12 +590,11 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
                         }}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
                       />
                     )}
 
-                    {/* Region glow for step 4 */}
+                    {/* Region glow */}
                     {isRegionGlowing && (
                       <motion.div
                         className="absolute inset-0 rounded-[6px]"

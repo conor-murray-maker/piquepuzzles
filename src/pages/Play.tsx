@@ -135,46 +135,60 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       elapsedSeconds,
       seed,
     });
-    const previousRating = profile?.rating ?? 1000;
-    const isDaily = !!dailyDate;
-    const result = await saveGameResult(state, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
-    setRatingResult(result);
 
-    // Save challenge completion
-    if (challengeId && user) {
-      await ChallengeService.saveCompletion({
-        challengeId,
-        userId: user.id,
-        displayName: profile?.display_name || null,
-        moves: state.moves,
-        timeSeconds: elapsedSeconds,
-        rating: result?.newRating ?? previousRating,
-        ratingChange: result?.ratingChange ?? 0,
-        won: state.isWon,
-      });
-    }
+    let result: GameResult | null = null;
 
-    // Save daily challenge completion + set localStorage flag
-    if (dailyDate && dailyDealId && user) {
-      setDailyCompletedByDeal(dailyDealId, user.id);
-      await ChallengeService.saveDailyCompletion({
-        userId: user.id,
-        date: dailyDate,
-        dealId: dailyDealId,
-        result: state.isWon ? 'win' : 'loss',
-        actualMoves: state.moves,
-        actualTime: elapsedSeconds,
-        hintsUsed: state.hintsUsed,
-        finalDelta: result?.ratingChange ?? 0,
-      });
-    }
+    if (isTestMode) {
+      // Simulate a fake rating result without touching DB
+      const fakeRating = state.isWon ? 1020 + Math.floor(Math.random() * 30) : 985 + Math.floor(Math.random() * 15);
+      result = {
+        newRating: fakeRating,
+        previousRating: 1000,
+        ratingChange: fakeRating - 1000,
+      } as GameResult;
+      setRatingResult(result);
+    } else {
+      const previousRating = profile?.rating ?? 1000;
+      const isDaily = !!dailyDate;
+      result = await saveGameResult(state, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
+      setRatingResult(result);
 
-    void refreshProfile();
+      // Save challenge completion
+      if (challengeId && user) {
+        await ChallengeService.saveCompletion({
+          challengeId,
+          userId: user.id,
+          displayName: profile?.display_name || null,
+          moves: state.moves,
+          timeSeconds: elapsedSeconds,
+          rating: result?.newRating ?? previousRating,
+          ratingChange: result?.ratingChange ?? 0,
+          won: state.isWon,
+        });
+      }
 
-    // Mark onboarding complete on first game
-    if (isOnboarding) {
-      void onboarding.markOnboardingComplete();
-      void onboarding.markModeComplete(gameMode);
+      // Save daily challenge completion + set localStorage flag
+      if (dailyDate && dailyDealId && user) {
+        setDailyCompletedByDeal(dailyDealId, user.id);
+        await ChallengeService.saveDailyCompletion({
+          userId: user.id,
+          date: dailyDate,
+          dealId: dailyDealId,
+          result: state.isWon ? 'win' : 'loss',
+          actualMoves: state.moves,
+          actualTime: elapsedSeconds,
+          hintsUsed: state.hintsUsed,
+          finalDelta: result?.ratingChange ?? 0,
+        });
+      }
+
+      void refreshProfile();
+
+      // Mark onboarding complete on first game
+      if (isOnboarding) {
+        void onboarding.markOnboardingComplete();
+        void onboarding.markModeComplete(gameMode);
+      }
     }
 
     // Show IQ reveal on first game completion
@@ -195,7 +209,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
     const elapsed = Date.now() - completingStart;
     const remaining = Math.max(0, 800 - elapsed);
     setTimeout(() => setPhase('postgame'), remaining);
-  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile, isOnboarding, onboarding]);
+  }, [saveGameResult, setPhase, gameMode, challengeId, user, profile, dailyDate, dailyDealId, drawMode, refreshProfile, isOnboarding, isTestMode, onboarding]);
 
   const handleGiveUp = useCallback(async (state: KlondikeState | FreeCellState, elapsedSeconds: number) => {
     if (gameEndInFlight.current) return;

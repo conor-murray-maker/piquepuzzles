@@ -76,6 +76,10 @@ export default function Play({ onActiveGameChange }: PlayProps) {
 
   // Pop deal from pool on mount (only for regular games, not challenges/daily)
   useEffect(() => {
+    if (isOnboarding) {
+      setLoading(false);
+      return;
+    }
     if (initialSeed !== undefined || hasPopped.current || popInFlight.current) {
       if (initialSeed !== undefined) setLoading(false);
       return;
@@ -88,7 +92,7 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       popInFlight.current = false;
       setLoading(false);
     });
-  }, [gameMode, drawMode, initialSeed, popNextDeal]);
+  }, [isOnboarding, gameMode, drawMode, initialSeed, popNextDeal]);
 
   // Fetch challenge data
   useEffect(() => {

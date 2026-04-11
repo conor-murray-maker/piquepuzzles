@@ -51,6 +51,7 @@ export const ONBOARDING_REALM_PUZZLE = {
   /** Region colours — matching the REALM_COLORS palette */
   regionColors: ['#E8735A', '#2A9D8F', '#E9C46A', '#3A86FF', '#6A994E'],
 
+  puzzleName: 'Your First Puzzle',
   dealUuid: 'onboarding-puzzle-v1',
   difficulty: 'Easy' as const,
   dds: 20,

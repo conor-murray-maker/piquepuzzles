@@ -118,7 +118,7 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
         spatialSurprise: 0,
       };
       const s = createRealmStateFromDeal(deal, 0);
-      return { ...s, dealUuid: p.dealUuid, dealId: p.dealUuid, difficulty: p.difficulty, difficultyScore: p.dds };
+      return { ...s, dealUuid: p.dealUuid, dealId: p.dealUuid, difficulty: p.difficulty, difficultyScore: p.dds, puzzleName: p.puzzleName };
     }
     if (initialSeed !== undefined) {
       const fresh = createRealmGame(initialSeed, gridSize);

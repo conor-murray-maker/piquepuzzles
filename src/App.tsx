@@ -65,7 +65,8 @@ function AppContent() {
   const hideNav = (location.pathname === '/play' && isGameActive) ||
     location.pathname === '/auth' ||
     location.pathname === '/reset-password' ||
-    location.pathname === '/landing';
+    location.pathname === '/landing' ||
+    location.pathname === '/welcome-test';
 
   return (
     <>

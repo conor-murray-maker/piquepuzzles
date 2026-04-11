@@ -45,10 +45,18 @@ export default function Landing() {
       <LandingBottomCTA onSignIn={handleSignIn} onGuestPlay={handleGuestPlay} />
 
       <footer className="px-5 py-6">
-        <div className="max-w-md mx-auto text-center">
-          <a href="/privacy" className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors underline">
-            Privacy Policy
-          </a>
+        <div className="max-w-md mx-auto text-center space-y-3">
+          <button
+            onClick={() => navigate('/welcome-test')}
+            className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors underline"
+          >
+            Test Mode: First-Time Experience
+          </button>
+          <div>
+            <a href="/privacy" className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors underline">
+              Privacy Policy
+            </a>
+          </div>
         </div>
       </footer>
     </div>

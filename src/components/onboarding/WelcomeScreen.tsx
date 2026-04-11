@@ -17,7 +17,11 @@ const TIER_COLORS: Record<string, string> = {
   grandmaster: 'hsl(45, 100%, 50%)',
 };
 
-export function WelcomeScreen() {
+interface WelcomeScreenProps {
+  testMode?: boolean;
+}
+
+export function WelcomeScreen({ testMode }: WelcomeScreenProps) {
   const navigate = useNavigate();
   const [tierIndex, setTierIndex] = useState(-1);
 
@@ -34,6 +38,10 @@ export function WelcomeScreen() {
   }, []);
 
   const handleStart = () => {
+    if (testMode) {
+      navigate('/landing', { replace: true });
+      return;
+    }
     navigate('/play?mode=realm&onboarding=true', { replace: true });
   };
 

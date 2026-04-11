@@ -86,7 +86,14 @@ export function RealmTooltips({ crownsPlaced, totalCrowns, movesMade, gameStarte
         transition={{ duration: 0.2 }}
         onClick={dismiss}
       >
-        <div className="bg-foreground/90 text-background px-4 py-3 rounded-xl text-xs font-medium text-center max-w-sm backdrop-blur-sm shadow-lg">
+        <div className="px-4 py-3 rounded-xl text-xs font-medium text-center max-w-sm backdrop-blur-sm"
+          style={{
+            backgroundColor: '#FFFFFF',
+            color: '#1a1a1a',
+            border: '1px solid #E0E0E0',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          }}
+        >
           {getMessage()}
         </div>
       </motion.div>

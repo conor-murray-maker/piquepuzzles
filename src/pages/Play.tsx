@@ -403,6 +403,10 @@ export default function Play({ onActiveGameChange }: PlayProps) {
   const effectiveSeed = initialSeed ?? queuedDeal?.seed;
   const effectiveDealUuid = queuedDeal?.dealUuid;
 
+  // Fixed first-game deal for onboarding: lowest-DDS 5x5 Realm deal
+  const ONBOARDING_FIRST_GAME_SEED = 1082219183;
+  const ONBOARDING_FIRST_GAME_UUID = '4f637be9-7d3c-4da1-a707-7ed04a7c0fd2';
+
   if (gameMode === 'realm') {
     if (showRealmTutorial) {
       return (
@@ -412,13 +416,17 @@ export default function Play({ onActiveGameChange }: PlayProps) {
         />
       );
     }
+
+    const firstGameSeed = isOnboarding ? ONBOARDING_FIRST_GAME_SEED : effectiveSeed;
+    const firstGameUuid = isOnboarding ? ONBOARDING_FIRST_GAME_UUID : effectiveDealUuid;
+
     return (
       <RealmBoard
         key={gameKey}
         onGameEnd={handleGameEnd as any}
         onGiveUp={handleGiveUp as any}
-        initialSeed={effectiveSeed}
-        dealUuid={effectiveDealUuid}
+        initialSeed={firstGameSeed}
+        dealUuid={firstGameUuid}
         gridSize={isOnboarding ? 5 : queuedDeal?.minMoves}
         isOnboarding={isOnboarding}
       />

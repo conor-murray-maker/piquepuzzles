@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CrownIcon } from '@/components/game/CrownIcon';
 
@@ -9,8 +9,11 @@ import { CrownIcon } from '@/components/game/CrownIcon';
  *
  * Region A (single cell): (0,1) — forces first crown immediately.
  * Region B: (0,2), (0,3), (1,3) — top-right area.
- * Region C: (1,0), (1,1), (1,2), (2,0) — middle-left block.
- * Region D: (0,0), (2,1), (2,2), (2,3), (3,0), (3,1), (3,2), (3,3) — bottom + corner.
+ * Region C: (1,0), (1,1), (1,2), (2,0) — middle-left block + top-left.
+ * Region D: (2,1), (2,2), (2,3), (3,0), (3,1), (3,2), (3,3) — bottom block.
+ *
+ * All regions are contiguous. (0,0) belongs to Region C, connecting
+ * to (1,0) which is also Region C.
  *
  * Solution (verified no adjacency violations):
  *   Crown A: (0,1)  Crown B: (1,3)  Crown C: (2,0)  Crown D: (3,2)
@@ -25,10 +28,10 @@ import { CrownIcon } from '@/components/game/CrownIcon';
  *   1. Region A has 1 cell → crown at (0,1) → eliminates row 0, col 1
  *   2. Region B: (0,2)→row0, (0,3)→row0, only (1,3) left → forced
  *   3. Crown at (1,3) → eliminates row 1, col 3
- *   4. Region C: (1,0)→row1, (1,1)→row1, (1,2)→row1, only (2,0) left → forced
+ *   4. Region C: (0,0)→row0, (1,0)→row1, (1,1)→row1, (1,2)→row1, only (2,0) left → forced
  *   5. Crown at (2,0) → eliminates row 2, col 0
- *   6. Region D: (0,0)→row0+col0, (2,1)→row2+col1, (2,2)→row2, (2,3)→row2+col3,
- *      (3,0)→col0, (3,1)→col1, (3,3)→col3, only (3,2) left → forced
+ *   6. Region D: (2,1)→row2, (2,2)→row2, (2,3)→row2+col3,
+ *      (3,0)→col0, (3,1)→adj(2,0), (3,3)→col3, only (3,2) left → forced
  */
 
 const GRID_SIZE = 4;
@@ -53,66 +56,60 @@ const SOLUTION: [number, number][] = [
 
 type CellState = 'empty' | 'x' | 'crown';
 
-interface TutorialStep {
-  title: string;
-  text: string;
-  cta: string;
-  interactiveCell?: [number, number]; // cell the user can tap
-  autoAdvance?: boolean;
+// ── Staged elimination helpers ──────────────────────────────────
+
+function applyCrown(grid: CellState[][], row: number, col: number): CellState[][] {
+  const g = grid.map(r => [...r]);
+  g[row][col] = 'crown';
+  return g;
 }
 
-const STEPS: TutorialStep[] = [
-  {
-    title: 'Welcome',
-    text: 'Find where each crown belongs. One crown per row, column, and colour region.',
-    cta: 'Start tutorial',
-  },
-  {
-    title: 'Single cell region',
-    text: 'This region has only one cell. The crown must go here. Tap it.',
-    cta: 'Show me',
-    interactiveCell: [0, 1],
-    autoAdvance: true,
-  },
-  {
-    title: 'Row rule',
-    text: 'One crown placed. The whole row is eliminated. No other crown can share a row.',
-    cta: 'Got it',
-  },
-  {
-    title: 'Column rule',
-    text: 'The same goes for columns. One crown placed in this column eliminates the whole column.',
-    cta: 'Got it',
-  },
-  {
-    title: 'Region rule',
-    text: 'And each colour region can only have one crown. This region is done.',
-    cta: 'Got it',
-  },
-  {
-    title: 'Next placement',
-    text: 'Row 0 is eliminated. Only one cell remains in this region. Logic tells you exactly where the crown goes. Tap it.',
-    cta: 'Show me',
-    interactiveCell: [1, 3],
-    autoAdvance: true,
-  },
-  {
-    title: 'Adjacency',
-    text: 'Two crowns cannot touch each other, not even diagonally. The highlighted cells around each crown are off-limits.',
-    cta: 'Got it',
-  },
-  {
-    title: 'Ready',
-    text: "You're ready. The logic will always show you the way. Trust it.",
-    cta: 'Play your first game',
-  },
-];
-
-function createEmptyGrid(): CellState[][] {
-  return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill('empty'));
+function applyRowEliminations(grid: CellState[][], row: number, col: number): CellState[][] {
+  const g = grid.map(r => [...r]);
+  for (let c = 0; c < GRID_SIZE; c++) {
+    if (c !== col && g[row][c] === 'empty') g[row][c] = 'x';
+  }
+  return g;
 }
 
-// Get all cells adjacent (including diagonal) to a position
+function applyColumnEliminations(grid: CellState[][], row: number, col: number): CellState[][] {
+  const g = grid.map(r => [...r]);
+  for (let r = 0; r < GRID_SIZE; r++) {
+    if (r !== row && g[r][col] === 'empty') g[r][col] = 'x';
+  }
+  return g;
+}
+
+function applyRegionEliminations(grid: CellState[][], row: number, col: number): CellState[][] {
+  const g = grid.map(r => [...r]);
+  const region = REGION_MAP[row][col];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (REGION_MAP[r][c] === region && !(r === row && c === col) && g[r][c] === 'empty') {
+        g[r][c] = 'x';
+      }
+    }
+  }
+  return g;
+}
+
+function applyAdjacencyEliminations(grid: CellState[][], row: number, col: number): CellState[][] {
+  const g = grid.map(r => [...r]);
+  for (const [ar, ac] of getAdjacentCells(row, col)) {
+    if (g[ar][ac] === 'empty') g[ar][ac] = 'x';
+  }
+  return g;
+}
+
+function applyFullEliminations(grid: CellState[][], row: number, col: number): CellState[][] {
+  let g = applyCrown(grid, row, col);
+  g = applyRowEliminations(g, row, col);
+  g = applyColumnEliminations(g, row, col);
+  g = applyRegionEliminations(g, row, col);
+  g = applyAdjacencyEliminations(g, row, col);
+  return g;
+}
+
 function getAdjacentCells(row: number, col: number): [number, number][] {
   const adj: [number, number][] = [];
   for (let dr = -1; dr <= 1; dr++) {
@@ -127,33 +124,127 @@ function getAdjacentCells(row: number, col: number): [number, number][] {
   return adj;
 }
 
-// Apply crown placement and cascade eliminations
-function placeCrownWithCascade(grid: CellState[][], row: number, col: number): CellState[][] {
-  const g = grid.map(r => [...r]);
-  g[row][col] = 'crown';
-  // Eliminate row
-  for (let c = 0; c < GRID_SIZE; c++) {
-    if (c !== col && g[row][c] === 'empty') g[row][c] = 'x';
-  }
-  // Eliminate column
-  for (let r = 0; r < GRID_SIZE; r++) {
-    if (r !== row && g[r][col] === 'empty') g[r][col] = 'x';
-  }
-  // Eliminate same region
-  const region = REGION_MAP[row][col];
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      if (REGION_MAP[r][c] === region && !(r === row && c === col) && g[r][c] === 'empty') {
-        g[r][c] = 'x';
-      }
-    }
-  }
-  // Eliminate adjacent cells
-  for (const [ar, ac] of getAdjacentCells(row, col)) {
-    if (g[ar][ac] === 'empty') g[ar][ac] = 'x';
-  }
-  return g;
+// ── Step definitions ────────────────────────────────────────────
+
+/*
+ * FLOW OVERVIEW:
+ *
+ * 0: Welcome
+ * 1: Tap Region A (single cell) — interactive
+ * 2: Row elimination stage — "Got it" to advance
+ * 3: Column elimination stage — "Got it" to advance
+ * 4: Region elimination stage — "Got it" to advance
+ * 5: Tap Region B crown — interactive
+ * 6: Adjacency rule explanation
+ * 7: Tap Region C crown — interactive (guided)
+ * 8: Tap Region D crown — interactive (guided)
+ * 9: Win celebration + handoff
+ */
+
+interface TutorialStep {
+  title: string;
+  text: string;
+  cta: string;
+  interactiveCell?: [number, number];
+  autoAdvance?: boolean;
 }
+
+const STEPS: TutorialStep[] = [
+  // 0: Welcome
+  {
+    title: 'Welcome',
+    text: 'Find where each crown belongs. One crown per row, column, and colour region.',
+    cta: 'Start tutorial',
+  },
+  // 1: Place crown in single-cell region
+  {
+    title: 'Single cell region',
+    text: 'This region has only one cell. The crown must go here. Tap it.',
+    cta: 'Show me',
+    interactiveCell: [0, 1],
+    autoAdvance: true,
+  },
+  // 2: Row Xs revealed (staged)
+  {
+    title: 'Row rule',
+    text: 'One crown per row. The rest of this row is eliminated.',
+    cta: 'Got it',
+  },
+  // 3: Column Xs revealed (staged)
+  {
+    title: 'Column rule',
+    text: 'The same goes for columns.',
+    cta: 'Got it',
+  },
+  // 4: Region Xs revealed (staged)
+  {
+    title: 'Region rule',
+    text: 'And each colour region can only have one crown.',
+    cta: 'Got it',
+  },
+  // 5: Place crown B — forced by elimination
+  {
+    title: 'Next placement',
+    text: 'The top row is eliminated. Only one cell remains in this region. Tap it.',
+    cta: 'Show me',
+    interactiveCell: [1, 3],
+    autoAdvance: true,
+  },
+  // 6: Adjacency rule
+  {
+    title: 'Adjacency',
+    text: 'Two crowns cannot touch each other, not even diagonally. The highlighted cells around each crown are off-limits.',
+    cta: 'Got it',
+  },
+  // 7: Place crown C — guided completion
+  {
+    title: 'Keep going',
+    text: 'Only one cell remains in this region. Tap it.',
+    cta: 'Place it',
+    interactiveCell: [2, 0],
+    autoAdvance: true,
+  },
+  // 8: Place crown D — guided completion
+  {
+    title: 'Last one',
+    text: 'One cell left. Finish the puzzle!',
+    cta: 'Place it',
+    interactiveCell: [3, 2],
+    autoAdvance: true,
+  },
+  // 9: Win + handoff
+  {
+    title: 'Solved!',
+    text: "You solved it! Every puzzle has a logical path like this. Ready for a real one?",
+    cta: 'Play your first game',
+  },
+];
+
+function createEmptyGrid(): CellState[][] {
+  return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill('empty'));
+}
+
+// ── Highlight types ─────────────────────────────────────────────
+
+interface HighlightState {
+  rowHighlight: number | null;      // row index to highlight in amber
+  colHighlight: number | null;      // col index to highlight in amber
+  regionGlow: number | null;        // region index to glow
+  adjacencyHighlight: boolean;
+  highlightCell: [number, number] | null;
+  xTimestamps: Map<string, number>; // cell key → timestamp for stagger
+}
+
+const EMPTY_HIGHLIGHTS: HighlightState = {
+  rowHighlight: null,
+  colHighlight: null,
+  regionGlow: null,
+  adjacencyHighlight: false,
+  highlightCell: null,
+  xTimestamps: new Map(),
+};
+
+// ── Component ───────────────────────────────────────────────────
 
 interface RealmTutorialProps {
   onComplete: () => void;
@@ -163,124 +254,221 @@ interface RealmTutorialProps {
 export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
   const [step, setStep] = useState(0);
   const [grid, setGrid] = useState<CellState[][]>(createEmptyGrid);
-  const [highlightCell, setHighlightCell] = useState<[number, number] | null>(null);
+  const [highlights, setHighlights] = useState<HighlightState>(EMPTY_HIGHLIGHTS);
   const [animating, setAnimating] = useState(false);
-  const [colPulse, setColPulse] = useState(false); // step 3: pulse column 1
-  const [regionGlow, setRegionGlow] = useState(false); // step 4: glow region A
-  const [adjacencyHighlight, setAdjacencyHighlight] = useState(false); // step 6: highlight adjacency zones
-  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [winCelebration, setWinCelebration] = useState(false);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Build grid state for each step
-  const buildGridForStep = useCallback((s: number): { grid: CellState[][]; highlight: [number, number] | null } => {
+  const clearTimers = useCallback(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+  }, []);
+
+  const addTimer = useCallback((fn: () => void, delay: number) => {
+    const t = setTimeout(fn, delay);
+    timersRef.current.push(t);
+    return t;
+  }, []);
+
+  useEffect(() => {
+    return () => clearTimers();
+  }, [clearTimers]);
+
+  // ── Build grid state for each step ──────────────────────────
+  const buildGridForStep = useCallback((s: number): CellState[][] => {
     let g = createEmptyGrid();
-    let hl: [number, number] | null = null;
 
-    if (s === 1) {
-      // Highlight single-cell region A: (0,1)
-      hl = [0, 1];
-    } else if (s >= 2 && s <= 4) {
-      // Crown A placed at (0,1) with cascade
-      g = placeCrownWithCascade(g, 0, 1);
+    if (s >= 2 && s <= 4) {
+      // Crown A placed — but Xs are shown progressively
+      g = applyCrown(g, 0, 1);
+      if (s >= 2) g = applyRowEliminations(g, 0, 1);
+      if (s >= 3) g = applyColumnEliminations(g, 0, 1);
+      if (s >= 4) {
+        g = applyRegionEliminations(g, 0, 1);
+        g = applyAdjacencyEliminations(g, 0, 1);
+      }
     } else if (s === 5) {
-      // Crown A placed, highlight (1,3) for next placement
-      g = placeCrownWithCascade(g, 0, 1);
-      hl = [1, 3];
-    } else if (s >= 6) {
-      // Both crowns placed
-      g = placeCrownWithCascade(g, 0, 1);
-      g = placeCrownWithCascade(g, 1, 3);
+      g = applyFullEliminations(g, 0, 1);
+    } else if (s === 6) {
+      g = applyFullEliminations(g, 0, 1);
+      g = applyFullEliminations(g, 1, 3);
+    } else if (s === 7) {
+      g = applyFullEliminations(g, 0, 1);
+      g = applyFullEliminations(g, 1, 3);
+    } else if (s === 8) {
+      g = applyFullEliminations(g, 0, 1);
+      g = applyFullEliminations(g, 1, 3);
+      g = applyFullEliminations(g, 2, 0);
+    } else if (s === 9) {
+      g = applyFullEliminations(g, 0, 1);
+      g = applyFullEliminations(g, 1, 3);
+      g = applyFullEliminations(g, 2, 0);
+      g = applyFullEliminations(g, 3, 2);
     }
 
-    return { grid: g, highlight: hl };
+    return g;
   }, []);
 
-  // Update grid when step changes
+  // ── Update state when step changes ──────────────────────────
   useEffect(() => {
-    const { grid: g, highlight: hl } = buildGridForStep(step);
+    clearTimers();
+    const g = buildGridForStep(step);
     setGrid(g);
-    setHighlightCell(hl);
     setAnimating(false);
-    setColPulse(false);
-    setRegionGlow(false);
-    setAdjacencyHighlight(false);
+    setWinCelebration(false);
 
-    // Step 3: pulse column cells after a short delay
-    if (step === 3) {
-      const t = setTimeout(() => setColPulse(true), 300);
-      return () => clearTimeout(t);
-    }
-    // Step 4: glow region A
-    if (step === 4) {
-      const t = setTimeout(() => setRegionGlow(true), 300);
-      return () => clearTimeout(t);
-    }
-    // Step 6: adjacency highlights
-    if (step === 6) {
-      const t = setTimeout(() => setAdjacencyHighlight(true), 300);
-      return () => clearTimeout(t);
-    }
-  }, [step, buildGridForStep]);
+    const hl: HighlightState = { ...EMPTY_HIGHLIGHTS, xTimestamps: new Map() };
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-    };
-  }, []);
+    switch (step) {
+      case 1:
+        hl.highlightCell = [0, 1];
+        break;
+      case 2:
+        hl.rowHighlight = 0;
+        break;
+      case 3:
+        hl.colHighlight = 1;
+        break;
+      case 4:
+        hl.regionGlow = 0;
+        break;
+      case 5:
+        hl.highlightCell = [1, 3];
+        break;
+      case 6:
+        hl.adjacencyHighlight = true;
+        break;
+      case 7:
+        hl.highlightCell = [2, 0];
+        break;
+      case 8:
+        hl.highlightCell = [3, 2];
+        break;
+      case 9:
+        setWinCelebration(true);
+        break;
+    }
 
-  const performCrownAction = useCallback((targetRow: number, targetCol: number) => {
+    setHighlights(hl);
+  }, [step, buildGridForStep, clearTimers]);
+
+  // ── Staged crown animation for step 1 → steps 2/3/4 ────────
+  const performStagedCrownAnimation = useCallback((targetRow: number, targetCol: number) => {
     if (animating) return;
     setAnimating(true);
-    setHighlightCell(null);
+    setHighlights(h => ({ ...h, highlightCell: null }));
 
-    // Place crown with cascade animation
-    setGrid(prev => placeCrownWithCascade(prev, targetRow, targetCol));
+    // Step A: Place crown immediately
+    setGrid(prev => applyCrown(prev, targetRow, targetCol));
 
-    // Auto-advance after pause
-    advanceTimerRef.current = setTimeout(() => {
-      setStep(s => s + 1);
+    // Step B: Row Xs (200ms after crown)
+    addTimer(() => {
+      setGrid(prev => applyRowEliminations(prev, targetRow, targetCol));
+      setHighlights(h => ({ ...h, rowHighlight: targetRow }));
+    }, 200);
+
+    // Auto-advance to step 2 (row rule) after row Xs settle
+    addTimer(() => {
+      setStep(2);
+    }, 900);
+  }, [animating, addTimer]);
+
+  // ── Quick crown for steps 5, 7, 8 (non-staged) ─────────────
+  const performQuickCrown = useCallback((targetRow: number, targetCol: number, nextStep: number) => {
+    if (animating) return;
+    setAnimating(true);
+    setHighlights(h => ({ ...h, highlightCell: null }));
+
+    setGrid(prev => applyCrown(prev, targetRow, targetCol));
+
+    // Apply all eliminations after brief pause
+    addTimer(() => {
+      setGrid(prev => {
+        let g = applyRowEliminations(prev, targetRow, targetCol);
+        g = applyColumnEliminations(g, targetRow, targetCol);
+        g = applyRegionEliminations(g, targetRow, targetCol);
+        g = applyAdjacencyEliminations(g, targetRow, targetCol);
+        return g;
+      });
+    }, 200);
+
+    addTimer(() => {
+      setStep(nextStep);
     }, 800);
-  }, [animating]);
+  }, [animating, addTimer]);
 
+  // ── Cell tap handler ────────────────────────────────────────
   const handleCellTap = useCallback((row: number, col: number) => {
     if (animating) return;
     const currentStep = STEPS[step];
     if (!currentStep.interactiveCell) return;
-    const [targetRow, targetCol] = currentStep.interactiveCell;
-    if (row !== targetRow || col !== targetCol) return;
-    performCrownAction(targetRow, targetCol);
-  }, [step, animating, performCrownAction]);
+    const [tr, tc] = currentStep.interactiveCell;
+    if (row !== tr || col !== tc) return;
 
+    if (step === 1) {
+      performStagedCrownAnimation(tr, tc);
+    } else if (step === 5) {
+      performQuickCrown(tr, tc, 6);
+    } else if (step === 7) {
+      performQuickCrown(tr, tc, 8);
+    } else if (step === 8) {
+      // Last crown — go to win celebration
+      if (animating) return;
+      setAnimating(true);
+      setHighlights(h => ({ ...h, highlightCell: null }));
+      setGrid(prev => applyFullEliminations(prev, tr, tc));
+      addTimer(() => {
+        setStep(9);
+      }, 600);
+    }
+  }, [step, animating, performStagedCrownAnimation, performQuickCrown, addTimer]);
+
+  // ── CTA handler ─────────────────────────────────────────────
   const handleCTA = useCallback(() => {
     if (animating) return;
 
-    if (step === 7) {
+    if (step === 9) {
       onComplete();
       return;
     }
 
     const currentStep = STEPS[step];
     if (currentStep.autoAdvance && currentStep.interactiveCell) {
-      // "Show me" fallback — animate the action
-      const [targetRow, targetCol] = currentStep.interactiveCell;
-      performCrownAction(targetRow, targetCol);
+      // "Show me" / "Place it" fallback
+      const [tr, tc] = currentStep.interactiveCell;
+      if (step === 1) {
+        performStagedCrownAnimation(tr, tc);
+      } else if (step === 5) {
+        performQuickCrown(tr, tc, 6);
+      } else if (step === 7) {
+        performQuickCrown(tr, tc, 8);
+      } else if (step === 8) {
+        setAnimating(true);
+        setHighlights(h => ({ ...h, highlightCell: null }));
+        setGrid(prev => applyFullEliminations(prev, tr, tc));
+        addTimer(() => {
+          setStep(9);
+        }, 600);
+      }
     } else {
       setStep(s => s + 1);
     }
-  }, [step, animating, onComplete, performCrownAction]);
+  }, [step, animating, onComplete, performStagedCrownAnimation, performQuickCrown, addTimer]);
 
   const handleBack = () => {
-    if (step > 0) setStep(s => s - 1);
+    if (step > 0) {
+      clearTimers();
+      setStep(s => s - 1);
+    }
   };
 
-  const currentStep = STEPS[step];
+  const currentStepDef = STEPS[step];
   const cellSize = 68;
   const gap = 2;
 
   // Compute adjacency zones for step 6
   const adjacencyCells = new Set<string>();
-  if (step === 6 && adjacencyHighlight) {
-    // Crowns placed at (0,1) and (1,3)
+  if (step === 6 && highlights.adjacencyHighlight) {
     const crowns: [number, number][] = [[0, 1], [1, 3]];
     for (const [cr, cc] of crowns) {
       for (const [ar, ac] of getAdjacentCells(cr, cc)) {
@@ -322,112 +510,145 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
 
       {/* Grid area */}
       <div className="flex-1 flex items-center justify-center px-6">
-        <div
-          className="relative"
-          style={{
-            width: cellSize * GRID_SIZE + gap * (GRID_SIZE - 1),
-            height: cellSize * GRID_SIZE + gap * (GRID_SIZE - 1),
-          }}
-        >
-          {Array.from({ length: GRID_SIZE }).map((_, row) =>
-            Array.from({ length: GRID_SIZE }).map((_, col) => {
-              const region = REGION_MAP[row][col];
-              const bgColor = REGION_COLORS[region];
-              const borderColor = REGION_BORDER_COLORS[region];
-              const state = grid[row][col];
-              const isHighlighted = highlightCell && highlightCell[0] === row && highlightCell[1] === col;
-              const isInteractive = !!STEPS[step]?.interactiveCell &&
-                STEPS[step].interactiveCell![0] === row && STEPS[step].interactiveCell![1] === col;
-              const isColPulsing = colPulse && step === 3 && col === 1 && state === 'x';
-              const isRegionGlowing = regionGlow && step === 4 && region === 0;
-              const isAdjacencyZone = adjacencyCells.has(`${row}-${col}`);
-
-              return (
-                <div
-                  key={`${row}-${col}`}
-                  className="absolute flex items-center justify-center transition-all duration-200"
-                  style={{
-                    width: cellSize,
-                    height: cellSize,
-                    left: col * (cellSize + gap),
-                    top: row * (cellSize + gap),
-                    backgroundColor: bgColor,
-                    border: `2.5px solid ${borderColor}`,
-                    borderRadius: 8,
-                    cursor: isInteractive && !animating ? 'pointer' : 'default',
-                    opacity: step === 1 && !isHighlighted ? 0.6 : 1,
-                  }}
-                  onClick={() => handleCellTap(row, col)}
-                >
-                  {/* Interactive highlight ring */}
-                  {isHighlighted && (
-                    <motion.div
-                      className="absolute inset-0 rounded-[6px]"
-                      style={{ border: '3px solid #22c55e' }}
-                      animate={{ opacity: [0.4, 1, 0.4] }}
-                      transition={{ duration: 1.2, repeat: Infinity }}
-                    />
-                  )}
-
-                  {/* Column pulse for step 3 */}
-                  {isColPulsing && (
-                    <motion.div
-                      className="absolute inset-0 rounded-[6px]"
-                      style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)' }}
-                      animate={{ opacity: [0, 0.4, 0] }}
-                      transition={{ duration: 1.5, repeat: 2 }}
-                    />
-                  )}
-
-                  {/* Region glow for step 4 */}
-                  {isRegionGlowing && (
-                    <motion.div
-                      className="absolute inset-0 rounded-[6px]"
-                      style={{ border: '3px solid #22c55e' }}
-                      animate={{ opacity: [0.3, 0.8, 0.3] }}
-                      transition={{ duration: 1.5, repeat: 2 }}
-                    />
-                  )}
-
-                  {/* Adjacency zone highlight */}
-                  {isAdjacencyZone && (
-                    <motion.div
-                      className="absolute inset-0 rounded-[6px]"
-                      style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '2px solid rgba(239, 68, 68, 0.4)' }}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: [0.5, 1, 0.5] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    />
-                  )}
-
-                  <AnimatePresence mode="wait">
-                    {state === 'x' && (
-                      <motion.div
-                        key="x"
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <X style={{ color: '#9ca3af' }} size={20} strokeWidth={2.5} />
-                      </motion.div>
-                    )}
-                    {state === 'crown' && (
-                      <motion.div
-                        key="crown"
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                      >
-                        <CrownIcon size={Math.round(cellSize * 0.6)} color="#1B2340" />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+        <div className="relative">
+          {/* Win celebration overlay */}
+          {winCelebration && (
+            <motion.div
+              className="absolute inset-0 z-20 flex items-center justify-center rounded-xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
+              style={{ backgroundColor: 'rgba(34, 197, 94, 0.08)' }}
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.4 }}
+              >
+                <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: '#22c55e' }}>
+                  <Check size={32} color="white" strokeWidth={3} />
                 </div>
-              );
-            })
+              </motion.div>
+            </motion.div>
           )}
+
+          <div
+            style={{
+              width: cellSize * GRID_SIZE + gap * (GRID_SIZE - 1),
+              height: cellSize * GRID_SIZE + gap * (GRID_SIZE - 1),
+            }}
+          >
+            {Array.from({ length: GRID_SIZE }).map((_, row) =>
+              Array.from({ length: GRID_SIZE }).map((_, col) => {
+                const region = REGION_MAP[row][col];
+                const bgColor = REGION_COLORS[region];
+                const borderColor = REGION_BORDER_COLORS[region];
+                const state = grid[row][col];
+                const isHighlighted = highlights.highlightCell &&
+                  highlights.highlightCell[0] === row && highlights.highlightCell[1] === col;
+                const isInteractive = !!STEPS[step]?.interactiveCell &&
+                  STEPS[step].interactiveCell![0] === row && STEPS[step].interactiveCell![1] === col;
+
+                const isRowHighlighted = highlights.rowHighlight === row;
+                const isColHighlighted = highlights.colHighlight === col;
+                const isRegionGlowing = highlights.regionGlow !== null && region === highlights.regionGlow;
+                const isAdjacencyZone = adjacencyCells.has(`${row}-${col}`);
+
+                // Amber highlight for row/column stages
+                const amberHighlight = isRowHighlighted || isColHighlighted;
+
+                return (
+                  <div
+                    key={`${row}-${col}`}
+                    className="absolute flex items-center justify-center transition-all duration-200"
+                    style={{
+                      width: cellSize,
+                      height: cellSize,
+                      left: col * (cellSize + gap),
+                      top: row * (cellSize + gap),
+                      backgroundColor: bgColor,
+                      border: `2.5px solid ${borderColor}`,
+                      borderRadius: 8,
+                      cursor: isInteractive && !animating ? 'pointer' : 'default',
+                      opacity: step === 1 && !isHighlighted ? 0.6 : 1,
+                    }}
+                    onClick={() => handleCellTap(row, col)}
+                  >
+                    {/* Interactive highlight ring */}
+                    {isHighlighted && (
+                      <motion.div
+                        className="absolute inset-0 rounded-[6px]"
+                        style={{ border: '3px solid #22c55e' }}
+                        animate={{ opacity: [0.4, 1, 0.4] }}
+                        transition={{ duration: 1.2, repeat: Infinity }}
+                      />
+                    )}
+
+                    {/* Amber row/column highlight */}
+                    {amberHighlight && (
+                      <motion.div
+                        className="absolute inset-0 rounded-[6px]"
+                        style={{
+                          backgroundColor: 'rgba(251,191,36,0.3)',
+                          border: '2px solid rgba(251,191,36,0.8)',
+                        }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                      />
+                    )}
+
+                    {/* Region glow for step 4 */}
+                    {isRegionGlowing && (
+                      <motion.div
+                        className="absolute inset-0 rounded-[6px]"
+                        style={{ border: `3px solid ${REGION_BORDER_COLORS[highlights.regionGlow!]}` }}
+                        animate={{ opacity: [0.4, 1, 0.4] }}
+                        transition={{ duration: 1.2, repeat: 2 }}
+                      />
+                    )}
+
+                    {/* Adjacency zone highlight */}
+                    {isAdjacencyZone && (
+                      <motion.div
+                        className="absolute inset-0 rounded-[6px]"
+                        style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '2px solid rgba(239, 68, 68, 0.4)' }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      />
+                    )}
+
+                    <AnimatePresence mode="wait">
+                      {state === 'x' && (
+                        <motion.div
+                          key="x"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                        >
+                          <X style={{ color: '#9ca3af' }} size={20} strokeWidth={2.5} />
+                        </motion.div>
+                      )}
+                      {state === 'crown' && (
+                        <motion.div
+                          key="crown"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                        >
+                          <CrownIcon size={Math.round(cellSize * 0.6)} color="#1B2340" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
 
@@ -444,7 +665,7 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
         >
           <div className="text-center space-y-2">
             <p className="text-sm leading-relaxed" style={{ color: '#555' }}>
-              {currentStep.text}
+              {currentStepDef.text}
             </p>
           </div>
 
@@ -452,12 +673,12 @@ export function RealmTutorial({ onComplete, onDismiss }: RealmTutorialProps) {
             onClick={handleCTA}
             disabled={animating}
             className={`w-full h-12 text-base font-semibold ${
-              step === 7
+              step === 9
                 ? 'bg-[#22c55e] hover:bg-[#16a34a] text-white'
                 : ''
             }`}
           >
-            {currentStep.cta}
+            {currentStepDef.cta}
           </Button>
         </motion.div>
       </AnimatePresence>

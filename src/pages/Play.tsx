@@ -235,36 +235,46 @@ export default function Play({ onActiveGameChange }: PlayProps) {
       elapsedSeconds,
       seed,
     });
-    const isDaily = !!dailyDate;
-    const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
-    setRatingResult(result);
+
+    if (isTestMode) {
+      const fakeRating = 985 + Math.floor(Math.random() * 15);
+      setRatingResult({
+        newRating: fakeRating,
+        previousRating: 1000,
+        ratingChange: fakeRating - 1000,
+      } as GameResult);
+    } else {
+      const isDaily = !!dailyDate;
+      const result = await saveGameResult(lostState as any, gameMode, elapsedSeconds, drawMode, dealUuid, isDaily);
+      setRatingResult(result);
+
+      // Save daily challenge completion on give up + set localStorage flag
+      if (dailyDate && dailyDealId && user) {
+        setDailyCompletedByDeal(dailyDealId, user.id);
+        await ChallengeService.saveDailyCompletion({
+          userId: user.id,
+          date: dailyDate,
+          dealId: dailyDealId,
+          result: 'loss',
+          actualMoves: state.moves,
+          actualTime: elapsedSeconds,
+          hintsUsed: state.hintsUsed,
+          finalDelta: result?.ratingChange ?? 0,
+        });
+      }
+
+      void refreshProfile();
+    }
 
     if (gameMode === 'realm') clearRealmStorage();
     else if (gameMode === 'freecell') clearFreeCellStorage();
     else clearStorage();
 
-    // Save daily challenge completion on give up + set localStorage flag
-    if (dailyDate && dailyDealId && user) {
-      setDailyCompletedByDeal(dailyDealId, user.id);
-      await ChallengeService.saveDailyCompletion({
-        userId: user.id,
-        date: dailyDate,
-        dealId: dailyDealId,
-        result: 'loss',
-        actualMoves: state.moves,
-        actualTime: elapsedSeconds,
-        hintsUsed: state.hintsUsed,
-        finalDelta: result?.ratingChange ?? 0,
-      });
-    }
-
-    void refreshProfile();
-
     // Ensure minimum 800ms display
     const elapsed = Date.now() - completingStart;
     const remaining = Math.max(0, 800 - elapsed);
     setTimeout(() => setPhase('postgame'), remaining);
-  }, [saveGameResult, setPhase, gameMode, dailyDate, dailyDealId, user, drawMode, refreshProfile]);
+  }, [saveGameResult, setPhase, gameMode, dailyDate, dailyDealId, user, drawMode, refreshProfile, isTestMode]);
 
   const handlePlayAgain = useCallback(async () => {
     gameEndInFlight.current = false;

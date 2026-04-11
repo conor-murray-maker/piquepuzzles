@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { RealmState, CellState, createRealmGame, createRealmStateFromDeal, cycleCell, toggleMark, getRealmHint, RealmHintAction, RealmDeal } from '@/game/realm';
+import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint, RealmHintAction } from '@/game/realm';
 import { ONBOARDING_REALM_PUZZLE } from '@/game/onboardingPuzzle';
 import { supabase } from '@/integrations/supabase/client';
 import { CrownIcon } from './CrownIcon';

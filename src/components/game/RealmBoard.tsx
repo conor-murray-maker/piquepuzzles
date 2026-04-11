@@ -59,6 +59,7 @@ interface RealmBoardProps {
   dealUuid?: string;
   gridSize?: number;
   isOnboarding?: boolean;
+  useOnboardingPuzzle?: boolean;
 }
 
 const DRAG_HOLD_MS = 150;

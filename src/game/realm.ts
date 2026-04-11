@@ -415,7 +415,7 @@ export interface RealmDeal {
   spatialSurprise: number;
 }
 
-function createRealmStateFromDeal(deal: RealmDeal, seed: number): RealmState {
+export function createRealmStateFromDeal(deal: RealmDeal, seed: number): RealmState {
   const grid: RealmCell[][] = Array.from({ length: deal.size }, (_, r) =>
     Array.from({ length: deal.size }, (_, c) => ({
       row: r,

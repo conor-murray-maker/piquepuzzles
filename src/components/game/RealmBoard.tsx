@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { RealmState, CellState, createRealmGame, createRealmStateFromDeal, cycleCell, toggleMark, getRealmHint, RealmHintAction, RealmDeal } from '@/game/realm';
+import { RealmState, CellState, createRealmGame, cycleCell, toggleMark, getRealmHint, RealmHintAction } from '@/game/realm';
 import { ONBOARDING_REALM_PUZZLE } from '@/game/onboardingPuzzle';
 import { supabase } from '@/integrations/supabase/client';
 import { CrownIcon } from './CrownIcon';
@@ -107,18 +107,8 @@ export function RealmBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid, gridSiz
   const [state, setState] = useState<RealmState | null>(() => {
     if (useOnboardingPuzzle) {
       const p = ONBOARDING_REALM_PUZZLE;
-      const deal: RealmDeal = {
-        regionMap: p.regionMap as number[][],
-        regions: p.regions as number[][],
-        solution: p.solution as [number, number][],
-        size: p.size,
-        dds: p.dds,
-        deduction: { solvable: true, forcedSteps: 5, cascadeChain: 5 },
-        regionColors: [...p.regionColors],
-        spatialSurprise: 0,
-      };
-      const s = createRealmStateFromDeal(deal, 0);
-      return { ...s, dealUuid: p.dealUuid, dealId: p.dealUuid, difficulty: p.difficulty, difficultyScore: p.dds, puzzleName: p.puzzleName };
+      const fresh = createRealmGame(p.seed, p.size);
+      return { ...fresh, dealUuid: p.dealUuid, dealId: p.dealUuid, difficulty: p.difficulty, difficultyScore: p.dds, puzzleName: p.puzzleName };
     }
     if (initialSeed !== undefined) {
       const fresh = createRealmGame(initialSeed, gridSize);

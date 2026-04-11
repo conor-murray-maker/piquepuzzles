@@ -39,7 +39,8 @@ export function WelcomeScreen({ testMode }: WelcomeScreenProps) {
 
   const handleStart = () => {
     if (testMode) {
-      navigate('/landing', { replace: true });
+      localStorage.setItem('pique-guest-mode', 'true');
+      navigate('/play?mode=realm&onboarding=true&testMode=true', { replace: true });
       return;
     }
     navigate('/play?mode=realm&onboarding=true', { replace: true });

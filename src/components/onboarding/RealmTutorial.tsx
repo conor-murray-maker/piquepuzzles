@@ -34,7 +34,7 @@ import { CrownIcon } from '@/components/game/CrownIcon';
 const GRID_SIZE = 4;
 
 const REGION_MAP: number[][] = [
-  [3, 0, 1, 1],
+  [2, 0, 1, 1],
   [2, 2, 2, 1],
   [2, 3, 3, 3],
   [3, 3, 3, 3],

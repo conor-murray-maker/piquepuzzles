@@ -718,6 +718,37 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
+  const getTimerColor = (s: number) => {
+    if (s >= 300) return '#EF4444';
+    if (s >= 180) return '#F59E0B';
+    return undefined;
+  };
+
+  const foundationCount = state.foundation.reduce((sum, pile) => sum + pile.length, 0);
+
+  // IQ pace arrow: simple heuristic based on difficulty expected times
+  const getExpectedTime = (diff: string): number => {
+    switch (diff) {
+      case 'Easy': return 180;
+      case 'Medium': return 300;
+      case 'Hard': return 420;
+      case 'Expert': return 600;
+      case 'Master': return 900;
+      case 'Grandmaster': return 1200;
+      default: return 300;
+    }
+  };
+
+  const paceArrow = (() => {
+    if (elapsed < 60 || !gameStarted) return null;
+    const expected = getExpectedTime(state.difficulty);
+    const progress = foundationCount / 52;
+    const timeProgress = elapsed / expected;
+    if (progress > timeProgress * 1.1) return 'up';
+    if (progress < timeProgress * 0.7) return 'down';
+    return null;
+  })();
+
   const isHinted = (source: string) => {
     if (hintTarget) return hintTarget.from === source || hintTarget.to === source;
     return false;

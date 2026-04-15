@@ -18,7 +18,7 @@ import {
 } from '@/game/freecell';
 import { createVerifiedFreeCellGame } from '@/game/solver';
 import { getFreeCellAutoSend, applyFreeCellAutoSend } from '@/game/autoSend';
-import { PlayingCard, EmptyPile } from './PlayingCard';
+import { PlayingCard, EmptyPile, CARD_ASPECT_RATIO } from './PlayingCard';
 import { dragManager, DragSource } from '@/game/DragManager';
 import { isFreeCellStuck } from '@/game/stuckDetector';
 import { WinProbabilityBar } from './WinProbabilityBar';

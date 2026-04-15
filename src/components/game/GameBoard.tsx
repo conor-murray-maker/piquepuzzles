@@ -16,7 +16,7 @@ import {
 } from '@/game/klondike';
 import { createVerifiedKlondikeGame } from '@/game/solver';
 import { getKlondikeAutoSend, applyKlondikeAutoSend } from '@/game/autoSend';
-import { PlayingCard, EmptyPile } from './PlayingCard';
+import { PlayingCard, EmptyPile, CARD_ASPECT_RATIO } from './PlayingCard';
 import { dragManager, DragSource } from '@/game/DragManager';
 import { isKlondikeStuck } from '@/game/stuckDetector';
 import { WinProbabilityBar } from './WinProbabilityBar';

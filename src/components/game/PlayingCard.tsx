@@ -15,6 +15,8 @@ const RED = '#DC2626';
 const BLACK = '#1a1a1a';
 const NAVY = '#1B2340';
 
+export const CARD_ASPECT_RATIO = 1.5;
+
 type PipPos = [number, number, boolean?];
 
 const PIP_POSITIONS: Record<string, PipPos[]> = {
@@ -38,9 +40,8 @@ function CardFace({ card, w, h }: { card: CardType; w: number; h: number }) {
   const color = red ? RED : BLACK;
   const symbol = suitSymbol(card.suit);
 
-  // Scale font sizes relative to card width
-  const cornerRankSize = Math.max(10, w * 0.22);
-  const cornerSuitSize = Math.max(8, w * 0.18);
+  const cornerRankSize = Math.max(11, w * 0.25);
+  const cornerSuitSize = Math.max(9, w * 0.22);
   const cornerX = w * 0.08;
   const cornerRankY = cornerRankSize + 2;
   const cornerSuitY = cornerRankY + cornerSuitSize + 1;
@@ -53,23 +54,22 @@ function CardFace({ card, w, h }: { card: CardType; w: number; h: number }) {
       className="rounded-lg"
       style={{ display: 'block' }}
     >
-      {/* Card background */}
       <rect x="0" y="0" width={w} height={h} rx="5" ry="5" fill="white" stroke="#e2e8f0" strokeWidth="1" />
 
-      {/* Top-left corner: rank + suit */}
-      <text x={cornerX} y={cornerRankY} fontSize={cornerRankSize} fontWeight="700" fill={color} fontFamily="Inter, system-ui, sans-serif">
+      {/* Top-left corner */}
+      <text x={cornerX} y={cornerRankY} fontSize={cornerRankSize} fontWeight="800" fill={color} fontFamily="Inter, system-ui, sans-serif">
         {card.rank}
       </text>
-      <text x={cornerX} y={cornerSuitY} fontSize={cornerSuitSize} fill={color} fontFamily="Inter, system-ui, sans-serif">
+      <text x={cornerX} y={cornerSuitY} fontSize={cornerSuitSize} fontWeight="700" fill={color} fontFamily="Inter, system-ui, sans-serif">
         {symbol}
       </text>
 
       {/* Bottom-right corner (rotated) */}
       <g transform={`translate(${w}, ${h}) rotate(180)`}>
-        <text x={cornerX} y={cornerRankY} fontSize={cornerRankSize} fontWeight="700" fill={color} fontFamily="Inter, system-ui, sans-serif">
+        <text x={cornerX} y={cornerRankY} fontSize={cornerRankSize} fontWeight="800" fill={color} fontFamily="Inter, system-ui, sans-serif">
           {card.rank}
         </text>
-        <text x={cornerX} y={cornerSuitY} fontSize={cornerSuitSize} fill={color} fontFamily="Inter, system-ui, sans-serif">
+        <text x={cornerX} y={cornerSuitY} fontSize={cornerSuitSize} fontWeight="700" fill={color} fontFamily="Inter, system-ui, sans-serif">
           {symbol}
         </text>
       </g>
@@ -112,10 +112,8 @@ function FaceCardCenterSVG({ rank, w, h, color }: { rank: Rank; w: number; h: nu
 
   return (
     <g>
-      {/* Decorative bordered box */}
       <rect x={boxX} y={boxY} width={boxW} height={boxH} rx="4" ry="4" fill={NAVY} />
       <rect x={boxX + 2} y={boxY + 2} width={boxW - 4} height={boxH - 4} rx="3" ry="3" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-      {/* Stylised letter */}
       <text
         x={w / 2}
         y={h / 2 + fontSize * 0.32}
@@ -172,7 +170,6 @@ function CardBack({ w, h }: { w: number; h: number }) {
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="rounded-lg" style={{ display: 'block' }}>
       <rect x="0" y="0" width={w} height={h} rx="5" ry="5" fill="hsl(160, 60%, 40%)" />
       <rect x="3" y="3" width={w - 6} height={h - 6} rx="3" ry="3" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-      {/* Diamond pattern */}
       <g opacity="0.12">
         {Array.from({ length: 3 }).map((_, row) =>
           Array.from({ length: 2 }).map((_, col) => {
@@ -190,7 +187,7 @@ function CardBack({ w, h }: { w: number; h: number }) {
 
 export function PlayingCard({ card, onClick, onDoubleClick, style, isDragging, className = '', cardWidth = 70 }: PlayingCardProps) {
   const w = cardWidth;
-  const h = Math.round(w * 1.4);
+  const h = Math.round(w * CARD_ASPECT_RATIO);
 
   return (
     <div
@@ -209,6 +206,17 @@ export function PlayingCard({ card, onClick, onDoubleClick, style, isDragging, c
   );
 }
 
+/** Get suit color for foundation styling */
+function getSuitColor(label?: string): { border: string; bg: string; text: string } {
+  if (label === '♥' || label === '♦') {
+    return { border: 'rgba(220, 38, 38, 0.4)', bg: 'rgba(220, 38, 38, 0.05)', text: 'rgba(220, 38, 38, 0.4)' };
+  }
+  if (label === '♣' || label === '♠') {
+    return { border: 'rgba(26, 26, 26, 0.35)', bg: 'rgba(26, 26, 26, 0.04)', text: 'rgba(26, 26, 26, 0.35)' };
+  }
+  return { border: '#cbd5e1', bg: 'transparent', text: 'rgba(203, 213, 225, 0.6)' };
+}
+
 export function EmptyPile({ label, onClick, className = '', cardWidth = 70, variant = 'default' }: {
   label?: string;
   onClick?: () => void;
@@ -217,7 +225,7 @@ export function EmptyPile({ label, onClick, className = '', cardWidth = 70, vari
   variant?: 'default' | 'foundation' | 'freecell' | 'stock-empty';
 }) {
   const w = cardWidth;
-  const h = Math.round(w * 1.4);
+  const h = Math.round(w * CARD_ASPECT_RATIO);
 
   if (variant === 'freecell') {
     return (
@@ -226,8 +234,8 @@ export function EmptyPile({ label, onClick, className = '', cardWidth = 70, vari
         style={{
           width: w,
           height: h,
-          backgroundColor: '#e8edf5',
-          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.08)',
+          backgroundColor: '#F3F4F6',
+          border: '1.5px solid #D1D5DB',
         }}
         onClick={onClick}
       />
@@ -235,17 +243,28 @@ export function EmptyPile({ label, onClick, className = '', cardWidth = 70, vari
   }
 
   if (variant === 'foundation') {
+    const colors = getSuitColor(label);
     return (
       <div
-        className={`rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer ${className}`}
+        className={`rounded-lg flex items-center justify-center cursor-pointer ${className}`}
         style={{
           width: w,
           height: h,
-          borderColor: '#cbd5e1',
+          border: `1.5px solid ${colors.border}`,
+          backgroundColor: colors.bg,
         }}
         onClick={onClick}
       >
-        {label && <span style={{ color: '#cbd5e1', fontSize: Math.max(16, w * 0.35), fontWeight: 500 }}>{label}</span>}
+        {label && (
+          <span style={{
+            color: colors.text,
+            fontSize: Math.max(20, w * 0.45),
+            fontWeight: 500,
+            lineHeight: 1,
+          }}>
+            {label}
+          </span>
+        )}
       </div>
     );
   }

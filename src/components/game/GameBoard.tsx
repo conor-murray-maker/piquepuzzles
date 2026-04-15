@@ -43,13 +43,13 @@ import {
 const STORAGE_KEY = 'pique-game-state';
 const HISTORY_KEY = 'pique-game-history';
 const ELAPSED_KEY = 'pique-elapsed-time';
-const SIDE_PAD = 8;
-const COL_GAP = 4;
+const SIDE_PAD = 6;
+const COL_GAP = 3;
 const COLS = 7;
 
 function computeCardWidth(screenWidth: number) {
   const available = screenWidth - SIDE_PAD * 2 - COL_GAP * (COLS - 1);
-  return Math.floor(available / COLS);
+  return Math.max(44, Math.floor(available / COLS));
 }
 
 function saveToStorage(state: KlondikeState, history: KlondikeState[]) {
@@ -145,7 +145,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);
 
-  const cardH = Math.round(cardW * 1.4);
+  const cardH = Math.round(cardW * CARD_ASPECT_RATIO);
 
   // Hint state
   const [hintLoading, setHintLoading] = useState(false);

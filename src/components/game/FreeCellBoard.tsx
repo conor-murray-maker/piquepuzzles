@@ -39,13 +39,13 @@ import {
 const STORAGE_KEY = 'pique-freecell-state';
 const HISTORY_KEY = 'pique-freecell-history';
 const ELAPSED_KEY = 'pique-freecell-elapsed';
-const SIDE_PAD = 8;
-const COL_GAP = 4;
+const SIDE_PAD = 6;
+const COL_GAP = 3;
 const FC_COLS = 8;
 
 function computeCardWidth(screenWidth: number) {
   const available = screenWidth - SIDE_PAD * 2 - COL_GAP * (FC_COLS - 1);
-  return Math.floor(available / FC_COLS);
+  return Math.max(44, Math.floor(available / FC_COLS));
 }
 
 function isStoredCard(value: unknown): value is Card {
@@ -165,7 +165,7 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
   elapsedRef.current = elapsed;
   const gameEndedRef = useRef(false);
 
-  const cardH = Math.round(cardW * 1.4);
+  const cardH = Math.round(cardW * CARD_ASPECT_RATIO);
 
   // Hint state
   const [hintLoading, setHintLoading] = useState(false);

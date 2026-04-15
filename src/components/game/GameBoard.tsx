@@ -24,7 +24,7 @@ import { GameActionBar } from './GameActionBar';
 import { useMCTSWorker } from '@/hooks/useMCTSWorker';
 import { getKlondikeHint, HINT_DEBUG } from '@/game/hintEvaluator';
 import { registerDeal } from '@/services/DealRegistrationService';
-import { Timer, Hash, Trophy, Layers, X, ArrowLeft, RotateCcw, Flame } from 'lucide-react';
+import { Timer, Trophy, Layers, X, ArrowLeft, RotateCcw, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { haptic } from '@/lib/haptics';

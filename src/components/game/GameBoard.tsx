@@ -789,12 +789,14 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
         className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm"
         style={{ paddingTop: 'calc(12px + var(--safe-area-top, 0px))' }}
       >
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <Timer className="w-3.5 h-3.5" />
-          <span>{formatTime(elapsed)}</span>
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Timer className="w-3.5 h-3.5" style={getTimerColor(elapsed) ? { color: getTimerColor(elapsed) } : undefined} />
+          <span style={getTimerColor(elapsed) ? { color: getTimerColor(elapsed) } : undefined}>{formatTime(elapsed)}</span>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1"><Hash className="w-3.5 h-3.5" />{state.moves}</span>
+          <span className="px-2 py-0.5 rounded-full bg-secondary text-xs font-medium text-muted-foreground">
+            {state.moves} {state.moves === 1 ? 'move' : 'moves'}
+          </span>
           <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
             state.difficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
             state.difficulty === 'Medium' ? 'bg-gold/20 text-gold' :
@@ -806,6 +808,11 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
           <span className="flex items-center gap-1 text-xs">
             <Layers className="w-3 h-3" />D{state.drawMode}
           </span>
+          {paceArrow && (
+            <span className={`text-xs font-mono font-semibold ${paceArrow === 'up' ? 'text-green-500' : 'text-amber-500'}`}>
+              {paceArrow === 'up' ? '↑' : '↓'}
+            </span>
+          )}
           {(authProfile as any)?.current_streak >= 2 && (
             <span className="flex items-center gap-0.5 text-xs">
               <Flame className="w-3 h-3 text-destructive" />
@@ -821,9 +828,9 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
             variant="ghost"
             size="sm"
             onClick={() => setShowGiveUpDialog(true)}
-            className="h-8 px-2 text-destructive hover:text-destructive"
+            className="h-7 px-1.5"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" style={{ color: '#9CA3AF' }} />
           </Button>
         </div>
       </div>
@@ -832,7 +839,7 @@ export function GameBoard({ onGameEnd, onGiveUp, drawMode = 3, initialSeed, deal
       <WinProbabilityBar
         probability={null}
         visible={!state.isWon}
-        foundationCount={state.foundation.reduce((sum, pile) => sum + pile.length, 0)}
+        foundationCount={foundationCount}
       />
 
       {/* Game area */}

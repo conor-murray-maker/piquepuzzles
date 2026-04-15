@@ -699,6 +699,36 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
+  const getTimerColor = (s: number) => {
+    if (s >= 300) return '#EF4444';
+    if (s >= 180) return '#F59E0B';
+    return undefined;
+  };
+
+  const foundationCount = state.foundation.reduce((sum, pile) => sum + pile.length, 0);
+
+  const getExpectedTime = (diff: string): number => {
+    switch (diff) {
+      case 'Easy': return 180;
+      case 'Medium': return 300;
+      case 'Hard': return 420;
+      case 'Expert': return 600;
+      case 'Master': return 900;
+      case 'Grandmaster': return 1200;
+      default: return 300;
+    }
+  };
+
+  const paceArrow = (() => {
+    if (elapsed < 60 || !gameStarted) return null;
+    const expected = getExpectedTime(state.difficulty);
+    const progress = foundationCount / 52;
+    const timeProgress = elapsed / expected;
+    if (progress > timeProgress * 1.1) return 'up';
+    if (progress < timeProgress * 0.7) return 'down';
+    return null;
+  })();
+
   const isHinted = (source: string) => {
     if (hintTarget) return hintTarget.from === source || hintTarget.to === source;
     return false;
@@ -726,14 +756,16 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
         touchAction: 'none',
       }}
     >
-      {/* Top bar — simplified */}
+      {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm">
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <Timer className="w-3.5 h-3.5" />
-          <span>{formatTime(elapsed)}</span>
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Timer className="w-3.5 h-3.5" style={getTimerColor(elapsed) ? { color: getTimerColor(elapsed) } : undefined} />
+          <span style={getTimerColor(elapsed) ? { color: getTimerColor(elapsed) } : undefined}>{formatTime(elapsed)}</span>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1"><Hash className="w-3.5 h-3.5" />{state.moves}</span>
+          <span className="px-2 py-0.5 rounded-full bg-secondary text-xs font-medium text-muted-foreground">
+            {state.moves} {state.moves === 1 ? 'move' : 'moves'}
+          </span>
           <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
             state.difficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
             state.difficulty === 'Medium' ? 'bg-gold/20 text-gold' :
@@ -742,22 +774,27 @@ export function FreeCellBoard({ onGameEnd, onGiveUp, initialSeed, dealUuid }: Fr
             state.difficulty === 'Master' ? 'bg-master/20 text-master' :
             'bg-grandmaster/20 text-grandmaster font-bold'
           }`}>{state.difficulty}</span>
+          {paceArrow && (
+            <span className={`text-xs font-mono font-semibold ${paceArrow === 'up' ? 'text-green-500' : 'text-amber-500'}`}>
+              {paceArrow === 'up' ? '↑' : '↓'}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={handleNewGame} className="h-8 px-2">
             <RotateCcw className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowGiveUpDialog(true)} className="h-8 px-2 text-destructive hover:text-destructive">
-            <X className="w-4 h-4" />
+          <Button variant="ghost" size="sm" onClick={() => setShowGiveUpDialog(true)} className="h-7 px-1.5">
+            <X className="w-3.5 h-3.5" style={{ color: '#9CA3AF' }} />
           </Button>
         </div>
       </div>
 
-      {/* Win probability bar */}
+      {/* Progress bar */}
       <WinProbabilityBar
         probability={null}
         visible={!state.isWon}
-        foundationCount={state.foundation.reduce((sum, pile) => sum + pile.length, 0)}
+        foundationCount={foundationCount}
       />
 
       {/* Game area */}

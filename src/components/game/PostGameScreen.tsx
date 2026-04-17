@@ -134,6 +134,17 @@ export function PostGameScreen({
     setSharing(false);
   }, [user, profile, dealSeed, gameMode, drawMode, gameState, timeSeconds, currentRating, ratingChange]);
 
+  // Derive difficulty from server breakdown to avoid stale client-cached label
+  // (e.g. dds_empirical drift between deal load and game completion).
+  const VALID_DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Expert', 'Master', 'Grandmaster'];
+  const serverDifficulty = breakdown?.breakdownItems
+    ?.find(item => item.label?.toLowerCase().includes('deal won') || item.label?.toLowerCase().includes('not solved'))
+    ?.label
+    ?.split(' ')[0];
+  const displayDifficulty = (serverDifficulty && VALID_DIFFICULTIES.includes(serverDifficulty))
+    ? serverDifficulty
+    : gameState.difficulty;
+
   const isChallenge = !!challengeData;
   const playerWonChallenge = isChallenge && gameState.isWon && challengeData &&
     gameState.moves <= challengeData.challengerMoves;
@@ -193,14 +204,14 @@ export function PostGameScreen({
             </>
           )}
           <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-            gameState.difficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
-            gameState.difficulty === 'Medium' ? 'bg-gold/20 text-gold' :
-            gameState.difficulty === 'Hard' ? 'bg-destructive/20 text-destructive' :
-            gameState.difficulty === 'Expert' ? 'bg-elite/20 text-elite' :
-            gameState.difficulty === 'Master' ? 'bg-master/20 text-master' :
+            displayDifficulty === 'Easy' ? 'bg-rating-up/20 text-rating-up' :
+            displayDifficulty === 'Medium' ? 'bg-gold/20 text-gold' :
+            displayDifficulty === 'Hard' ? 'bg-destructive/20 text-destructive' :
+            displayDifficulty === 'Expert' ? 'bg-elite/20 text-elite' :
+            displayDifficulty === 'Master' ? 'bg-master/20 text-master' :
             'bg-grandmaster/20 text-grandmaster font-bold'
           }`}>
-            {gameState.difficulty} Deal
+            {displayDifficulty} Deal
           </span>
         </div>
 
@@ -289,7 +300,7 @@ export function PostGameScreen({
           won={gameState.isWon}
           breakdown={breakdown}
           ratingChange={displayModeIQDelta}
-          difficulty={gameState.difficulty}
+          difficulty={displayDifficulty}
           actualTime={timeSeconds}
           actualMoves={gameState.moves}
           gameMode={gameMode}

@@ -91,12 +91,11 @@ function getMinConfidence(gamesPlayedThisMode: number): number {
   return 0; // no minimum
 }
 
-function ddsToLabel(dds: number, gameMode?: string): string {
+function ddsToLabel(dds: number): string {
   if (dds < 26) return 'Easy';
   if (dds < 51) return 'Medium';
   if (dds < 76) return 'Hard';
   if (dds < 101) return 'Expert';
-  if (gameMode === 'klondike' || gameMode === 'freecell') return 'Master';
   if (dds < 131) return 'Master';
   return 'Grandmaster';
 }
@@ -105,7 +104,7 @@ function dealRowToVerified(deal: any, tier: string): VerifiedDeal {
   // Realm: derive difficulty from grid size (min_moves = N); others: from DDS
   const difficulty = deal.game_mode === 'realm' && deal.min_moves >= 5 && deal.min_moves <= 10
     ? getRealmDifficulty(deal.min_moves, deal.dds_blended, deal.pool_attempts ?? 0)
-    : ddsToLabel(deal.dds_blended, deal.game_mode);
+    : ddsToLabel(deal.dds_blended);
 
   return {
     dealUuid: deal.id,
@@ -512,7 +511,7 @@ export class DealPoolService {
             minMoves: result.minSolutionLength,
             ddsInitial: dds,
             ddsBlended: dds,
-            difficulty: DDSService.ddsToLabel(dds, gameMode),
+            difficulty: DDSService.ddsToLabel(dds),
             difficultyScore: dds,
             drawMode,
           };

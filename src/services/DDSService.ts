@@ -49,16 +49,11 @@ export class DDSService {
     return Math.max(0, Math.min(1, (value - min) / (max - min)));
   }
 
-  /**
-   * Map DDS to difficulty label.
-   * Klondike and FreeCell are capped at "Master" — Grandmaster is reserved for Realm.
-   */
-  static ddsToLabel(dds: number, gameMode?: string): string {
+  static ddsToLabel(dds: number): string {
     if (dds < 26) return 'Easy';
     if (dds < 51) return 'Medium';
     if (dds < 76) return 'Hard';
     if (dds < 101) return 'Expert';
-    if (gameMode === 'klondike' || gameMode === 'freecell') return 'Master';
     if (dds < 131) return 'Master';
     return 'Grandmaster';
   }

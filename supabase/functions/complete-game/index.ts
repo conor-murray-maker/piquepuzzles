@@ -113,7 +113,7 @@ function computeScore(input: ScoreInput): ScoreResult {
       hintPenalty: 0,
       total: dynamicLoss,
       breakdown: [
-        { label: `${ddsToLabel(input.dealDDS, input.gameMode)} deal — not solved`, value: dynamicLoss },
+        { label: `${ddsToLabel(input.dealDDS)} deal — not solved`, value: dynamicLoss },
       ],
     };
   }
@@ -145,7 +145,7 @@ function computeScore(input: ScoreInput): ScoreResult {
   total = Math.max(dynamicLossPenalty + 1, total);
 
   const breakdown: { label: string; value: number }[] = [];
-  const diffLabel = ddsToLabel(input.dealDDS, input.gameMode);
+  const diffLabel = ddsToLabel(input.dealDDS);
 
   breakdown.push({ label: `${diffLabel} deal won`, value: baseCompletion });
 
@@ -189,13 +189,11 @@ function getNormConfig(gameMode: string) {
   return NORM_CONFIG[gameMode] ?? NORM_CONFIG.klondike;
 }
 
-function ddsToLabel(dds: number, gameMode?: string): string {
+function ddsToLabel(dds: number): string {
   if (dds < 26) return 'Easy';
   if (dds < 51) return 'Medium';
   if (dds < 76) return 'Hard';
   if (dds < 101) return 'Expert';
-  // Klondike & FreeCell are capped at Master — Grandmaster is reserved for Realm
-  if (gameMode === 'klondike' || gameMode === 'freecell') return 'Master';
   if (dds < 131) return 'Master';
   return 'Grandmaster';
 }
@@ -691,7 +689,7 @@ Deno.serve(async (req) => {
     const dealMinMoves = deal ? (deal.min_moves as number) : 0;
     const difficulty = gameMode === 'realm' && dealMinMoves >= 5 && dealMinMoves <= 10
       ? realmDifficultyFromGridSize(dealMinMoves)
-      : ddsToLabel(dds, gameMode);
+      : ddsToLabel(dds);
 
     // We need to compute composite IQ inside the transaction to avoid races.
     // We'll do it by first upserting mode rating, then computing the average.

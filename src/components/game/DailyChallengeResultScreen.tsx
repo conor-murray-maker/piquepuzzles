@@ -152,12 +152,19 @@ export function DailyChallengeResultScreen({
 
   const streakCopy = getStreakCopy(currentStreak, streakPercentile);
 
-  // Calculate client-side rank from merged leaderboard as fallback
-  const clientRank = user
-    ? leaderboard.findIndex(e => e.user_id === user.id) + 1
-    : 0;
-  const resolvedRank = myResult?.rank ?? (clientRank > 0 ? clientRank : null);
+  // Calculate rank: prefer leaderboard's computed rank (from RPC ROW_NUMBER),
+  // fall back to position in array. The stored myResult.rank column is always null.
+  const myLeaderboardEntry = user
+    ? leaderboard.find(e => e.user_id === user.id)
+    : null;
+  const myLeaderboardIndex = user
+    ? leaderboard.findIndex(e => e.user_id === user.id)
+    : -1;
+  const clientRank = myLeaderboardEntry?.rank ?? (myLeaderboardIndex >= 0 ? myLeaderboardIndex + 1 : 0);
+  const resolvedRank = clientRank > 0 ? clientRank : null;
   const rankReady = resolvedRank !== null;
+  // After loading finishes (all retries done), show a fallback rank rather than infinite "Finding..."
+  const rankFallback = !loading && !rankReady && won;
 
   const handleShare = useCallback(async () => {
     const time = formatTimeRaw(elapsedSeconds);
@@ -282,6 +289,14 @@ export function DailyChallengeResultScreen({
               <>
                 <p className="text-4xl font-bold font-mono text-primary">#{resolvedRank}</p>
                 <p className="text-sm text-muted-foreground mt-1">of {totalPlayers} completions today</p>
+              </>
+            ) : rankFallback ? (
+              <>
+                <p className="text-2xl font-bold text-primary">Completed</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  <Users className="w-3.5 h-3.5 inline mr-1" />
+                  {totalPlayers} players today
+                </p>
               </>
             ) : (
               <p className="text-sm text-muted-foreground animate-pulse">Finding your rank...</p>

@@ -324,10 +324,15 @@ export default function Daily() {
                   onPlayMore={() => navigate(`/play?mode=${challenge.game_mode}`)}
                 />
               ) : (
-                <motion.div className="stat-card py-4 text-center space-y-2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <motion.div className="stat-card py-5 text-center space-y-2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                   <Trophy className="w-8 h-8 text-gold mx-auto" />
-                  <h2 className="text-xl font-bold">Challenge Attempted</h2>
-                  <p className="text-sm text-muted-foreground">Your result is being processed...</p>
+                  <h2 className="text-xl font-bold">Challenge Completed</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {totalPlayers > 0
+                      ? `You're in today's leaderboard with ${totalPlayers} ${totalPlayers === 1 ? 'player' : 'players'}.`
+                      : "You're the first to finish today!"}
+                  </p>
+                  <p className="text-xs text-muted-foreground italic">Daily challenges don't affect your IQ rating</p>
                   <Button onClick={() => navigate(`/play?mode=${challenge.game_mode}`)} className="mt-3">
                     Play more {getModeLabel(challenge.game_mode)}
                     <ChevronRight className="w-4 h-4 ml-1" />

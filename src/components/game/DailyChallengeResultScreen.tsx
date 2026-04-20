@@ -290,6 +290,14 @@ export function DailyChallengeResultScreen({
                 <p className="text-4xl font-bold font-mono text-primary">#{resolvedRank}</p>
                 <p className="text-sm text-muted-foreground mt-1">of {totalPlayers} completions today</p>
               </>
+            ) : rankFallback ? (
+              <>
+                <p className="text-2xl font-bold text-primary">Completed</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  <Users className="w-3.5 h-3.5 inline mr-1" />
+                  {totalPlayers} players today
+                </p>
+              </>
             ) : (
               <p className="text-sm text-muted-foreground animate-pulse">Finding your rank...</p>
             )

@@ -72,60 +72,77 @@ export default function Daily() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch today's challenge data
+  // Fetch today's challenge data with retry for myResult (handles edge function lag)
   useEffect(() => {
+    let cancelled = false;
+    const retryTimers: ReturnType<typeof setTimeout>[] = [];
+
+    async function refetchLeaderboardAndResult(ch: DailyChallenge, difficulty: string) {
+      if (!user || cancelled) return;
+      const [count, lb, result] = await Promise.all([
+        DailyChallengeService.getCompletionCount(ch.id),
+        DailyChallengeService.getLeaderboard(ch.id, user.id),
+        DailyChallengeService.getMyResult(ch.id, user.id),
+      ]);
+      if (cancelled) return;
+      setRealCompletionCount(count);
+      const ghosts = generateGhostPlayers(ch.id, difficulty, ch.game_mode, count);
+      const merged = mergeWithGhosts(lb, ghosts);
+      setLeaderboard(merged);
+      setTotalPlayers(count + ghosts.length);
+      if (result) setMyResult(result);
+      return result;
+    }
+
     async function fetchAll() {
       setLoading(true);
       try {
         const ch = await DailyChallengeService.getTodaysChallenge(todayStr);
-        if (ch) {
+        if (ch && !cancelled) {
           setChallenge(ch);
           const difficulty = ch.difficulty || (ch.deals ? ddsToLabel(ch.deals.dds_blended) : 'Medium');
 
-          const [count, lb] = await Promise.all([
-            DailyChallengeService.getCompletionCount(ch.id),
-            DailyChallengeService.getLeaderboard(ch.id, user?.id),
-          ]);
-          setRealCompletionCount(count);
+          const result = await refetchLeaderboardAndResult(ch, difficulty);
 
-          // Merge with ghost players
-          const ghosts = generateGhostPlayers(ch.id, difficulty, ch.game_mode, count);
-          const merged = mergeWithGhosts(lb, ghosts);
-          setLeaderboard(merged);
-          setTotalPlayers(count + ghosts.length);
-
-          if (user) {
-            const result = await DailyChallengeService.getMyResult(ch.id, user.id);
-            setMyResult(result);
-
+          if (user && !cancelled) {
             // Also check localStorage flag
             if (!result && isDailyCompletedByDeal(ch.deal_id, user.id)) {
               setLocallyCompleted(true);
+              // Retry the DB fetch — the edge function upsert may still be in flight
+              [1500, 4000, 8000].forEach((delay) => {
+                retryTimers.push(setTimeout(() => {
+                  if (!cancelled) refetchLeaderboardAndResult(ch, difficulty);
+                }, delay));
+              });
             }
 
             if (result?.completed && ch.deals) {
               const pb = await DailyChallengeService.getPersonalBest(
                 user.id, ch.game_mode, difficulty, 'daily_challenge'
               );
-              setPersonalBest(pb);
+              if (!cancelled) setPersonalBest(pb);
             }
 
             const yesterday = await DailyChallengeService.getYesterdayResult(user.id);
-            setYesterdayResult(yesterday);
+            if (!cancelled) setYesterdayResult(yesterday);
           }
         }
 
         // Streak percentile for 30+ day copy
         if (currentStreak >= 30) {
           const pct = await DailyChallengeService.getStreakPercentile(30);
-          setStreakPercentile(pct);
+          if (!cancelled) setStreakPercentile(pct);
         }
       } catch (err) {
         console.warn('Failed to fetch daily challenge:', err);
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
     fetchAll();
+    return () => {
+      cancelled = true;
+      retryTimers.forEach(clearTimeout);
+    };
   }, [todayStr, user, currentStreak]);
 
   // Check milestone celebration

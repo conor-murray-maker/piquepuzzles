@@ -152,12 +152,19 @@ export function DailyChallengeResultScreen({
 
   const streakCopy = getStreakCopy(currentStreak, streakPercentile);
 
-  // Calculate client-side rank from merged leaderboard as fallback
-  const clientRank = user
-    ? leaderboard.findIndex(e => e.user_id === user.id) + 1
-    : 0;
-  const resolvedRank = myResult?.rank ?? (clientRank > 0 ? clientRank : null);
+  // Calculate rank: prefer leaderboard's computed rank (from RPC ROW_NUMBER),
+  // fall back to position in array. The stored myResult.rank column is always null.
+  const myLeaderboardEntry = user
+    ? leaderboard.find(e => e.user_id === user.id)
+    : null;
+  const myLeaderboardIndex = user
+    ? leaderboard.findIndex(e => e.user_id === user.id)
+    : -1;
+  const clientRank = myLeaderboardEntry?.rank ?? (myLeaderboardIndex >= 0 ? myLeaderboardIndex + 1 : 0);
+  const resolvedRank = clientRank > 0 ? clientRank : null;
   const rankReady = resolvedRank !== null;
+  // After loading finishes (all retries done), show a fallback rank rather than infinite "Finding..."
+  const rankFallback = !loading && !rankReady && won;
 
   const handleShare = useCallback(async () => {
     const time = formatTimeRaw(elapsedSeconds);

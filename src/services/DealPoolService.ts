@@ -512,7 +512,7 @@ export class DealPoolService {
             minMoves: result.minSolutionLength,
             ddsInitial: dds,
             ddsBlended: dds,
-            difficulty: DDSService.ddsToLabel(dds),
+            difficulty: DDSService.ddsToLabel(dds, gameMode),
             difficultyScore: dds,
             drawMode,
           };

@@ -73,7 +73,7 @@ export function DailyChallengeCard() {
 
   if (!ready || !challenge) return null;
 
-  const difficulty = challenge.difficulty || (challenge.deals ? ddsToLabel(challenge.deals.dds_blended) : 'Medium');
+  const difficulty = challenge.difficulty || (challenge.deals ? ddsToLabel(challenge.deals.dds_blended, challenge.game_mode) : 'Medium');
   const challengeNumber = getChallengeNumber(challenge.date);
   const completed = !!myResult || (user ? isDailyCompletedByDeal(challenge.deal_id, user.id) : false);
   if (completed && myResult) {

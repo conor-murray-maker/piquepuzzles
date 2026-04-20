@@ -72,60 +72,77 @@ export default function Daily() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch today's challenge data
+  // Fetch today's challenge data with retry for myResult (handles edge function lag)
   useEffect(() => {
+    let cancelled = false;
+    const retryTimers: ReturnType<typeof setTimeout>[] = [];
+
+    async function refetchLeaderboardAndResult(ch: DailyChallenge, difficulty: string) {
+      if (!user || cancelled) return;
+      const [count, lb, result] = await Promise.all([
+        DailyChallengeService.getCompletionCount(ch.id),
+        DailyChallengeService.getLeaderboard(ch.id, user.id),
+        DailyChallengeService.getMyResult(ch.id, user.id),
+      ]);
+      if (cancelled) return;
+      setRealCompletionCount(count);
+      const ghosts = generateGhostPlayers(ch.id, difficulty, ch.game_mode, count);
+      const merged = mergeWithGhosts(lb, ghosts);
+      setLeaderboard(merged);
+      setTotalPlayers(count + ghosts.length);
+      if (result) setMyResult(result);
+      return result;
+    }
+
     async function fetchAll() {
       setLoading(true);
       try {
         const ch = await DailyChallengeService.getTodaysChallenge(todayStr);
-        if (ch) {
+        if (ch && !cancelled) {
           setChallenge(ch);
           const difficulty = ch.difficulty || (ch.deals ? ddsToLabel(ch.deals.dds_blended) : 'Medium');
 
-          const [count, lb] = await Promise.all([
-            DailyChallengeService.getCompletionCount(ch.id),
-            DailyChallengeService.getLeaderboard(ch.id, user?.id),
-          ]);
-          setRealCompletionCount(count);
+          const result = await refetchLeaderboardAndResult(ch, difficulty);
 
-          // Merge with ghost players
-          const ghosts = generateGhostPlayers(ch.id, difficulty, ch.game_mode, count);
-          const merged = mergeWithGhosts(lb, ghosts);
-          setLeaderboard(merged);
-          setTotalPlayers(count + ghosts.length);
-
-          if (user) {
-            const result = await DailyChallengeService.getMyResult(ch.id, user.id);
-            setMyResult(result);
-
+          if (user && !cancelled) {
             // Also check localStorage flag
             if (!result && isDailyCompletedByDeal(ch.deal_id, user.id)) {
               setLocallyCompleted(true);
+              // Retry the DB fetch — the edge function upsert may still be in flight
+              [1500, 4000, 8000].forEach((delay) => {
+                retryTimers.push(setTimeout(() => {
+                  if (!cancelled) refetchLeaderboardAndResult(ch, difficulty);
+                }, delay));
+              });
             }
 
             if (result?.completed && ch.deals) {
               const pb = await DailyChallengeService.getPersonalBest(
                 user.id, ch.game_mode, difficulty, 'daily_challenge'
               );
-              setPersonalBest(pb);
+              if (!cancelled) setPersonalBest(pb);
             }
 
             const yesterday = await DailyChallengeService.getYesterdayResult(user.id);
-            setYesterdayResult(yesterday);
+            if (!cancelled) setYesterdayResult(yesterday);
           }
         }
 
         // Streak percentile for 30+ day copy
         if (currentStreak >= 30) {
           const pct = await DailyChallengeService.getStreakPercentile(30);
-          setStreakPercentile(pct);
+          if (!cancelled) setStreakPercentile(pct);
         }
       } catch (err) {
         console.warn('Failed to fetch daily challenge:', err);
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
     fetchAll();
+    return () => {
+      cancelled = true;
+      retryTimers.forEach(clearTimeout);
+    };
   }, [todayStr, user, currentStreak]);
 
   // Check milestone celebration
@@ -307,10 +324,15 @@ export default function Daily() {
                   onPlayMore={() => navigate(`/play?mode=${challenge.game_mode}`)}
                 />
               ) : (
-                <motion.div className="stat-card py-4 text-center space-y-2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <motion.div className="stat-card py-5 text-center space-y-2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                   <Trophy className="w-8 h-8 text-gold mx-auto" />
-                  <h2 className="text-xl font-bold">Challenge Attempted</h2>
-                  <p className="text-sm text-muted-foreground">Your result is being processed...</p>
+                  <h2 className="text-xl font-bold">Challenge Completed</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {totalPlayers > 0
+                      ? `You're in today's leaderboard with ${totalPlayers} ${totalPlayers === 1 ? 'player' : 'players'}.`
+                      : "You're the first to finish today!"}
+                  </p>
+                  <p className="text-xs text-muted-foreground italic">Daily challenges don't affect your IQ rating</p>
                   <Button onClick={() => navigate(`/play?mode=${challenge.game_mode}`)} className="mt-3">
                     Play more {getModeLabel(challenge.game_mode)}
                     <ChevronRight className="w-4 h-4 ml-1" />

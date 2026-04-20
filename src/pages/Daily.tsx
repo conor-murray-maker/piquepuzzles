@@ -80,7 +80,7 @@ export default function Daily() {
         const ch = await DailyChallengeService.getTodaysChallenge(todayStr);
         if (ch) {
           setChallenge(ch);
-          const difficulty = ch.difficulty || (ch.deals ? ddsToLabel(ch.deals.dds_blended) : 'Medium');
+          const difficulty = ch.difficulty || (ch.deals ? ddsToLabel(ch.deals.dds_blended, ch.game_mode) : 'Medium');
 
           const [count, lb] = await Promise.all([
             DailyChallengeService.getCompletionCount(ch.id),
@@ -159,7 +159,7 @@ export default function Daily() {
     }
   }, [myResult, challenge]);
 
-  const difficulty = challenge?.difficulty || (challenge?.deals ? ddsToLabel(challenge.deals.dds_blended) : 'Medium');
+  const difficulty = challenge?.difficulty || (challenge?.deals ? ddsToLabel(challenge.deals.dds_blended, challenge.game_mode) : 'Medium');
   const challengeNumber = challenge ? getChallengeNumber(challenge.date) : 0;
 
   const completions = leaderboard.filter(e => e.completed);

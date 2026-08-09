@@ -43,7 +43,7 @@ export default function Auth() {
           password,
           options: {
             data: { full_name: displayName || undefined },
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: returnUrl,
           },
         });
         if (error) throw error;
@@ -51,7 +51,7 @@ export default function Auth() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate('/');
+        navigate(next);
       }
     } catch (err: any) {
       toast.error(err.message || 'Authentication failed');
@@ -63,7 +63,7 @@ export default function Auth() {
   const handleGoogleAuth = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: returnUrl },
     });
     if (error) toast.error(error.message);
   };

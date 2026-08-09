@@ -28,6 +28,8 @@ const Daily = lazy(() => import("./pages/Daily.tsx"));
 const Privacy = lazy(() => import("./pages/Privacy.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent.tsx"));
+
 
 const queryClient = new QueryClient();
 
@@ -67,7 +69,9 @@ function AppContent() {
     location.pathname === '/auth' ||
     location.pathname === '/reset-password' ||
     location.pathname === '/landing' ||
+    location.pathname === '/.lovable/oauth/consent' ||
     location.pathname === '/welcome-test';
+
 
   return (
     <>
@@ -76,6 +80,8 @@ function AppContent() {
           <Route path="/landing" element={<PublicOnlyRoute><Landing /></PublicOnlyRoute>} />
           <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+
           <Route path="/welcome-test" element={<WelcomeScreen testMode />} />
           <Route path="/challenge/:id" element={<Challenge />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />

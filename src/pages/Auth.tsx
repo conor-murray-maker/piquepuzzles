@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Spade, Mail, Lock, User, ArrowRight, Loader2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,14 +7,24 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+function safeNext(raw: string | null): string {
+  if (!raw) return '/';
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+  return raw;
+}
+
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = safeNext(searchParams.get('next'));
+  const returnUrl = `${window.location.origin}${next}`;
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   const [showEmail, setShowEmail] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
+
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();

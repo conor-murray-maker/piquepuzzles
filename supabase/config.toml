@@ -29,3 +29,7 @@ verify_jwt = false
 
 [functions.recalibrate-dds]
 verify_jwt = false
+
+[functions.mcp]
+verify_jwt = false
+

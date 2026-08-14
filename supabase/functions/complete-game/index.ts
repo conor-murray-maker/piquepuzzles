@@ -464,6 +464,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    if (!Number.isInteger(undosUsed) || undosUsed < 0 || undosUsed > 1000) {
+      return new Response(JSON.stringify({ error: 'Invalid undosUsed' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Duplicate detection
     const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();

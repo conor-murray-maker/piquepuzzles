@@ -8,6 +8,15 @@ const corsHeaders = {
 
 const ADMIN_EMAILS = ["conor-murray@hotmail.com"];
 
+// PostgREST's .or()/.ilike() filter syntax treats commas, parentheses, dots,
+// quotes, tildes and asterisks as its own control characters. A hand-built
+// filter string (see users_list) must not let a caller-supplied search term
+// inject additional clauses -- strip those characters before interpolation
+// rather than trusting the input.
+function sanitizeSearchTerm(input: string): string {
+  return input.replace(/[,()."'~*]/g, "");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -149,7 +158,7 @@ Deno.serve(async (req) => {
       case "users_list": {
         const page = params?.page || 0;
         const pageSize = params?.pageSize || 20;
-        const search = params?.search || "";
+        const search = sanitizeSearchTerm(params?.search || "");
         const sortBy = params?.sortBy || "created_at";
         const sortDir = params?.sortDir === "asc";
 
